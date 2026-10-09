@@ -853,7 +853,7 @@ function OpeningSession({
 function BidsTable({ bids, canDownload, two }: { bids: Async<Bid[]>; canDownload: boolean; two: boolean }) {
   const { t, te, pick, fmtDate } = useI18n();
   return (
-    <Card title={t('td.bids')}>
+    <Card id="sec-bids" title={t('td.bids')}>
       <AsyncView state={bids} empty={t('td.noBids')}>
         {(list) => (
           <Table

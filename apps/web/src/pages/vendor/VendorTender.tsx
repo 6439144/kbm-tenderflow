@@ -128,7 +128,7 @@ export default function VendorTender() {
                   <Card title={t('vendor.packDocs')}>
                     <DocList docs={packDocs} empty={t('vendor.noPackDocs')} />
                   </Card>
-                  <Card title={t('vendor.clarifications')}>
+                  <Card id="vendor-clar" title={t('vendor.clarifications')}>
                     {clar.length === 0 ? (
                       <p className="muted">{t('vendor.noClarifications')}</p>
                     ) : (
@@ -164,7 +164,7 @@ export default function VendorTender() {
                   </Card>
                 </div>
                 <div className="stack">
-                  <Card title={t('vendor.submitBid')}>
+                  <Card id="vendor-bid" title={t('vendor.submitBid')}>
                     {receipt ? (
                       <Receipt receipt={receipt} />
                     ) : bids.loading && !bids.data ? (
