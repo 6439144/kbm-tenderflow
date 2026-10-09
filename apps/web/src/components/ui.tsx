@@ -9,7 +9,7 @@ import {
   type ButtonHTMLAttributes,
   type ReactNode,
 } from 'react';
-import { agentNameOf, ApiError, isAgentNotImported, isAiNotConfigured } from '../api';
+import { agentNameOf, ApiError, isAgentNotImported, isAiNotConfigured, isEmptyAiReply } from '../api';
 import { useI18n } from '../i18n';
 
 // ---------------------------------------------------------------- data hook
@@ -172,6 +172,17 @@ export function ErrorBox({ error, onRetry }: { error: unknown; onRetry?: () => v
   const { t } = useI18n();
   if (isAiNotConfigured(error)) return <AiNotConfiguredBanner />;
   if (isAgentNotImported(error)) return <AgentNotImportedBanner agent={agentNameOf(error)} />;
+  if (isEmptyAiReply(error)) {
+    return (
+      <div className="alert alert-warn" role="status">
+        <div>
+          <strong>{t('ai.emptyReply', { agent: agentNameOf(error) })}</strong>
+          <div className="small">{t('ai.emptyReplyDetail')}</div>
+          {onRetry && <Button variant="secondary" onClick={onRetry}>{t('common.retry')}</Button>}
+        </div>
+      </div>
+    );
+  }
   const code = error instanceof ApiError ? error.code : 'CLIENT_ERROR';
   const message = error instanceof Error ? error.message : String(error);
   const forbidden = error instanceof ApiError && error.status === 403;

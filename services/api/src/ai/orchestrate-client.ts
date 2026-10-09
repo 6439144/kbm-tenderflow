@@ -13,6 +13,9 @@
 //
 // No secrets (API key, bearer token) are ever written to logs or error messages.
 
+/** Orchestrate's own placeholder when the LLM produced no content (e.g. a malformed tool call): not an answer. */
+export const EMPTY_LLM_REPLY = /^\s*LLM has responded with (an )?empty (message|response)/i;
+
 export class OrchestrateError extends Error {
   code = 'ORCHESTRATE_ERROR';
   /** Set when the error is about one named agent (e.g. not imported on the instance). */
@@ -240,7 +243,14 @@ export class OrchestrateClient {
       const resultMsg = (status.result as { data?: { message?: { content?: unknown } } } | undefined)?.data?.message;
       if (resultMsg) text = contentToText(resultMsg.content);
     }
-    if (!text.trim()) throw new OrchestrateError(`Orchestrate run ${run.run_id} completed but no assistant text was found`, undefined, 'read answer');
+    if (!text.trim() || EMPTY_LLM_REPLY.test(text)) {
+      const e = new OrchestrateError(`The model behind agent "${agent.name}"${agent.llm ? ` (${agent.llm})` : ''} returned an empty reply`
+        + ` (Orchestrate run ${run.run_id}${text.trim() ? `: "${text.trim().slice(0, 120)}"` : ''}). Try again; if it repeats, set WXO_LLM to another`
+        + ` model from \`orchestrate models list\` and re-run agents/import.ps1.`, 502, 'read answer');
+      e.code = 'AI_EMPTY_REPLY';
+      e.agentName = agent.name;
+      throw e;
+    }
     return { text, agentId: agent.id, agentName: agent.name, model: agent.llm, threadId: run.thread_id, runId: run.run_id };
   }
 }

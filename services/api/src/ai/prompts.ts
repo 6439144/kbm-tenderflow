@@ -218,11 +218,10 @@ export const NARRATIVE_SCHEMA = `{
   "narrativeAr": "<the same narrative in Arabic>"
 }`;
 
-export const CHAT_SCHEMA = `{
-  "answer": "<the answer, in the language of the question>",
-  "notFound": true | false,
-  "citations": [ { "documentId": "<id from a DOC marker>", "section": "<section from the same DOC marker>" } ]
-}`;
+export const CHAT_SCHEMA = `Plain text, NOT JSON:
+<the answer, in the language of the question>
+Sources: [DOC <documentId> | <section>]; [DOC <documentId> | <section>]
+(Write "Sources: none" when no section was used. Start the answer with [NOT_FOUND] when the context does not contain it.)`;
 
 /** All section text of the documents (no markers): the "input" against which numbers in the output are checked. */
 export function documentsText(docs: DocText[]): string {
@@ -384,7 +383,7 @@ export function buildChatPrompt(input: ChatInput, maxChars: number): string {
   const lang = detectLanguage(input.message);
   return `TASK: TENDERFLOW ASSISTANT TURN (advisory, read-only).
 TenderFlow sent the context below for the signed-in user; it is already limited to what this user's role may see. Answer the user's
-question from this context only. If the context does not contain the answer, say so plainly and set "notFound": true. You never take
+question from this context only. If the context does not contain the answer, start your reply with [NOT_FOUND] and say so plainly. You never take
 actions (approve, return, publish, open bids, score, recommend, award, submit, pay): when asked, explain which TenderFlow step does it
 and who performs it, if the context says so. Never reveal or guess bid contents, other bidders' data or anything outside the context.
 
@@ -396,10 +395,11 @@ ${input.message}
 RULES (mandatory):
 1. Use ONLY the context between BEGIN DOCUMENTS and END DOCUMENTS (and earlier turns of this conversation).
 2. Answer in ${lang === 'ar' ? 'Arabic (Modern Standard Arabic)' : 'English'}, concisely. ${NUMBERS_RULE}
-3. Cite the context sections you used: copy "documentId" and "section" exactly from the [DOC ...] markers.
-4. Return ONLY one JSON object that matches the schema below. No markdown, no code fences, no text before or after the JSON.
+3. Reply in plain text, NOT JSON (no braces, no code fences). Answer yourself; do not delegate this turn to another agent.
+4. End with ONE last line that starts with "Sources:" listing the context sections you used, copied exactly from the
+   [DOC ...] markers as [DOC <documentId> | <section>], separated by "; " — or "Sources: none".
 
-OUTPUT SCHEMA:
+OUTPUT FORMAT:
 ${CHAT_SCHEMA}`;
 }
 

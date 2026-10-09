@@ -374,3 +374,37 @@ describe('pack check and compliance', () => {
     await assert.rejects(svc().screenCompliance({ requiredDocuments: [{ key: 'cr_copy', nameEn: 'CR', nameAr: 'س' }], bid: { bidId: 'b', vendorName: 'v', documents: DOCS } }), /PRESENT, MISSING or UNCLEAR/);
   });
 });
+
+describe('assistant chat (supervisor): plain-text contract and empty replies', () => {
+  beforeEach(() => reset());
+
+  test('plain text + "Sources:" line → structured answer with validated citations', async () => {
+    S.replies = ['Bids close on 5 November 2026 at 13:00.\nSources: [DOC doc-1 | 3. Key Dates]; [DOC doc-1 | 99. Invented]'];
+    const r = await svc().chat({ message: 'When do bids close?', context: DOCS });
+    assert.equal(r.output.structured, true);
+    assert.equal(r.output.answer, 'Bids close on 5 November 2026 at 13:00.');
+    assert.deepEqual(r.citations.map((c) => c.section), ['3. Key Dates'], 'invented section dropped');
+  });
+
+  test('[NOT_FOUND] prefix → notFound, no citations', async () => {
+    S.replies = ['[NOT_FOUND] The context does not say who the evaluators are.\nSources: none'];
+    const r = await svc().chat({ message: 'Who are the evaluators?', context: DOCS });
+    assert.equal(r.output.notFound, true);
+    assert.equal(r.output.answer, 'The context does not say who the evaluators are.');
+    assert.equal(r.output.citations.length, 0);
+  });
+
+  test('Orchestrate "LLM has responded with empty message" is not an answer: one retry on a fresh thread', async () => {
+    S.replies = ['LLM has responded with empty message. Please try again.', 'Bids close on 5 November 2026 at 13:00.\nSources: [DOC doc-1 | 3. Key Dates]'];
+    const r = await svc().chat({ message: 'When do bids close?', context: DOCS });
+    assert.equal(r.output.answer, 'Bids close on 5 November 2026 at 13:00.');
+    assert.equal(S.runBodies.length, 2);
+    assert.equal(S.runBodies[1].thread_id, undefined, 'retry starts a fresh thread');
+  });
+
+  test('empty twice → AI_EMPTY_REPLY naming the agent and model, never shown as an answer', async () => {
+    S.replies = ['LLM has responded with empty message. Please try again.', 'LLM has responded with empty message. Please try again.'];
+    await assert.rejects(svc().chat({ message: 'When do bids close?', context: DOCS }),
+      (e: any) => e.code === 'AI_EMPTY_REPLY' && /tenderflow_assistant/.test(e.message) && /WXO_LLM/.test(e.message));
+  });
+});

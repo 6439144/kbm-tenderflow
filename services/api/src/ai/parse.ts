@@ -320,15 +320,25 @@ export function validateChat(text: string, docs: DocText[], inputText: string): 
   try { obj = extractJsonObject(text); } catch { obj = undefined; }
   let answer = ''; let notFound = false; let structured = false;
   let cites: { citations: Citation[]; dropped: number } = { citations: [], dropped: 0 };
+  const raw = String(text ?? '').trim();
+  const sources = /(?:^|\n)\s*(?:\*\*)?(?:Sources|Source|المصادر|المصدر)(?:\*\*)?\s*:\s*([^\n]*)\s*$/i.exec(raw);
   if (isObj(obj) && typeof obj.answer === 'string') {
     structured = true;
     answer = str(obj.answer);
     notFound = obj.notFound === true;
     cites = citationsOf(obj.citations, docs);
+  } else if (sources) {
+    // Text contract (the supervisor agent has collaborators bound as tools, so it answers in plain text, not JSON).
+    structured = true;
+    answer = raw.slice(0, sources.index).trim();
+    const refs = [...sources[1].matchAll(/\[\s*(?:DOC\s+)?([^|\]]+?)\s*\|\s*([^|\]]+?)\s*(?:\|\s*([^\]]+?)\s*)?\]/gi)]
+      .map((m) => ({ documentId: m[1], section: (m[3] ?? m[2]).trim() }));
+    cites = citationsOf(refs, docs);
   } else {
-    answer = String(text ?? '').trim();
-    if (/^\s*[{[]/.test(answer)) problems.push('the reply looks like JSON but is not a valid {"answer": ...} object');
+    answer = raw;
+    if (/^\s*[{[]/.test(answer) && !/^\s*\[NOT_FOUND\]/i.test(answer)) problems.push('the reply looks like JSON but is not a valid {"answer": ...} object');
   }
+  if (/^\s*\[NOT_FOUND\]/i.test(answer)) { notFound = true; answer = answer.replace(/^\s*\[NOT_FOUND\]\s*[-—:]?\s*/i, ''); }
   if (!answer) problems.push('"answer" must be a non-empty string');
   const bad = numbersNotInInput(answer, inputText);
   if (bad.length) problems.push(numberProblem('"answer"', bad));

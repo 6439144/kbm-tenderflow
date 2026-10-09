@@ -422,6 +422,8 @@ export const isAiNotConfigured = (e: unknown): boolean =>
 
 /** Orchestrate is connected but the named TenderFlow agent has not been imported on the instance yet. */
 export const isAgentNotImported = (e: unknown): boolean => e instanceof ApiError && e.code === 'AI_AGENT_NOT_IMPORTED';
+/** The model behind an agent returned an empty reply twice (Orchestrate: "LLM has responded with empty message"). */
+export const isEmptyAiReply = (e: unknown): boolean => e instanceof ApiError && e.code === 'AI_EMPTY_REPLY';
 export const agentNameOf = (e: unknown): string => (e instanceof Error ? /agent "([^"]+)"/.exec(e.message)?.[1] : undefined) ?? 'tenderflow_*';
 
 export const UNAUTHORIZED_EVENT = 'tf:unauthorized';

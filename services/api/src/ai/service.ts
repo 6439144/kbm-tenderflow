@@ -51,7 +51,14 @@ export function createAiService(options: CreateAiServiceOptions = {}): AiService
     const c = getClient();
     const agentRef = cfg.agents[role];
     const t0 = Date.now();
-    const first: InvokeResult = await c.invokeAgent(agentRef, prompt, { timeoutMs: cfg.timeoutMs, threadId });
+    let first: InvokeResult;
+    try {
+      first = await c.invokeAgent(agentRef, prompt, { timeoutMs: cfg.timeoutMs, threadId });
+    } catch (e) {
+      // The model sometimes returns nothing (Orchestrate: "LLM has responded with empty message"): one retry on a fresh thread.
+      if ((e as { code?: string })?.code !== 'AI_EMPTY_REPLY') throw e;
+      first = await c.invokeAgent(agentRef, prompt, { timeoutMs: cfg.timeoutMs });
+    }
     let result = validate(first.text);
     let last = first; let repaired = false;
     if (result.value === undefined) {
