@@ -1,60 +1,78 @@
 #!/usr/bin/env bash
-# ==============================================================================
-# watsonx Orchestrate ADK Automated Rebuild & Import Script (Task T17)
-# Rebuilds all agents and tools on a fresh SaaS TechZone instance in <15 minutes
-# ==============================================================================
+# TenderFlow - import the three advisory agents into a watsonx Orchestrate (IBM Cloud) instance.
+# Usage (repo root): bash agents/import.sh
+# Reads WXO_INSTANCE_URL / WXO_API_KEY from the repo .env (process environment wins).
+# Optional: WXO_LLM (model id from `orchestrate models list`), WXO_ENV_NAME (default techzone),
+#           WXO_AUTH_TYPE (default ibm_iam for IBM Cloud instances).
+# Stops on the first failing step. The API key is never printed.
 set -euo pipefail
 
-START_TIME=$(date +%s)
+AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(dirname "$AGENTS_DIR")"
+ENV_FILE="$REPO_ROOT/.env"
+AGENT_FILES=(tenderflow_pack_checker.yaml tenderflow_clarification_assistant.yaml tenderflow_compliance_screener.yaml)
+AGENT_NAMES=(tenderflow_pack_checker tenderflow_clarification_assistant tenderflow_compliance_screener)
 
-echo "=========================================================="
-echo " TenderFlow AI Agents Automated Rebuild (<15 Min Target)"
-echo "=========================================================="
+# Read one KEY from .env without sourcing it (no code execution); process env wins.
+setting() {
+  local name="$1" default="${2:-}" val=""
+  val="${!name:-}"
+  if [[ -z "$val" && -f "$ENV_FILE" ]]; then
+    val="$(grep -E "^[[:space:]]*(export[[:space:]]+)?${name}[[:space:]]*=" "$ENV_FILE" | tail -n 1 | sed -E "s/^[[:space:]]*(export[[:space:]]+)?${name}[[:space:]]*=[[:space:]]*//" | tr -d '\r')" || val=""
+    if [[ "$val" =~ ^\"(.*)\"$ || "$val" =~ ^\'(.*)\'$ ]]; then val="${BASH_REMATCH[1]}"; else val="$(printf '%s' "$val" | sed -E 's/[[:space:]]+#.*$//; s/[[:space:]]+$//')"; fi
+  fi
+  printf '%s' "${val:-$default}"
+}
 
-WXO_INSTANCE_URL="${WXO_INSTANCE_URL:-https://api.techzone.orchestrate.example.com}"
-WXO_API_KEY="${WXO_API_KEY:-techzone_key}"
+step() { echo; echo "==> $1"; }
 
-echo "[1/4] Configuring & Activating TechZone Environment..."
-if command -v orchestrate &> /dev/null; then
-    orchestrate env add -n techzone -u "$WXO_INSTANCE_URL" --type ibm_iam --activate || true
-    orchestrate env activate techzone --api-key "$WXO_API_KEY" || true
-else
-    echo "  (Mock mode: orchestrate CLI not installed on local host, validating syntax)"
+URL="$(setting WXO_INSTANCE_URL)"; URL="${URL%/}"
+API_KEY="$(setting WXO_API_KEY)"
+ENV_NAME="$(setting WXO_ENV_NAME techzone)"
+AUTH_TYPE="$(setting WXO_AUTH_TYPE ibm_iam)"
+LLM="$(setting WXO_LLM)"
+
+[[ -n "$URL" ]] || { echo "WXO_INSTANCE_URL is not set (add it to $ENV_FILE)" >&2; exit 1; }
+[[ -n "$API_KEY" ]] || { echo "WXO_API_KEY is not set (add it to $ENV_FILE)" >&2; exit 1; }
+command -v orchestrate >/dev/null 2>&1 || { echo "orchestrate CLI not found: pip install --upgrade ibm-watsonx-orchestrate (Python 3.11+)" >&2; exit 1; }
+if [[ "$AUTH_TYPE" == "ibm_iam" && "$URL" != *".cloud.ibm.com"* ]]; then
+  echo "WARNING: WXO_INSTANCE_URL does not look like an IBM Cloud instance; for AWS-hosted instances set WXO_AUTH_TYPE=mcsp." >&2
 fi
 
-echo "[2/4] Validating OpenAPI Tools..."
-for tool in agents/tools/*.json; do
-    echo "  - Checking $(basename "$tool")..."
-    node -e "JSON.parse(require('fs').readFileSync('$tool'))"
-done
+echo "Instance:    $URL"
+echo "API key:     set (hidden)"
+echo "Environment: $ENV_NAME ($AUTH_TYPE)"
 
-echo "[3/4] Importing Tools to watsonx Orchestrate..."
-if command -v orchestrate &> /dev/null; then
-    orchestrate tools import -f agents/tools/health-tool.json
-    orchestrate tools import -f agents/tools/completeness-tool.json
-    orchestrate tools import -f agents/tools/clarification-tool.json
-    orchestrate tools import -f agents/tools/evaluation-tool.json
+step "orchestrate env add -n $ENV_NAME -u <instance> --type $AUTH_TYPE"
+# 'env add' asks to confirm updating an existing environment; answer y so re-runs are idempotent.
+echo y | orchestrate env add -n "$ENV_NAME" -u "$URL" --type "$AUTH_TYPE"
+
+step "orchestrate env activate $ENV_NAME --api-key <hidden>"
+orchestrate env activate "$ENV_NAME" --api-key "$API_KEY"
+
+IMPORT_DIR="$AGENTS_DIR"
+if [[ -n "$LLM" ]]; then
+  IMPORT_DIR="$(mktemp -d)"
+  trap 'rm -rf "$IMPORT_DIR"' EXIT
+  for f in "${AGENT_FILES[@]}"; do
+    LLM="$LLM" awk '{ if ($0 ~ /^llm:/) print "llm: " ENVIRON["LLM"]; else print }' "$AGENTS_DIR/$f" > "$IMPORT_DIR/$f"
+  done
+  echo "Using model override WXO_LLM=$LLM"
 fi
 
-echo "[4/4] Deploying Agent Manifests..."
-AGENTS=(
-  "agents/hello-agent.yaml"
-  "agents/tender-pack-checker.yaml"
-  "agents/clarification-assistant.yaml"
-  "agents/bid-compliance-screener.yaml"
-)
-
-for ag in "${AGENTS[@]}"; do
-    echo "  - Applying $(basename "$ag")..."
-    if command -v orchestrate &> /dev/null; then
-        orchestrate agents apply -f "$ag"
-    fi
+for f in "${AGENT_FILES[@]}"; do
+  step "orchestrate agents import -f $f"
+  orchestrate agents import -f "$IMPORT_DIR/$f"
 done
 
-END_TIME=$(date +%s)
-DURATION=$((END_TIME - START_TIME))
+step "orchestrate agents list"
+orchestrate agents list
 
-echo "=========================================================="
-echo " Rebuild finished in ${DURATION}s (Exit Criterion: <900s)."
-echo " Rule 7 Enforced: All agent actions strictly advisory."
-echo "=========================================================="
+LISTING="$(orchestrate agents list -v)"
+for n in "${AGENT_NAMES[@]}"; do
+  grep -q -- "$n" <<<"$LISTING" || { echo "FAILED: agent $n not found after import" >&2; exit 1; }
+done
+
+echo
+echo "OK: imported ${AGENT_NAMES[*]}"
+echo "Next: npm run build && npm run verify:ai"
