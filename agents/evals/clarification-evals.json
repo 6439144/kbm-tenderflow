@@ -1,0 +1,34 @@
+{
+  "kind": "clarification",
+  "description": "Clarification-assistant evals over agents/evals/sample-tender.md (synthetic). expectedKeywords: every entry must appear in the answer (case/diacritic-insensitive); '|' separates accepted alternatives. expectedSections: at least one returned citation must point at one of these sections.",
+  "document": "sample-tender.md",
+  "documentId": "eval-sample-tender",
+  "tender": { "titleEn": "Data Centre Monitoring Platform", "titleAr": "منصة مراقبة مراكز البيانات" },
+  "questions": [
+    { "id": "EN-01", "language": "en", "question": "What is the deadline for submitting bids?", "expectedKeywords": ["november", "13:00|1:00 pm|1 pm|1:00pm|1pm"], "expectedSections": ["3. Key Dates / المواعيد الرئيسية"] },
+    { "id": "EN-02", "language": "en", "question": "How much is the bid security and in what form must it be provided?", "expectedKeywords": ["2%|2 %|2 percent|two percent", "bank guarantee"], "expectedSections": ["4. Bid Security / ضمان العطاء"] },
+    { "id": "EN-03", "language": "en", "question": "For how long must the bid security remain valid?", "expectedKeywords": ["150"], "expectedSections": ["4. Bid Security / ضمان العطاء"] },
+    { "id": "EN-04", "language": "en", "question": "How many similar projects must a bidder have completed, and within what period?", "expectedKeywords": ["three|3", "five|5"], "expectedSections": ["5. Eligibility / الأهلية"] },
+    { "id": "EN-05", "language": "en", "question": "What are the technical and financial weights used in the evaluation?", "expectedKeywords": ["70", "30"], "expectedSections": ["7. Evaluation Method / طريقة التقييم"] },
+    { "id": "EN-06", "language": "en", "question": "What minimum technical score is needed before a financial proposal is evaluated?", "expectedKeywords": ["65"], "expectedSections": ["7. Evaluation Method / طريقة التقييم"] },
+    { "id": "EN-07", "language": "en", "question": "What is the payment schedule for this contract?", "expectedKeywords": ["30%|30 %|30 percent", "50%|50 %|50 percent", "20%|20 %|20 percent"], "expectedSections": ["8. Payment Terms / شروط الدفع"] },
+    { "id": "EN-08", "language": "en", "question": "What is the penalty for implementation delays, and is it capped?", "expectedKeywords": ["0.5", "10%|10 %|10 percent"], "expectedSections": ["9. Delay Penalties / غرامات التأخير"] },
+    { "id": "EN-09", "language": "en", "question": "How long must the platform retain monitoring data?", "expectedKeywords": ["13 months|13-month|thirteen months|thirteen-month"], "expectedSections": ["6. Technical Requirements / المتطلبات الفنية"] },
+    { "id": "EN-10", "language": "en", "question": "What response time is required for critical incidents?", "expectedKeywords": ["2 hours|two hours|2-hour|two-hour|2 hrs"], "expectedSections": ["10. Support and Warranty / الدعم والضمان"] },
+
+    { "id": "AR-01", "language": "ar", "question": "ما هو الموعد النهائي لتقديم العطاءات؟", "expectedKeywords": ["نوفمبر|11/2026|2026-11-05|/11/", "13:00|1:00|الواحده"], "expectedSections": ["3. Key Dates / المواعيد الرئيسية"] },
+    { "id": "AR-02", "language": "ar", "question": "كم تبلغ نسبة ضمان العطاء المطلوبة؟", "expectedKeywords": ["2%|2 %|2٪|2 ٪|2 بالم|2 في الم|اثنين في الم|اثنان في الم"], "expectedSections": ["4. Bid Security / ضمان العطاء"] },
+    { "id": "AR-03", "language": "ar", "question": "ما هي مدة سريان العطاءات؟", "expectedKeywords": ["120"], "expectedSections": ["3. Key Dates / المواعيد الرئيسية"] },
+    { "id": "AR-04", "language": "ar", "question": "ما هي شهادة أمن المعلومات المطلوبة من مقدمي العطاءات؟", "expectedKeywords": ["27001"], "expectedSections": ["5. Eligibility / الأهلية", "11. Required Bid Documents / مستندات العطاء المطلوبة"] },
+    { "id": "AR-05", "language": "ar", "question": "هل يجوز تخزين بيانات المراقبة خارج الكويت؟", "expectedKeywords": ["لا يجوز|لا يسمح|غير مسموح|لا يمكن|غير مسموح|لا، "], "expectedSections": ["6. Technical Requirements / المتطلبات الفنية"] },
+    { "id": "AR-06", "language": "ar", "question": "ما نسبة التوافر الشهرية المطلوبة للمنصة؟", "expectedKeywords": ["99.9"], "expectedSections": ["6. Technical Requirements / المتطلبات الفنية"] },
+    { "id": "AR-07", "language": "ar", "question": "كم عدد الخوادم التي يجب أن تغطيها منصة المراقبة؟", "expectedKeywords": ["400"], "expectedSections": ["2. Scope of Work / نطاق العمل"] },
+    { "id": "AR-08", "language": "ar", "question": "كم عدد موظفي الوزارة الذين يجب تدريبهم؟", "expectedKeywords": ["15"], "expectedSections": ["2. Scope of Work / نطاق العمل"] },
+    { "id": "AR-09", "language": "ar", "question": "ما هو آخر موعد لتقديم أسئلة الاستيضاح؟", "expectedKeywords": ["اكتوبر|10/2026|2026-10-25|/10/", "12:00|الثانيه عشره|12 ظهر"], "expectedSections": ["3. Key Dates / المواعيد الرئيسية"] },
+    { "id": "AR-10", "language": "ar", "question": "ما مدة الدعم المطلوبة ومتى تبدأ؟", "expectedKeywords": ["ثلاث|3", "الاستلام النهائي|استلام النهائي"], "expectedSections": ["10. Support and Warranty / الدعم والضمان"] },
+
+    { "id": "NF-01", "language": "en", "question": "What is the estimated budget for this tender?", "expectNotFound": true },
+    { "id": "NF-02", "language": "ar", "question": "هل يسمح بتقديم عطاءات مشتركة من تحالف شركات؟", "expectNotFound": true },
+    { "id": "NF-03", "language": "en", "question": "Is a site visit to the data centres mandatory before bidding?", "expectNotFound": true }
+  ]
+}
