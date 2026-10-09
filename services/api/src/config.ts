@@ -18,6 +18,8 @@ export interface Config {
   auditSigningKey: string;
   seedDemo: boolean;
   demoPassword?: string;
+  /** Presenter controls (persona switch, deadline advance). Never enable in production. */
+  demoMode: boolean;
   contentStoreType: 'filesystem' | 'filenet';
   corsOrigin?: string;
   webDistDir: string;
@@ -99,6 +101,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     auditSigningKey: auditSigningKey!,
     seedDemo,
     demoPassword,
+    demoMode: (env.DEMO_MODE ?? 'false').trim().toLowerCase() === 'true',
     contentStoreType: cst as 'filesystem' | 'filenet',
     corsOrigin: opt(env.CORS_ORIGIN),
     webDistDir: path.resolve(REPO_ROOT, opt(env.WEB_DIST_DIR) ?? path.join('apps', 'web', 'dist')),

@@ -16,7 +16,8 @@
     "gen-keys": "node scripts/gen-keys.mjs",
     "verify:filenet": "node services/api/dist/tools/verify-filenet.js",
     "verify:ai": "node services/api/dist/tools/verify-ai.js",
-    "evals": "node services/api/dist/tools/run-evals.js"
+    "evals": "node services/api/dist/tools/run-evals.js",
+    "demo:reset": "node scripts/demo-reset.mjs"
   },
   "keywords": [
     "tendering",

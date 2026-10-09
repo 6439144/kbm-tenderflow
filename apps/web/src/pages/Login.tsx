@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api';
 import { useI18n } from '../i18n';
 import { applyTheme, homeFor, useSession } from '../session';
@@ -11,8 +11,10 @@ export default function Login() {
   const { signIn, session, expired } = useSession();
   const navigate = useNavigate();
   const tenants = useAsync(() => api.tenants(), []);
-  const [tenantId, setTenantId] = useState('');
-  const [username, setUsername] = useState('');
+  // Optional prefill (guided demo switching entity): tenant and username only — never a password.
+  const [params] = useSearchParams();
+  const [tenantId, setTenantId] = useState(() => (/^[a-z0-9_-]{2,40}$/.test(params.get('tenant') ?? '') ? params.get('tenant')! : ''));
+  const [username, setUsername] = useState(() => (/^[a-z0-9._@-]{1,80}$/i.test(params.get('username') ?? '') ? params.get('username')! : ''));
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<unknown>(null);
@@ -22,7 +24,7 @@ export default function Login() {
   }, [session, navigate]);
 
   useEffect(() => {
-    if (!tenantId && tenants.data && tenants.data.length > 0) setTenantId(tenants.data[0].id);
+    if (tenants.data && tenants.data.length > 0 && (!tenantId || !tenants.data.some((x) => x.id === tenantId))) setTenantId(tenants.data[0].id);
   }, [tenants.data, tenantId]);
 
   const tenant = tenants.data?.find((x) => x.id === tenantId) ?? null;

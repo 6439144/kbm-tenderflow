@@ -149,7 +149,7 @@ export function AdminAudit() {
     <div className="stack">
       <header className="page-head">
         <h1>{t('admin.audit')}</h1>
-        <Button busy={vBusy} onClick={runVerify}>
+        <Button busy={vBusy} onClick={runVerify} data-tour="audit-verify">
           {t('admin.verify')}
         </Button>
       </header>
