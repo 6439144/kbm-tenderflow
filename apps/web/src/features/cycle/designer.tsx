@@ -13,6 +13,7 @@ import {
   TPL_TONE,
   roleLabels,
 } from './common';
+import { DueHoursField, OutOfScopeNote, ScopeCard, bidsInScope } from '../moi';
 
 interface Draft {
   id: string | null;
@@ -28,6 +29,7 @@ interface Draft {
 
 /** Starting values for a brand-new template (same as the server's v1 behaviour: one director approval, one envelope). */
 const BLANK: CycleConfig = {
+  scope: 'FULL_CYCLE',
   stages: { requestIntake: false, documentPurchase: false, gazette: false, capt: false, complianceScreening: true, recordsLock: false },
   approvals: {
     request: [{ role: 'DIRECTOR', ...roleLabels('DIRECTOR') }],
@@ -438,6 +440,8 @@ function Editor({
         </div>
       </Card>
 
+      <ScopeCard value={c.scope} onChange={(v) => setCfg((x) => void (x.scope = v))} />
+
       <div className="cyc-config-grid">
         <Card title={t('cycle.d.stages')}>
           <p className="muted small">{t('cycle.d.stagesHint')}</p>
@@ -457,6 +461,7 @@ function Editor({
         </Card>
 
         <Card title={t('cycle.d.envelopes')}>
+          {!bidsInScope(c) && <OutOfScopeNote />}
           <div className="segmented" role="radiogroup" aria-label={t('cycle.d.envelopes')}>
             {(['ONE', 'TWO'] as const).map((v) => (
               <button
@@ -522,7 +527,7 @@ function Editor({
         <Card title={t('cycle.d.approvals')} className="cyc-span-2">
           <p className="muted small">{t('cycle.d.approvalsHint')}</p>
           <div className="cyc-chains">
-            {(['request', 'publish', 'award'] as const).map((k) => (
+            {(['request', 'publish', 'award'] as const).filter((k) => k !== 'award' || bidsInScope(c)).map((k) => (
               <ChainEditor key={k} title={t(`cycle.gate.${k}` as TKey)} value={c.approvals[k]} onChange={(v) => setCfg((x) => void (x.approvals[k] = v))} />
             ))}
           </div>
@@ -701,6 +706,7 @@ function ChainEditor({ title, value, onChange }: { title: string; value: Approva
               </Field>
               <Field label={t('cycle.d.labelEn')}>{(id) => <input id={id} value={l.labelEn} onChange={(e) => set(i, { labelEn: e.target.value })} dir="ltr" />}</Field>
               <Field label={t('cycle.d.labelAr')}>{(id) => <input id={id} value={l.labelAr} onChange={(e) => set(i, { labelAr: e.target.value })} dir="rtl" />}</Field>
+              <DueHoursField value={l.dueHours} onChange={(h) => set(i, { dueHours: h })} />
             </div>
             <div className="cyc-chain-btns">
               <button type="button" className="btn btn-ghost cyc-icon" onClick={() => move(i, -1)} disabled={i === 0} aria-label={t('cycle.d.moveUp', { n: i + 1 })}>
