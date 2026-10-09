@@ -66,7 +66,7 @@ test('demo seed runs through the real services (SEED_DEMO=true)', async () => {
   const run = await startApp(undefined, { SEED_DEMO: 'true', DEMO_PASSWORD: 'Demo-Passw0rd!' });
   try {
     const tenants = await api(run, 'GET', '/api/v1/public/tenants');
-    assert.deepEqual(tenants.body.map((t: any) => t.id), ['gcia', 'kea']);
+    assert.deepEqual(tenants.body.map((t: any) => t.id), ['gcia', 'kea', 'moi']);
     const officer = await login(run, 'kea', 'officer', 'Demo-Passw0rd!');
     const list = await api(run, 'GET', '/api/v1/tenders', { token: officer });
     const byNum = Object.fromEntries(list.body.map((t: any) => [t.tenderNumber, t]));
