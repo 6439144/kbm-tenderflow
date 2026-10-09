@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import { db, VendorRecord } from '../db/client.js';
-import { AuthenticatedRequest } from '../middleware/tenant.js';
+import { AuthenticatedRequest, requireRole } from '../middleware/auth.js';
 import { auditLogger } from '../services/audit.js';
 import { validateVendorTransition } from '../domain/state-model.js';
 
@@ -8,14 +8,23 @@ export const vendorsRouter = Router();
 
 vendorsRouter.get('/', (req: AuthenticatedRequest, res: Response) => {
   const statusFilter = req.query.status as string;
+  const isVendor = req.user?.role === 'VENDOR';
+
   const list = Array.from(db.vendors.values()).filter(v => {
     if (v.tenantId !== req.tenantId) return false;
+    // Vendor can only view their own record
+    if (isVendor && v.id !== req.user?.vendorId && v.contactEmail !== req.user?.username && v.id !== req.user?.id) {
+      return false;
+    }
     if (statusFilter && v.status !== statusFilter) return false;
     return true;
   });
   res.json(list);
 });
 
+/**
+ * Public Vendor Self-Registration (Step 2)
+ */
 vendorsRouter.post('/register', async (req: AuthenticatedRequest, res: Response) => {
   const { legalNameEn, legalNameAr, crNumber, contactEmail, contactPhone, documentIds } = req.body;
   const tenantId = req.tenantId || 'kea';
@@ -64,12 +73,11 @@ vendorsRouter.post('/register', async (req: AuthenticatedRequest, res: Response)
   res.status(201).json(vendor);
 });
 
-vendorsRouter.post('/:vendorId/approve', async (req: AuthenticatedRequest, res: Response) => {
-  if (req.user?.role === 'VENDOR' || req.user?.role === 'PUBLIC') {
-    res.status(403).json({ code: 'FORBIDDEN_ROLE', message: 'Vendors are not permitted to approve vendor registrations.' });
-    return;
-  }
-
+/**
+ * Approve Vendor Registration (Step 2)
+ * Requires PROCUREMENT_OFFICER, DIRECTOR, or ADMIN
+ */
+vendorsRouter.post('/:vendorId/approve', requireRole(['PROCUREMENT_OFFICER', 'DIRECTOR', 'TENANT_ADMIN', 'SUPER_ADMIN']), async (req: AuthenticatedRequest, res: Response) => {
   const { vendorId } = req.params;
   const { reason } = req.body;
   const vendor = db.vendors.get(vendorId);
@@ -91,7 +99,7 @@ vendorsRouter.post('/:vendorId/approve', async (req: AuthenticatedRequest, res: 
 
   await auditLogger.logEvent({
     tenantId: req.tenantId!,
-    actorId: req.user?.id || 'officer@kea.gov.kw',
+    actorId: req.user?.id || 'officer',
     actorRole: req.user?.role || 'PROCUREMENT_OFFICER',
     action: 'VENDOR_APPROVED',
     resourceType: 'VENDOR',

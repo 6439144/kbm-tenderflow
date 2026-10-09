@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import { db, TenderRecord } from '../db/client.js';
-import { AuthenticatedRequest } from '../middleware/tenant.js';
+import { AuthenticatedRequest, requireRole } from '../middleware/auth.js';
 import { auditLogger } from '../services/audit.js';
 import { validateTenderTransition, TenderStatus } from '../domain/state-model.js';
 import { clarificationsRouter } from './clarifications.js';
@@ -14,22 +14,30 @@ tendersRouter.use('/:tenderId/clarifications', clarificationsRouter);
 tendersRouter.use('/:tenderId/bids', bidsRouter);
 tendersRouter.use('/:tenderId/evaluations', evaluationsRouter);
 
+/**
+ * Public listing of published tenders or authenticated view of all tenant tenders
+ */
 tendersRouter.get('/', (req: AuthenticatedRequest, res: Response) => {
   const statusFilter = req.query.status as string;
+  const isVendorOrPublic = !req.user || req.user.role === 'VENDOR' || req.user.role === 'PUBLIC';
+
   const list = Array.from(db.tenders.values()).filter(t => {
     if (t.tenantId !== req.tenantId) return false;
+    // Public/vendor can only see published/closed tenders
+    if (isVendorOrPublic && (t.status === 'DRAFT' || t.status === 'APPROVED_FOR_PUBLICATION')) {
+      return false;
+    }
     if (statusFilter && t.status !== statusFilter) return false;
     return true;
   });
   res.json(list);
 });
 
-tendersRouter.post('/', async (req: AuthenticatedRequest, res: Response) => {
-  if (req.user?.role === 'VENDOR' || req.user?.role === 'PUBLIC') {
-    res.status(403).json({ code: 'FORBIDDEN_ROLE', message: 'Vendors are not permitted to draft tenders.' });
-    return;
-  }
-
+/**
+ * Draft Tender Dossier (Step 3)
+ * Requires PROCUREMENT_OFFICER, DIRECTOR, or ADMIN
+ */
+tendersRouter.post('/', requireRole(['PROCUREMENT_OFFICER', 'DIRECTOR', 'TENANT_ADMIN', 'SUPER_ADMIN']), async (req: AuthenticatedRequest, res: Response) => {
   const { tenderNumber, titleEn, titleAr, category, estimatedBudget, submissionDeadline, documentIds } = req.body;
 
   if (!tenderNumber || !titleEn || !titleAr || !estimatedBudget || !submissionDeadline) {
@@ -50,6 +58,7 @@ tendersRouter.post('/', async (req: AuthenticatedRequest, res: Response) => {
     currency: 'KWD',
     submissionDeadline,
     documentIds: documentIds || [],
+    createdBy: req.user?.id,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   };
@@ -58,7 +67,7 @@ tendersRouter.post('/', async (req: AuthenticatedRequest, res: Response) => {
 
   await auditLogger.logEvent({
     tenantId: req.tenantId!,
-    actorId: req.user?.id || 'officer@kea.gov.kw',
+    actorId: req.user?.id || 'system',
     actorRole: req.user?.role || 'PROCUREMENT_OFFICER',
     action: 'TENDER_CREATED',
     resourceType: 'TENDER',
@@ -71,12 +80,12 @@ tendersRouter.post('/', async (req: AuthenticatedRequest, res: Response) => {
   res.status(201).json(tender);
 });
 
-tendersRouter.post('/:tenderId/approve-publish', async (req: AuthenticatedRequest, res: Response) => {
-  if (req.user?.role === 'VENDOR' || req.user?.role === 'PUBLIC') {
-    res.status(403).json({ code: 'FORBIDDEN_ROLE', message: 'Vendors are not permitted to approve tenders.' });
-    return;
-  }
-
+/**
+ * Authorize Publication (Step 4)
+ * Strict Segregation of Duties: Creator cannot approve own tender!
+ * Requires DIRECTOR or ADMIN
+ */
+tendersRouter.post('/:tenderId/approve-publish', requireRole(['DIRECTOR', 'TENANT_ADMIN', 'SUPER_ADMIN']), async (req: AuthenticatedRequest, res: Response) => {
   const { tenderId } = req.params;
   const { reason, aiAdvisoryRef } = req.body;
   const tender = db.tenders.get(tenderId);
@@ -86,8 +95,17 @@ tendersRouter.post('/:tenderId/approve-publish', async (req: AuthenticatedReques
     return;
   }
 
+  // Segregation of Duties (Rule SoD-1): Approver cannot be the creator
+  if (tender.createdBy && req.user?.id && tender.createdBy === req.user.id) {
+    res.status(403).json({
+      code: 'CREATOR_CANNOT_APPROVE',
+      message: 'Segregation of duties violation: Tender creator cannot authorize publication of their own tender.'
+    });
+    return;
+  }
+
   try {
-    // Non-negotiable Rule 7: Must be authorized by human officer
+    // Rule 7: Must be authorized by human director
     validateTenderTransition(tender.status as TenderStatus, 'APPROVED_FOR_PUBLICATION');
 
     const prev = tender.status;
@@ -97,14 +115,14 @@ tendersRouter.post('/:tenderId/approve-publish', async (req: AuthenticatedReques
 
     await auditLogger.logEvent({
       tenantId: req.tenantId!,
-      actorId: req.user?.id || 'director@kea.gov.kw',
-      actorRole: 'DIRECTOR',
+      actorId: req.user?.id || 'director',
+      actorRole: req.user?.role || 'DIRECTOR',
       action: 'TENDER_APPROVED_FOR_PUBLISH',
       resourceType: 'TENDER',
       resourceId: tenderId,
       prevState: prev,
       newState: 'APPROVED_FOR_PUBLICATION',
-      reason: reason || 'Human sign-off approving publication after AI completeness review.'
+      reason: reason || 'Human director sign-off approving publication after completeness review.'
     });
 
     res.json(tender);
@@ -113,12 +131,11 @@ tendersRouter.post('/:tenderId/approve-publish', async (req: AuthenticatedReques
   }
 });
 
-tendersRouter.post('/:tenderId/publish', async (req: AuthenticatedRequest, res: Response) => {
-  if (req.user?.role === 'VENDOR' || req.user?.role === 'PUBLIC') {
-    res.status(403).json({ code: 'FORBIDDEN_ROLE', message: 'Vendors are not permitted to publish tenders.' });
-    return;
-  }
-
+/**
+ * Publish Tender (Step 5)
+ * Requires PROCUREMENT_OFFICER, DIRECTOR, or ADMIN
+ */
+tendersRouter.post('/:tenderId/publish', requireRole(['PROCUREMENT_OFFICER', 'DIRECTOR', 'TENANT_ADMIN', 'SUPER_ADMIN']), async (req: AuthenticatedRequest, res: Response) => {
   const { tenderId } = req.params;
   const tender = db.tenders.get(tenderId);
 
@@ -136,8 +153,8 @@ tendersRouter.post('/:tenderId/publish', async (req: AuthenticatedRequest, res: 
 
     await auditLogger.logEvent({
       tenantId: req.tenantId!,
-      actorId: req.user?.id || 'officer@kea.gov.kw',
-      actorRole: 'PROCUREMENT_OFFICER',
+      actorId: req.user?.id || 'officer',
+      actorRole: req.user?.role || 'PROCUREMENT_OFFICER',
       action: 'TENDER_PUBLISHED',
       resourceType: 'TENDER',
       resourceId: tenderId,
@@ -152,7 +169,10 @@ tendersRouter.post('/:tenderId/publish', async (req: AuthenticatedRequest, res: 
   }
 });
 
-tendersRouter.post('/:tenderId/close', async (req: AuthenticatedRequest, res: Response) => {
+/**
+ * Close Tender at deadline
+ */
+tendersRouter.post('/:tenderId/close', requireRole(['PROCUREMENT_OFFICER', 'DIRECTOR', 'TENANT_ADMIN', 'SUPER_ADMIN']), async (req: AuthenticatedRequest, res: Response) => {
   const { tenderId } = req.params;
   const tender = db.tenders.get(tenderId);
 
@@ -171,7 +191,7 @@ tendersRouter.post('/:tenderId/close', async (req: AuthenticatedRequest, res: Re
     await auditLogger.logEvent({
       tenantId: req.tenantId!,
       actorId: req.user?.id || 'system',
-      actorRole: 'SYSTEM',
+      actorRole: req.user?.role || 'SYSTEM',
       action: 'TENDER_CLOSED',
       resourceType: 'TENDER',
       resourceId: tenderId,
@@ -192,5 +212,12 @@ tendersRouter.get('/:tenderId', (req: AuthenticatedRequest, res: Response) => {
     res.status(404).json({ code: 'NOT_FOUND', message: 'Tender not found.' });
     return;
   }
+
+  const isVendorOrPublic = !req.user || req.user.role === 'VENDOR' || req.user.role === 'PUBLIC';
+  if (isVendorOrPublic && (tender.status === 'DRAFT' || tender.status === 'APPROVED_FOR_PUBLICATION')) {
+    res.status(404).json({ code: 'NOT_FOUND', message: 'Tender is not published yet.' });
+    return;
+  }
+
   res.json(tender);
 });

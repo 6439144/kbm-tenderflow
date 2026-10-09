@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import { db, ClarificationRecord } from '../db/client.js';
-import { AuthenticatedRequest } from '../middleware/tenant.js';
+import { AuthenticatedRequest, requireRole } from '../middleware/auth.js';
 import { auditLogger } from '../services/audit.js';
 
 export const clarificationsRouter = Router({ mergeParams: true });
@@ -27,7 +27,7 @@ clarificationsRouter.post('/', async (req: AuthenticatedRequest, res: Response) 
     id,
     tenantId: req.tenantId!,
     tenderId,
-    vendorId: req.user?.id || 'vendor_001',
+    vendorId: req.user?.id || 'anonymous_vendor',
     question,
     status: 'PENDING',
     createdAt: new Date().toISOString()
@@ -38,7 +38,7 @@ clarificationsRouter.post('/', async (req: AuthenticatedRequest, res: Response) 
   await auditLogger.logEvent({
     tenantId: req.tenantId!,
     actorId: req.user?.id || 'vendor',
-    actorRole: 'VENDOR',
+    actorRole: req.user?.role || 'VENDOR',
     action: 'CLARIFICATION_SUBMITTED',
     resourceType: 'CLARIFICATION',
     resourceId: id,
@@ -50,7 +50,7 @@ clarificationsRouter.post('/', async (req: AuthenticatedRequest, res: Response) 
   res.status(201).json(clar);
 });
 
-clarificationsRouter.post('/:clarificationId/respond', async (req: AuthenticatedRequest, res: Response) => {
+clarificationsRouter.post('/:clarificationId/respond', requireRole(['PROCUREMENT_OFFICER', 'DIRECTOR', 'TENANT_ADMIN', 'SUPER_ADMIN']), async (req: AuthenticatedRequest, res: Response) => {
   const { tenderId, clarificationId } = req.params;
   const { answer } = req.body;
 
@@ -66,8 +66,8 @@ clarificationsRouter.post('/:clarificationId/respond', async (req: Authenticated
 
   await auditLogger.logEvent({
     tenantId: req.tenantId!,
-    actorId: req.user?.id || 'officer@kea.gov.kw',
-    actorRole: 'PROCUREMENT_OFFICER',
+    actorId: req.user?.id || 'officer',
+    actorRole: req.user?.role || 'PROCUREMENT_OFFICER',
     action: 'CLARIFICATION_ANSWERED',
     resourceType: 'CLARIFICATION',
     resourceId: clarificationId,

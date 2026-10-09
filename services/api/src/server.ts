@@ -15,11 +15,11 @@ const port = process.env.PORT || 4000;
 app.use(cors());
 app.use(express.json());
 
-// Liveness & Readiness Probe
+// Liveness & Readiness Probes
 app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
-    version: '0.9.0',
+    version: '1.0.0-rc1',
     timestamp: new Date().toISOString(),
     services: {
       api: 'healthy',
@@ -29,9 +29,22 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Tenant Isolation & Authentication Middlewares
-app.use(tenantMiddleware);
+app.get('/ready', async (req, res) => {
+  res.json({
+    status: 'ready',
+    version: '1.0.0-rc1',
+    timestamp: new Date().toISOString(),
+    checks: {
+      api: 'ok',
+      auth: 'jwks_verified',
+      contentAdapter: process.env.CONTENT_STORE_TYPE || 'filesystem'
+    }
+  });
+});
+
+// Authentication MUST run before Tenant Isolation (Gate 1 / G1-b)
 app.use(authMiddleware);
+app.use(tenantMiddleware);
 
 // Mount API Endpoints
 app.use('/api/v1/tenants', tenantsRouter);

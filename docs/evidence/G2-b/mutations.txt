@@ -1,0 +1,115 @@
+createDocument(repositoryIdentifier: NON_NULL, classIdentifier: String, id: ID, versionSeriesId: ID, documentProperties: DocumentPropertiesInput, fileInFolderIdentifier: String, checkinAction: SubCheckinActionInput): A document object creation mutation.
+
+The id and versionSeriesId arguments are optional and can be used to predefine those IDs.
+
+The checkinAction argument can be specified to automatically check in at creation time.
+
+The fileInFolderIdentifier argument can be specified to automatically file in a folder (RCR created) at creation time.
+specified by Id or path.
+updateDocument(repositoryIdentifier: NON_NULL, identifier: NON_NULL, classIdentifier: String, updateSequenceNumber: Int, documentProperties: DocumentPropertiesInput): A document object update mutation.
+
+The identifier argument can identify the document by Id or path.
+
+Update can be combined with a Change Class by specifying a different class name for the classIdentifier argument.
+checkinDocument(repositoryIdentifier: NON_NULL, identifier: NON_NULL, updateSequenceNumber: Int, checkinAction: NON_NULL, documentProperties: DocumentPropertiesInput): A document object checkin mutation.
+
+The identifier argument can identify the document by Id or path.
+checkoutDocument(repositoryIdentifier: NON_NULL, identifier: NON_NULL, updateSequenceNumber: Int, documentProperties: DocumentPropertiesInput, checkoutAction: SubCheckoutActionInput): A document object checkout mutation.
+
+The identifier argument can identify the document by Id or path.
+
+This returns the source document being checked out.  The newly checked out Reservation object can be obtained by selecting the 'reservation' field.
+
+Note: The newly checked out reservation properties can optionally be set inside the SubCheckoutActionInput object.  The source
+      document properties can optionally be set through the properties field in addition to the checkout.  Setting the source
+      document properties at the time of checking it out might be rare.
+cancelDocumentCheckout(repositoryIdentifier: NON_NULL, identifier: NON_NULL): A document object cancel checkout mutation.
+
+The identifier argument can identify the document by Id or path.
+promoteDocumentVersion(repositoryIdentifier: NON_NULL, identifier: NON_NULL, updateSequenceNumber: Int, documentProperties: DocumentPropertiesInput): A document promote version mutation.
+
+The identifier argument can identify the document by Id
+demoteDocumentVersion(repositoryIdentifier: NON_NULL, identifier: NON_NULL, updateSequenceNumber: Int, documentProperties: DocumentPropertiesInput): A document demote version mutation.
+
+The identifier argument can identify the document by Id or path.
+deleteDocument(repositoryIdentifier: NON_NULL, identifier: NON_NULL, updateSequenceNumber: Int): A document object delete mutation.
+
+The identifier argument can identify the folder by Id or path.
+
+Upon successful deletion a minimal Document object with identifying information only is returned.
+fileDocument(repositoryIdentifier: NON_NULL, identifier: NON_NULL, folderIdentifier: NON_NULL, autoUniqueName: AutoUniqueName, containmentName: String, defineSecurityParentage: DefineSecurityParentage): File a document to a folder mutation.
+
+The identifier argument can identify the document by Id or path.
+
+The target folder for the document to file under can be identified by Id or path.
+fileCustomObject(repositoryIdentifier: NON_NULL, identifier: NON_NULL, folderIdentifier: NON_NULL, autoUniqueName: AutoUniqueName, containmentName: String, defineSecurityParentage: DefineSecurityParentage): File a custom object to a folder mutation.
+
+The identifier argument can identify the custom object by Id or path.
+
+The target folder for the custom object to file under can be identified by Id or path.
+deleteReferentialContainmentRelationship(repositoryIdentifier: NON_NULL, identifier: NON_NULL, updateSequenceNumber: Int): Unfile a document or custom object from a folder mutation by deleting the corresponding referential containment relationship.
+
+The identifier argument can identify the document or custom object by Id or containment path.
+
+Upon successful deletion a minimal ReferentialContainmentRelationship object with identifying information only is returned.
+createFolder(repositoryIdentifier: NON_NULL, classIdentifier: String, id: ID, folderProperties: FolderPropertiesInput): A folder object creation mutation.
+
+The id is optional and can be used to predefine a folder ID.
+updateFolder(repositoryIdentifier: NON_NULL, identifier: NON_NULL, classIdentifier: String, updateSequenceNumber: Int, folderProperties: FolderPropertiesInput): A folder object update mutation.
+
+The identifier argument can identify the folder by Id or path.
+
+Update can be combined with a Change Class by specifying a different class name for the classIdentifier argument.
+deleteFolder(repositoryIdentifier: NON_NULL, identifier: NON_NULL, updateSequenceNumber: Int): A folder object delete mutation.
+
+The identifier argument can identify the folder by Id or path.
+
+Upon successful deletion a minimal Folder object with identifying information only is returned.
+createCustomObject(repositoryIdentifier: NON_NULL, classIdentifier: String, id: ID, customObjectProperties: CustomObjectPropertiesInput, fileInFolderIdentifier: String): A custom object creation mutation.
+
+The id argument is optional and can be used to predefine the ID.
+
+The fileInFolderIdentifier argument can be specified to automatically file in a folder (RCR created) at creation time.
+Specified by Id or path.
+updateCustomObject(repositoryIdentifier: NON_NULL, identifier: NON_NULL, classIdentifier: String, updateSequenceNumber: Int, customObjectProperties: CustomObjectPropertiesInput): A custom object update mutation.
+
+The identifier argument can identify the custom object by Id or path.
+
+Update can be combined with a Change Class by specifying a different class name for the classIdentifier argument.
+deleteCustomObject(repositoryIdentifier: NON_NULL, identifier: NON_NULL, updateSequenceNumber: Int): 
+createCmAbstractPersistable(repositoryIdentifier: NON_NULL, classIdentifier: NON_NULL, id: ID, cmAbstractPersistableProperties: CmAbstractPersistablePropertiesInput): A CmAbstractPersistable object creation mutation.
+
+The id is optional and can be used to predefine an object ID.
+updateCmAbstractPersistable(repositoryIdentifier: NON_NULL, classIdentifier: NON_NULL, identifier: NON_NULL, updateSequenceNumber: Int, cmAbstractPersistableProperties: CmAbstractPersistablePropertiesInput): A CmAbstractPersistable object update mutation.
+deleteCmAbstractPersistable(repositoryIdentifier: NON_NULL, classIdentifier: NON_NULL, identifier: NON_NULL, updateSequenceNumber: Int): A CmAbstractPersistable object delete mutation.
+
+Upon successful deletion a minimal CmAbstractPersistable object with identifying information only is returned.
+deleteVersionSeries(repositoryIdentifier: NON_NULL, identifier: NON_NULL, updateSequenceNumber: Int): Delete a document version series.
+
+Upon successful deletion a minimal VersionSeries object with identifying information only is returned.
+createAnnotation(repositoryIdentifier: NON_NULL, classIdentifier: String, id: ID, annotationProperties: AnnotationPropertiesInput): An Annotation object create mutation.
+
+The id is optional and can be used to predefine an object ID.
+updateAnnotation(repositoryIdentifier: NON_NULL, identifier: NON_NULL, classIdentifier: String, updateSequenceNumber: Int, annotationProperties: AnnotationPropertiesInput): An Annotation object update mutation.
+deleteAnnotation(repositoryIdentifier: NON_NULL, identifier: NON_NULL, updateSequenceNumber: Int): An Annotation object delete mutation.
+
+Upon successful deletion a minimal Annotation object with identifying information only is returned.
+createCmThumbnail(repositoryIdentifier: NON_NULL, classIdentifier: String, id: ID, cmThumbnailProperties: CmThumbnailPropertiesInput): A CmThumbnail object create mutation.
+
+The id is optional and can be used to predefine an object ID.
+updateCmThumbnail(repositoryIdentifier: NON_NULL, identifier: String, classIdentifier: String, updateSequenceNumber: Int, cmThumbnailProperties: CmThumbnailPropertiesInput): A CmThumbnail object update mutation.
+deleteCmThumbnail(repositoryIdentifier: NON_NULL, identifier: String, updateSequenceNumber: Int): A CmThumbnail object delete mutation.
+
+ Upon successful deletion a minimal CmThumbnail object with identifying information only is returned.
+changeObject(repositoryIdentifier: String, classIdentifier: String, identifier: String, updateSequenceNumber: Int, properties: LIST, objectProperties: LIST, actions: LIST): A generic object mutation that can create or change any independently persistable object in any way including
+chaining together pending actions.
+
+Class and object identifier are optional if this represents a create action, in which case the action itself holds at least the class information.
+
+For a domain object, pass "Domain" for classIdentifier and no identifier.
+
+The generic actions list must include an action with the type CREATE if this is a request to create an object.
+If this represents a delete action, a minimal object implementing IndependentlyPersistableObject with identifying information is returned.
+eevCreateExternalEventAction(repositoryIdentifier: NON_NULL, id: ID, externalEventActionProperties: NON_NULL, subscriptions: EevExternalEventSubscriptionSetInput): A mutation to create an external event action.
+eevUpdateExternalEventAction(repositoryIdentifier: NON_NULL, identifier: NON_NULL, updateSequenceNumber: Int, externalEventActionProperties: EevBaseExternalEventActionPropertiesInput, subscriptions: EevExternalEventSubscriptionSetInput): A mutation to update a particular external event action.
+eevDeleteExternalEventAction(repositoryIdentifier: NON_NULL, identifier: NON_NULL, updateSequenceNumber: Int): A mutation to delete a particular external event action.

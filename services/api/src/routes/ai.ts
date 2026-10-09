@@ -1,13 +1,12 @@
 import { Router, Response } from 'express';
-import { AuthenticatedRequest } from '../middleware/tenant.js';
+import { AuthenticatedRequest, requireRole } from '../middleware/auth.js';
 import { aiAdvisory } from '../services/ai-advisory.js';
 import { db } from '../db/client.js';
-
 import { sealedBidVault } from '../services/sealed-bid-vault.js';
 
 export const aiRouter = Router();
 
-aiRouter.post('/advisory/tender-completeness-check', async (req: AuthenticatedRequest, res: Response) => {
+aiRouter.post('/advisory/tender-completeness-check', requireRole(['PROCUREMENT_OFFICER', 'DIRECTOR', 'TENANT_ADMIN', 'SUPER_ADMIN']), async (req: AuthenticatedRequest, res: Response) => {
   const { tenderId } = req.body;
   const tender = db.tenders.get(tenderId);
 
@@ -28,7 +27,7 @@ aiRouter.post('/advisory/tender-completeness-check', async (req: AuthenticatedRe
   res.json(report);
 });
 
-aiRouter.post('/advisory/draft-clarification-reply', async (req: AuthenticatedRequest, res: Response) => {
+aiRouter.post('/advisory/draft-clarification-reply', requireRole(['PROCUREMENT_OFFICER', 'DIRECTOR', 'TENANT_ADMIN', 'SUPER_ADMIN']), async (req: AuthenticatedRequest, res: Response) => {
   const { question } = req.body;
   if (!question) {
     res.status(400).json({ code: 'INVALID_REQUEST', message: 'question is required.' });
@@ -39,7 +38,7 @@ aiRouter.post('/advisory/draft-clarification-reply', async (req: AuthenticatedRe
   res.json(draft);
 });
 
-aiRouter.post('/advisory/evaluate-bid-compliance', async (req: AuthenticatedRequest, res: Response) => {
+aiRouter.post('/advisory/evaluate-bid-compliance', requireRole(['EVALUATOR', 'COMMITTEE_CHAIR', 'OPENING_COMMITTEE_CHAIR', 'COMMITTEE_MEMBER', 'TENANT_ADMIN', 'SUPER_ADMIN']), async (req: AuthenticatedRequest, res: Response) => {
   const { bidId, vendorName } = req.body;
 
   // Non-negotiable Rule 1: Nobody (including AI tools) reads a sealed bid before opening

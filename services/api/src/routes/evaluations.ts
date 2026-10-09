@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import { db, EvaluationRecord, AwardRecord } from '../db/client.js';
-import { AuthenticatedRequest } from '../middleware/tenant.js';
+import { AuthenticatedRequest, requireRole } from '../middleware/auth.js';
 import { auditLogger } from '../services/audit.js';
 import { validateTenderTransition, TenderStatus } from '../domain/state-model.js';
 
@@ -14,12 +14,11 @@ evaluationsRouter.get('/', (req: AuthenticatedRequest, res: Response) => {
   res.json(evals);
 });
 
-evaluationsRouter.post('/scorecard', async (req: AuthenticatedRequest, res: Response) => {
-  if (req.user?.role === 'VENDOR' || req.user?.role === 'PUBLIC') {
-    res.status(403).json({ code: 'FORBIDDEN_ROLE', message: 'Vendors are not permitted to submit evaluation scorecards.' });
-    return;
-  }
-
+/**
+ * Submit Evaluator Scorecard (Step 9)
+ * Requires EVALUATOR, COMMITTEE_MEMBER, or ADMIN
+ */
+evaluationsRouter.post('/scorecard', requireRole(['EVALUATOR', 'COMMITTEE_MEMBER', 'TENANT_ADMIN', 'SUPER_ADMIN']), async (req: AuthenticatedRequest, res: Response) => {
   const { tenderId } = req.params;
   const { bidId, evaluatorId, technicalScore, financialScore, comments } = req.body;
 
@@ -36,7 +35,7 @@ evaluationsRouter.post('/scorecard', async (req: AuthenticatedRequest, res: Resp
     tenantId: req.tenantId!,
     tenderId,
     bidId,
-    evaluatorId: evaluatorId || req.user?.id || 'evaluator_1',
+    evaluatorId: evaluatorId || req.user?.id || 'evaluator',
     technicalScore: Number(technicalScore),
     financialScore: Number(financialScore),
     compositeScore: Math.round(composite * 100) / 100,
@@ -68,12 +67,11 @@ evaluationsRouter.post('/scorecard', async (req: AuthenticatedRequest, res: Resp
   res.status(201).json(evaluation);
 });
 
-evaluationsRouter.post('/award', async (req: AuthenticatedRequest, res: Response) => {
-  if (req.user?.role === 'VENDOR' || req.user?.role === 'PUBLIC') {
-    res.status(403).json({ code: 'FORBIDDEN_ROLE', message: 'Vendors are not permitted to issue contract awards.' });
-    return;
-  }
-
+/**
+ * Contract Award Sign-Off (Step 10)
+ * Requires DIRECTOR, TENANT_ADMIN, or SUPER_ADMIN (Rule SoD-2)
+ */
+evaluationsRouter.post('/award', requireRole(['DIRECTOR', 'TENANT_ADMIN', 'SUPER_ADMIN']), async (req: AuthenticatedRequest, res: Response) => {
   const { tenderId } = req.params;
   const { winningVendorId, awardValue, justification } = req.body;
 
@@ -98,7 +96,7 @@ evaluationsRouter.post('/award', async (req: AuthenticatedRequest, res: Response
     winningVendorId,
     awardValue: Number(awardValue),
     justification: justification || 'Highest composite score in technical and commercial evaluation.',
-    approvedBy: req.user?.id || 'director@kea.gov.kw',
+    approvedBy: req.user?.id || 'director',
     awardedAt: new Date().toISOString()
   };
 
@@ -112,7 +110,7 @@ evaluationsRouter.post('/award', async (req: AuthenticatedRequest, res: Response
   await auditLogger.logEvent({
     tenantId: req.tenantId!,
     actorId: award.approvedBy,
-    actorRole: 'DIRECTOR',
+    actorRole: req.user?.role || 'DIRECTOR',
     action: 'TENDER_AWARDED',
     resourceType: 'TENDER',
     resourceId: tenderId,

@@ -37,6 +37,7 @@ export interface TenderRecord {
   currency: string;
   submissionDeadline: string;
   documentIds: string[];
+  createdBy?: string;
   awardedVendorId?: string | null;
   aiAdvisoryRef?: string | null;
   createdAt: string;

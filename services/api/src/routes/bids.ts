@@ -1,5 +1,5 @@
 import { Router, Response } from 'express';
-import { AuthenticatedRequest } from '../middleware/tenant.js';
+import { AuthenticatedRequest, requireRole } from '../middleware/auth.js';
 import { sealedBidVault, SealedBidAccessViolationError } from '../services/sealed-bid-vault.js';
 import { db } from '../db/client.js';
 import { validateTenderTransition, TenderStatus } from '../domain/state-model.js';
@@ -9,14 +9,26 @@ export const bidsRouter = Router({ mergeParams: true });
 bidsRouter.get('/', (req: AuthenticatedRequest, res: Response) => {
   const { tenderId } = req.params;
   const bids = sealedBidVault.listBidsForTender(req.tenantId!, tenderId);
+
+  // If caller is a vendor, filter so they only see their own bid metadata or count
+  if (req.user?.role === 'VENDOR') {
+    const callerVendorId = req.user.vendorId || req.user.id;
+    return res.json(bids.filter(b => b.vendorId === callerVendorId));
+  }
+
   res.json(bids);
 });
 
-bidsRouter.post('/', async (req: AuthenticatedRequest, res: Response) => {
+/**
+ * Submit Sealed Bid (Step 7)
+ * Strictly requires VENDOR role
+ * Rejects submission if tender is not PUBLISHED or deadline has passed
+ */
+bidsRouter.post('/', requireRole(['VENDOR']), async (req: AuthenticatedRequest, res: Response) => {
   const { tenderId } = req.params;
-  const { vendorId, vendorName, technicalProposalDocId, financialProposalDocId, hashDigest } = req.body;
+  const { technicalProposalDocId, financialProposalDocId, hashDigest, vendorName } = req.body;
 
-  if (!vendorId || !technicalProposalDocId || !financialProposalDocId || !hashDigest) {
+  if (!technicalProposalDocId || !financialProposalDocId || !hashDigest) {
     res.status(400).json({ code: 'INVALID_REQUEST', message: 'Missing required bid submission parameters.' });
     return;
   }
@@ -27,12 +39,35 @@ bidsRouter.post('/', async (req: AuthenticatedRequest, res: Response) => {
     return;
   }
 
+  // Reject bids if tender is not in PUBLISHED state
+  if (tender.status !== 'PUBLISHED') {
+    res.status(400).json({
+      code: 'TENDER_NOT_PUBLISHED',
+      message: `Cannot submit bid: Tender status is '${tender.status}'. Bids can only be submitted for PUBLISHED tenders.`
+    });
+    return;
+  }
+
+  // Reject bids if server clock (UTC) has passed submission deadline
+  const now = new Date();
+  const deadline = new Date(tender.submissionDeadline);
+  if (now > deadline) {
+    res.status(400).json({
+      code: 'DEADLINE_ELAPSED',
+      message: `Cannot submit bid: Submission deadline (${tender.submissionDeadline}) has elapsed.`
+    });
+    return;
+  }
+
+  // vendorId is strictly derived from the authenticated token claim
+  const authenticatedVendorId = req.user?.vendorId || req.user?.id || 'vnd_unknown';
+
   try {
     const bid = await sealedBidVault.submitSealedBid({
       tenantId: req.tenantId!,
       tenderId,
-      vendorId,
-      vendorName: vendorName || 'Registered Vendor',
+      vendorId: authenticatedVendorId,
+      vendorName: vendorName || req.user?.username || 'Verified Vendor',
       technicalDocId: technicalProposalDocId,
       financialDocId: financialProposalDocId,
       hashDigest
@@ -55,12 +90,26 @@ bidsRouter.post('/', async (req: AuthenticatedRequest, res: Response) => {
 /**
  * Non-negotiable Rule 1: Sealed bids access control.
  * Strictly returns HTTP 403 if tender has not held opening ceremony.
+ * Competitor vendors are forbidden from reading other vendors' bids.
  */
 bidsRouter.get('/:bidId/content', (req: AuthenticatedRequest, res: Response) => {
   const { tenderId, bidId } = req.params;
 
   try {
     const bid = sealedBidVault.getBidContent(req.tenantId!, tenderId, bidId);
+
+    // Prevent competitor vendor from viewing another vendor's bid contents even after opening
+    if (req.user?.role === 'VENDOR') {
+      const callerVendorId = req.user.vendorId || req.user.id;
+      if (bid.vendorId !== callerVendorId) {
+        res.status(403).json({
+          code: 'FORBIDDEN_COMPETITOR_ACCESS',
+          message: 'Vendors are forbidden from inspecting competing bids.'
+        });
+        return;
+      }
+    }
+
     res.json({
       bidId: bid.id,
       technicalProposalDocId: bid.technicalDocId,
@@ -81,13 +130,10 @@ bidsRouter.get('/:bidId/content', (req: AuthenticatedRequest, res: Response) => 
 
 /**
  * Step 8: Bid Opening Ceremony
+ * Requires COMMITTEE_CHAIR, OPENING_COMMITTEE_CHAIR, or ADMIN
+ * Cannot be opened before submission deadline (409 Conflict)
  */
-bidsRouter.post('/opening-ceremony', async (req: AuthenticatedRequest, res: Response) => {
-  if (req.user?.role === 'VENDOR' || req.user?.role === 'PUBLIC') {
-    res.status(403).json({ code: 'FORBIDDEN_ROLE', message: 'Vendors are not permitted to convene bid opening ceremonies.' });
-    return;
-  }
-
+bidsRouter.post('/opening-ceremony', requireRole(['COMMITTEE_CHAIR', 'OPENING_COMMITTEE_CHAIR', 'TENANT_ADMIN', 'SUPER_ADMIN']), async (req: AuthenticatedRequest, res: Response) => {
   const { tenderId } = req.params;
   const { committeeChair, attendees, minutesNotes } = req.body;
 
@@ -102,8 +148,19 @@ bidsRouter.post('/opening-ceremony', async (req: AuthenticatedRequest, res: Resp
     return;
   }
 
+  // Reject opening ceremony if now < deadline (Task G1-c / P0-2)
+  const now = new Date();
+  const deadline = new Date(tender.submissionDeadline);
+  if (now < deadline) {
+    res.status(409).json({
+      code: 'OPENING_BEFORE_DEADLINE',
+      message: `Opening ceremony cannot be convened before submission deadline (${tender.submissionDeadline}).`
+    });
+    return;
+  }
+
   try {
-    // If tender is not yet closed, transition to CLOSED first
+    // If tender was PUBLISHED and deadline passed, auto-close
     if (tender.status === 'PUBLISHED') {
       tender.status = 'CLOSED';
     }
