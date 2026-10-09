@@ -20,6 +20,7 @@ import { FileNetHealthPage } from './features/filenet';
 import { AssistantDock } from './features/assistant';
 import { DocumentQueuePage, DocumentTypesPage } from './features/docintel';
 import { AdminOverviewPage, AnalyticsPage, EvidencePackPage, PublicBoardPage } from './features/insight';
+import { DeliveryLogPage, JobsPage, NotificationTemplatesPage } from './features/notify';
 
 const LANG_KEY = 'tf.lang';
 
@@ -55,6 +56,9 @@ const ADMIN_NAV: NavItem[] = [
   { to: '/admin/overview', label: 'insight.nav.overview' },
   { to: '/admin/analytics', label: 'insight.nav.analytics' },
   { to: '/admin/evidence', label: 'insight.nav.evidence' },
+  { to: '/admin/notifications', label: 'nav.notifications', end: true },
+  { to: '/admin/notifications/log', label: 'nav.deliveryLog' },
+  { to: '/admin/jobs', label: 'nav.jobs' },
 ];
 
 function Home() {
@@ -129,6 +133,10 @@ export default function App() {
               <Route path="overview" element={<AdminOverviewPage />} />
               <Route path="analytics" element={<AnalyticsPage />} />
               <Route path="evidence" element={<EvidencePackPage />} />
+              {/* notify routes */}
+              <Route path="notifications" element={<NotificationTemplatesPage />} />
+              <Route path="notifications/log" element={<DeliveryLogPage />} />
+              <Route path="jobs" element={<JobsPage />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>

@@ -9,7 +9,7 @@ import { insertDocument, publicDoc, putDocument, validateUpload, type DocumentRo
 import { emitDocumentEvent } from './document-events.js';
 import { applyPattern, configOf, getProfile, resolveTemplate, snapshotOf, stageList, type ApprovalLevel } from './templates.js';
 import { checkEligibility, purchaseOf, ruleOf } from './eligibility.js';
-import { notifyRole, notifyVendorsOfTender } from './notifications.js';
+import { notify, notifyRole, notifyVendorsOfTender } from './notifications.js';
 
 export interface TenderRow {
   id: string; tenant_id: string; tender_number: string; title_en: string; title_ar: string; description_en: string;
@@ -438,6 +438,7 @@ export async function answerClarification(ctx: Ctx, actor: Actor, id: string, b:
       `UPDATE clarifications SET answer=$1, answered_by=$2, answered_at=$3, status='ANSWERED', ai_run_id=COALESCE($4, ai_run_id)
         WHERE id=$5 AND status='OPEN' RETURNING *`, [answer, actor.id, now(), aiRunId, id]);
     if (!rows[0]) throw conflict('INVALID_STATE', 'Clarification already answered');
+    await notify(q, { tenantId: actor.tenantId, vendorId: c.vendor_id, kind: 'CLARIFICATION_ANSWERED', body: { tenderId: c.tender_id, clarificationId: id }, titleEn: 'Your clarification was answered', titleAr: 'تمت الإجابة على استفساركم' });
     await auditTx(ctx, q, { tenantId: actor.tenantId, actor, action: 'CLARIFICATION_ANSWERED', resourceType: 'CLARIFICATION',
       resourceId: id, prevState: 'OPEN', newState: 'ANSWERED', details: { tenderId: c.tender_id, aiRunId } });
     return camel(rows[0]);

@@ -17,7 +17,7 @@ import { unwrapKey } from '../../services/vault.js';
 import type { TenderRow } from '../../services/tenders.js';
 import { configOf, getProfile } from '../../services/templates.js';
 import { recordRun } from '../../services/ai-runs.js';
-import { notify } from '../../services/notifications.js';
+import { notify, notifyRole } from '../../services/notifications.js';
 import { setClassification } from '../../services/eligibility.js';
 import { catalogueFor, contextOf, typeByCode, CLASSIFIABLE_OWNER_TYPES } from '../../services/doc-catalogue.js';
 import { computeFlags, expectedTypeOf, EXPIRY_KEYS, type EffectiveField, type Flag } from './flags.js';
@@ -146,6 +146,7 @@ async function insertInsight(ctx: Ctx, actor: Actor, d: DocumentRow, v: Partial<
     await auditTx(ctx, q, { tenantId: d.tenant_id, actor, action, resourceType: 'DOCUMENT', resourceId: d.id, newState: v.status,
       details: { insightId: id, aiRunId: v.ai_run_id ?? null, docType: v.doc_type ?? null, fields: (v.fields ?? []).map((f) => f.key),
         flags: (v.flags ?? []).map((f) => f.code), trigger: v.trigger, ownerType: d.owner_type, error: v.error?.slice(0, 300) ?? null } });
+    if (v.status === 'PENDING_REVIEW') await notifyRole(q, d.tenant_id, isBidDoc(d) ? 'COMMITTEE_CHAIR' : 'PROCUREMENT_OFFICER', { kind: 'DOCUMENT_INSIGHT_READY', body: { documentId: d.id, insightId: id, tenderId: d.tender_id ?? undefined, docType: v.doc_type ?? null }, titleEn: `Document data ready for review: ${d.title}`, titleAr: `بيانات مستند جاهزة للمراجعة: ${d.title}` });
     return rows[0];
   });
 }

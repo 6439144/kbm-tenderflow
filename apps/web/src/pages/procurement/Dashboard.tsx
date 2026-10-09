@@ -1,6 +1,7 @@
 import { useI18n } from '../../i18n';
 import { ApprovalsWaitingCard, DefaultCycleCard } from '../../features/cycle';
 import { StaffRoleDashboard } from '../../features/insight';
+import { OverdueApprovalsCard } from '../../features/notify';
 
 /**
  * Staff home (/procurement), MOI BRD FR-031: the cycle cards, then one dashboard section per role the user holds
@@ -15,6 +16,7 @@ export default function Dashboard() {
       </header>
       <div className="cyc-dash">
         <ApprovalsWaitingCard />
+        <OverdueApprovalsCard />
         <DefaultCycleCard />
       </div>
       <StaffRoleDashboard />

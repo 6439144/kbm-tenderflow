@@ -1,0 +1,405 @@
+/* NOTIFY feature styles (notification templates, delivery log, jobs, approval service levels).
+   Logical properties only, so Arabic (RTL) and English (LTR) both work. */
+
+.notify-lead {
+  margin: 0;
+  max-inline-size: 75ch;
+}
+.notify-code {
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+}
+.notify-num {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+/* sub navigation */
+.notify-subnav {
+  display: flex;
+  gap: 0.25rem;
+  border-block-end: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+.notify-subnav a {
+  padding: 0.45rem 0.85rem;
+  text-decoration: none;
+  color: var(--ink-2);
+  border-block-end: 3px solid transparent;
+  margin-block-end: -1px;
+  font-weight: 550;
+}
+.notify-subnav a:hover {
+  color: var(--primary);
+}
+.notify-subnav a.on {
+  color: var(--primary);
+  border-block-end-color: var(--primary);
+}
+
+/* channel status */
+.notify-chstatus {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.5rem;
+}
+.notify-chstatus li {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 0.55rem 0.75rem;
+}
+.notify-chstatus-dot {
+  inline-size: 10px;
+  block-size: 10px;
+  border-radius: 50%;
+  margin-block-start: 0.4rem;
+  flex: none;
+  background: var(--muted);
+}
+.notify-chstatus li.ok .notify-chstatus-dot {
+  background: var(--success);
+}
+.notify-chstatus li.off {
+  background: var(--line-2);
+}
+.notify-chstatus-detail {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.notify-ch {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--ink-2);
+  background: var(--surface);
+  white-space: nowrap;
+}
+.notify-ch-email {
+  border-color: var(--info);
+  color: var(--info);
+}
+.notify-ch-sms {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+
+/* templates page */
+.notify-layout {
+  display: grid;
+  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+.notify-list {
+  padding: 0.5rem;
+  position: sticky;
+  inset-block-start: 1rem;
+  max-block-size: calc(100vh - 2rem);
+  overflow: auto;
+}
+.notify-list-h {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  margin: 0.5rem 0.5rem 0.25rem;
+}
+.notify-list ul {
+  list-style: none;
+  margin: 0 0 0.5rem;
+  padding: 0;
+}
+.notify-list-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  inline-size: 100%;
+  text-align: start;
+  border: 1px solid transparent;
+  background: none;
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.6rem;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+.notify-list-item:hover {
+  background: var(--line-2);
+}
+.notify-list-item.on {
+  background: var(--primary-soft);
+  border-color: var(--primary-line);
+}
+.notify-list-item:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+.notify-list-subj {
+  font-size: 0.88rem;
+  line-height: 1.35;
+}
+.notify-list-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.notify-editor-title {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+.notify-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.notify-switch input {
+  inline-size: 1.1rem;
+  block-size: 1.1rem;
+}
+.notify-channels {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.85rem 0.65rem;
+  margin: 0 0 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.notify-channels legend {
+  font-weight: 600;
+  padding-inline: 0.25rem;
+}
+.notify-langs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+.notify-lang h3 {
+  font-size: 0.95rem;
+  color: var(--ink-2);
+}
+.notify-lang textarea,
+.notify-lang input {
+  inline-size: 100%;
+}
+.notify-ph {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+  margin-block: 0.25rem 0.75rem;
+}
+.notify-ph-chip {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  border: 1px dashed var(--primary-line);
+  background: var(--primary-soft);
+  color: var(--primary);
+  border-radius: 999px;
+  padding: 0.1rem 0.55rem;
+  cursor: pointer;
+}
+.notify-ph-chip:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+.notify-preview {
+  border-block-start: 1px solid var(--line);
+  padding-block-start: 0.75rem;
+  margin-block-end: 1rem;
+}
+.notify-preview h3 {
+  margin-block-end: 0.1rem;
+}
+.notify-preview-box {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  padding: 0.75rem 0.9rem;
+}
+.notify-preview-subj {
+  font-weight: 650;
+  margin-block-end: 0.4rem;
+}
+.notify-preview-body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.92rem;
+}
+.notify-actions {
+  margin-block-start: 0.5rem;
+}
+.notify-test {
+  margin-block-start: 0.85rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: var(--radius-sm);
+  background: var(--info-bg);
+}
+.notify-test ul {
+  list-style: none;
+  padding: 0;
+  margin: 0.4rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.notify-test-ch {
+  min-inline-size: 7rem;
+  font-weight: 600;
+}
+.notify-contact .field input {
+  max-inline-size: 28rem;
+}
+
+/* delivery log */
+.notify-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.notify-count-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.75rem;
+  min-inline-size: 200px;
+}
+.notify-count-card ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.notify-count-ch {
+  font-weight: 650;
+  margin-block-end: 0.25rem;
+}
+.notify-count-btn {
+  background: none;
+  border: 0;
+  padding: 0.1rem 0;
+  font: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
+  color: inherit;
+}
+.notify-count-btn:hover strong {
+  text-decoration: underline;
+}
+.notify-subj-cell {
+  min-inline-size: 14rem;
+  max-inline-size: 26rem;
+  overflow-wrap: anywhere;
+}
+.notify-err {
+  max-inline-size: 22rem;
+  overflow-wrap: anywhere;
+}
+.notify-msgid {
+  max-inline-size: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.notify-row-test td {
+  background: color-mix(in srgb, var(--info-bg) 55%, transparent);
+}
+
+/* jobs + service levels */
+.notify-two {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+.notify-lastrun {
+  margin-block: 0.5rem 0;
+}
+
+/* overdue card + SLA badges */
+.notify-overdue-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.notify-overdue-item {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  text-decoration: none;
+  color: inherit;
+  border: 1px solid var(--line);
+  border-inline-start: 4px solid var(--danger);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.65rem;
+}
+.notify-overdue-item:hover {
+  background: var(--danger-bg);
+}
+.notify-overdue-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  min-inline-size: 0;
+}
+.notify-overdue-foot {
+  margin: 0.6rem 0 0;
+}
+.notify-sla {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  margin-inline-start: 0.4rem;
+  vertical-align: middle;
+  font-weight: 400;
+}
+.notify-sla-esc {
+  color: var(--danger);
+}
+
+@media (max-width: 900px) {
+  .notify-layout,
+  .notify-two,
+  .notify-langs {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .notify-list {
+    position: static;
+    max-block-size: none;
+  }
+}
+
+/* message text under the title in the header bell (features/cycle/bell.tsx) */
+.notify-bell-msg {
+  color: var(--ink-2);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.table .notify-code {
+  white-space: nowrap;
+}

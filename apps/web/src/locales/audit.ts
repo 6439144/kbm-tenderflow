@@ -71,6 +71,15 @@ const L: Record<string, [en: string, ar: string]> = {
   DOCUMENT_TYPE_CREATED: ['Document type created', 'إنشاء نوع مستند'],
   DOCUMENT_TYPE_UPDATED: ['Document type updated', 'تحديث نوع مستند'],
   DEMO_PERSONA_SWITCH: ['Persona switched (demo)', 'تبديل الشخصية (العرض)'],
+  // notify
+  NOTIFICATION_TEMPLATE_UPDATED: ['Notification template changed', 'تعديل قالب إشعار'],
+  NOTIFICATION_TEST_SENT: ['Test notification sent', 'إرسال إشعار تجريبي'],
+  NOTIFICATION_DELIVERY_REQUEUED: ['Notification delivery queued again', 'إعادة جدولة إرسال إشعار'],
+  NOTIFICATION_CONTACT_UPDATED: ['Notification contact updated', 'تحديث بيانات التواصل للإشعارات'],
+  APPROVAL_SLA_UPDATED: ['Approval service levels changed', 'تعديل مستويات خدمة الاعتماد'],
+  APPROVAL_REMINDER_SENT: ['Approval reminder sent', 'إرسال تذكير بالاعتماد'],
+  APPROVAL_ESCALATED: ['Overdue approval escalated', 'تصعيد اعتماد متأخر'],
+  TENDER_REJECTED: ['Tender rejected at approval', 'رفض المناقصة عند الاعتماد'],
 };
 
 const humanise = (code: string) => code.toLowerCase().replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());

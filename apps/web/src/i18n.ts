@@ -5,6 +5,7 @@ import * as filenetL from './locales/filenet';
 import * as assistantL from './locales/assistant';
 import * as docintelL from './locales/docintel';
 import * as insightL from './locales/insight';
+import * as notifyL from './locales/notify';
 
 export type Lang = 'ar' | 'en';
 
@@ -423,7 +424,7 @@ const coreEn = {
   'misc.days': '{d}d {h}h {m}m',
 } as const;
 
-const en = { ...coreEn, ...cycleL.en, ...demoL.en, ...filenetL.en, ...assistantL.en, ...docintelL.en, ...insightL.en };
+const en = { ...coreEn, ...cycleL.en, ...demoL.en, ...filenetL.en, ...assistantL.en, ...docintelL.en, ...insightL.en, ...notifyL.en };
 export type TKey = keyof typeof en;
 
 const coreAr: Record<keyof typeof coreEn, string> = {
@@ -823,7 +824,7 @@ const coreAr: Record<keyof typeof coreEn, string> = {
   'misc.days': '{d}ي {h}س {m}د',
 };
 
-const ar: Record<TKey, string> = { ...coreAr, ...cycleL.ar, ...demoL.ar, ...filenetL.ar, ...assistantL.ar, ...docintelL.ar, ...insightL.ar };
+const ar: Record<TKey, string> = { ...coreAr, ...cycleL.ar, ...demoL.ar, ...filenetL.ar, ...assistantL.ar, ...docintelL.ar, ...insightL.ar, ...notifyL.ar };
 
 const dict: Record<Lang, Record<TKey, string>> = { en, ar };
 

@@ -1,17 +1,27 @@
-// In-app notifications (BRD NOT-001..005 baseline; email/SMS adapters are Phase 2).
+// Notifications (BRD NOT-001..005 + TenderFlow events). Every call is rendered from the entity's notification
+// template (EN + AR, admin-editable) and delivered in-app; e-mail / SMS are queued when the template enables them and
+// the channel is configured (features/notify/*, docs/NOTIFICATIONS-AND-ESCALATION.md). The exported signatures below
+// are the stable API other features call.
 // Tender alerts are rule-based (category + eligibility rule); the Orchestrate relevance agent may add a ranked
 // "tenders for you" list on top, but notifications never depend on AI.
 import type { Ctx } from '../ctx.js';
 import type { Actor } from '../auth/tokens.js';
 import type { Queryable } from '../db.js';
-import { camel, isUuid, notFound, now, uuid } from '../util.js';
+import { camel, isUuid, notFound, now } from '../util.js';
 import { checkEligibility } from './eligibility.js';
 import type { TenderRow } from './tenders.js';
+import { deliver, type DeliverResult } from '../features/notify/engine.js';
 
-export async function notify(q: Queryable, n: { tenantId: string; userId?: string | null; vendorId?: string | null; kind: string; titleEn: string; titleAr: string; body?: Record<string, unknown> }) {
-  await q.query(`INSERT INTO notifications (id, tenant_id, user_id, vendor_id, kind, title_en, title_ar, body, created_at)
-                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9)`,
-    [uuid(), n.tenantId, n.userId ?? null, n.vendorId ?? null, n.kind, n.titleEn, n.titleAr, JSON.stringify(n.body ?? {}), now()]);
+export type { DeliverResult };
+
+/**
+ * Notify one user or one vendor. `kind` is the event; `templateCode` (optional, defaults to `kind`) selects the
+ * notification template — e.g. 'NOT-001_SUBSCRIPTION_RENEWAL' or the short form 'NOT-001'. titleEn/titleAr are used
+ * as the {title} placeholder and as the in-app title when no template exists for the code. `body` values are
+ * available as placeholders ({expiryDate}, {knetLink} …; `xEn` / `xAr` give language-specific values).
+ */
+export async function notify(q: Queryable, n: { tenantId: string; userId?: string | null; vendorId?: string | null; kind: string; titleEn: string; titleAr: string; body?: Record<string, unknown>; templateCode?: string }): Promise<DeliverResult> {
+  return deliver(q, n);
 }
 
 /** Notify approved vendors in the tender's category who meet its eligibility rule. Returns the count. */
@@ -31,7 +41,7 @@ export async function notifyVendorsOfTender(_ctx: Ctx, q: Queryable, t: TenderRo
 }
 
 /** Notify every active user holding a role (e.g. the next approver in a chain). */
-export async function notifyRole(q: Queryable, tenantId: string, role: string, n: { kind: string; titleEn: string; titleAr: string; body?: Record<string, unknown> }) {
+export async function notifyRole(q: Queryable, tenantId: string, role: string, n: { kind: string; titleEn: string; titleAr: string; body?: Record<string, unknown>; templateCode?: string }) {
   const users = await q.query<{ id: string }>(`SELECT id FROM users WHERE tenant_id=$1 AND active AND $2 = ANY(roles)`, [tenantId, role]);
   for (const u of users) await notify(q, { tenantId, userId: u.id, ...n });
   return users.length;

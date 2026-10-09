@@ -120,6 +120,7 @@ export function NotificationsBell() {
                     {!n.readAt && <span className="cyc-dot" aria-label={t('cycle.n.unread')} />}
                     <span className="cyc-bell-text">
                       <span className="cyc-bell-title">{pick(n.titleEn, n.titleAr)}</span>
+                      {typeof n.body?.messageEn === 'string' && <span className="small notify-bell-msg">{pick(n.body.messageEn as string, n.body.messageAr as string)}</span>}
                       <span className="muted small">{fmtDate(n.createdAt)}</span>
                     </span>
                   </button>
