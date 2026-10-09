@@ -98,12 +98,12 @@ function AnalyticsBody({ a }: { a: Analytics }) {
       <div className="insight-grid">
         <Block title={t('insight.analytics.byStatus')} hint={t('insight.analytics.createdInRange')}
           csv={<CsvButton name={`tenders-by-status_${range}`} head={['status', 'tenders']} rows={a.tendersByStatus.map((r) => [r.status, r.count])} />}>
-          <DonutChart title={t('insight.analytics.byStatus')} valueLabel={t('insight.chart.tenders')}
+          <DonutChart hideTitle title={t('insight.analytics.byStatus')} valueLabel={t('insight.chart.tenders')}
             data={a.tendersByStatus.map((r) => ({ key: r.status, label: te('st.', r.status), value: r.count, color: SERIES[['DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'PUBLISHED', 'CLOSED', 'OPENED', 'EVALUATION', 'AWARDED', 'CANCELLED'].indexOf(r.status) % SERIES.length] }))} />
         </Block>
         <Block title={t('insight.analytics.byCategory')} hint={t('insight.analytics.createdInRange')}
           csv={<CsvButton name={`tenders-by-category_${range}`} head={['category', 'tenders']} rows={a.tendersByCategory.map((r) => [r.category, r.count])} />}>
-          <BarChart title={t('insight.analytics.byCategory')} valueLabel={t('insight.chart.tenders')} data={a.tendersByCategory.map((r) => ({ key: r.category, label: te('cat.', r.category), value: r.count }))} />
+          <BarChart hideTitle title={t('insight.analytics.byCategory')} valueLabel={t('insight.chart.tenders')} data={a.tendersByCategory.map((r) => ({ key: r.category, label: te('cat.', r.category), value: r.count }))} />
         </Block>
       </div>
 

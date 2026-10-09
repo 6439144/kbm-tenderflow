@@ -34,12 +34,12 @@ function DataTable({ head, rows, caption }: { head: string[]; rows: (string | nu
   );
 }
 
-function Frame({ title, subtitle, children, empty }: { title: string; subtitle?: ReactNode; children: ReactNode; empty: boolean }) {
+function Frame({ title, subtitle, children, empty, hideTitle }: { title: string; subtitle?: ReactNode; children: ReactNode; empty: boolean; hideTitle?: boolean }) {
   const { t } = useI18n();
   return (
     <figure className="insight-chart">
       <figcaption>
-        <strong>{title}</strong>
+        <strong className={hideTitle ? 'sr-only' : undefined}>{title}</strong>
         {subtitle ? <span className="muted small">{subtitle}</span> : null}
       </figcaption>
       {empty ? <p className="insight-nodata">{t('insight.noData')}</p> : children}
@@ -48,34 +48,37 @@ function Frame({ title, subtitle, children, empty }: { title: string; subtitle?:
 }
 
 /** Horizontal bars (mirrors in RTL). One series → the entity colour; labels on the start side, values at the bar end. */
-export function BarChart({ title, subtitle, data, valueLabel, digits = 0, unit = '' }: {
-  title: string; subtitle?: ReactNode; data: Datum[]; valueLabel: string; digits?: number; unit?: string;
+export function BarChart({ title, subtitle, data, valueLabel, digits = 0, unit = '', hideTitle }: {
+  title: string; subtitle?: ReactNode; data: Datum[]; valueLabel: string; digits?: number; unit?: string; hideTitle?: boolean;
 }) {
   const { t, lang } = useI18n();
   const id = useId();
   const rtl = lang === 'ar';
-  const W = 640; const labelW = 210; const valueW = 70; const rowH = 30; const barH = 16;
+  const W = 520; const labelW = 170; const valueW = 66; const rowH = 30; const barH = 16;
   const H = Math.max(rowH, data.length * rowH) + 6;
   const max = Math.max(0, ...data.map((d) => d.value));
   const plotW = W - labelW - valueW;
-  const empty = data.length === 0 || data.every((d) => d.value === 0);
+  // Zero is a real value (e.g. an item that has waited less than a day); only an empty list is "no data".
+  const empty = data.length === 0;
   const fmt = (n: number) => `${fmtNum(lang, n, digits)}${unit}`;
   return (
-    <Frame title={title} subtitle={subtitle} empty={empty}>
-      <svg className="insight-svg" viewBox={`0 0 ${W} ${H}`} role="img" aria-labelledby={`${id}-t`} preserveAspectRatio="xMinYMin meet">
+    <Frame title={title} subtitle={subtitle} empty={empty} hideTitle={hideTitle}>
+      {/* Geometry is mirrored explicitly for Arabic, so the SVG itself is always laid out LTR. */}
+      <svg className="insight-svg" viewBox={`0 0 ${W} ${H}`} role="img" aria-labelledby={`${id}-t`} preserveAspectRatio="xMinYMin meet" style={{ direction: 'ltr' }}>
         <title id={`${id}-t`}>{`${title}: ${data.map((d) => `${d.label} ${fmt(d.value)}`).join('; ')}`}</title>
         {data.map((d, i) => {
           const y = i * rowH + 4;
           const w = max > 0 ? Math.max(d.value > 0 ? 3 : 0, (d.value / max) * plotW) : 0;
           const x = rtl ? W - labelW - w : labelW;
           const lx = rtl ? W - labelW + 10 : labelW - 10;
+          const la = rtl ? 'start' : 'end';
           const vx = rtl ? x - 6 : x + w + 6;
           return (
             <g key={d.key} className="insight-mark">
               <title>{`${d.label}: ${fmt(d.value)}${d.hint ? ` — ${d.hint}` : ''}`}</title>
               <rect x={0} y={y - 4} width={W} height={rowH} fill="transparent" />
-              <text x={lx} y={y + barH - 3} textAnchor="end" direction={rtl ? 'rtl' : 'ltr'} className="insight-axis-label">
-                {d.label.length > 30 ? `${d.label.slice(0, 29)}…` : d.label}
+              <text x={lx} y={y + barH - 3} textAnchor={la} className="insight-axis-label">
+                {d.label.length > 24 ? `${d.label.slice(0, 23)}…` : d.label}
               </text>
               <rect x={x} y={y} width={w} height={barH} rx={4} fill={d.color ?? 'var(--primary)'} />
               <text x={vx} y={y + barH - 3} textAnchor={rtl ? 'end' : 'start'} className="insight-value">{fmt(d.value)}</text>
@@ -89,10 +92,10 @@ export function BarChart({ title, subtitle, data, valueLabel, digits = 0, unit =
 }
 
 /** Line over time (left-to-right in both languages: dates read chronologically). */
-export function LineChart({ title, subtitle, points, valueLabel }: { title: string; subtitle?: ReactNode; points: { x: string; label: string; y: number }[]; valueLabel: string }) {
+export function LineChart({ title, subtitle, points, valueLabel, hideTitle }: { title: string; subtitle?: ReactNode; points: { x: string; label: string; y: number }[]; valueLabel: string; hideTitle?: boolean }) {
   const { t, lang } = useI18n();
   const id = useId();
-  const W = 640; const H = 200; const padL = 36; const padR = 12; const padT = 12; const padB = 28;
+  const W = 520; const H = 190; const padL = 36; const padR = 12; const padT = 12; const padB = 28;
   const max = Math.max(1, ...points.map((p) => p.y));
   const step = points.length > 1 ? (W - padL - padR) / (points.length - 1) : 0;
   const xy = points.map((p, i) => [padL + i * step, padT + (H - padT - padB) * (1 - p.y / max)] as const);
@@ -101,7 +104,7 @@ export function LineChart({ title, subtitle, points, valueLabel }: { title: stri
   const ticks = [0, Math.round(max / 2), max];
   const peak = points.reduce((b, p, i) => (p.y > points[b].y ? i : b), 0);
   return (
-    <Frame title={title} subtitle={subtitle} empty={points.length === 0 || total === 0}>
+    <Frame title={title} subtitle={subtitle} empty={points.length === 0 || total === 0} hideTitle={hideTitle}>
       <svg className="insight-svg" viewBox={`0 0 ${W} ${H}`} role="img" aria-labelledby={`${id}-t`} style={{ direction: 'ltr' }}>
         <title id={`${id}-t`}>{`${title}: ${fmtNum(lang, total)} (${points[0]?.label} – ${points[points.length - 1]?.label})`}</title>
         {ticks.map((v) => {
@@ -134,7 +137,7 @@ export function LineChart({ title, subtitle, points, valueLabel }: { title: stri
 }
 
 /** Donut for a part-to-whole split with a legend (identity never by colour alone: label + value in the legend). */
-export function DonutChart({ title, subtitle, data, valueLabel }: { title: string; subtitle?: ReactNode; data: Datum[]; valueLabel: string }) {
+export function DonutChart({ title, subtitle, data, valueLabel, hideTitle }: { title: string; subtitle?: ReactNode; data: Datum[]; valueLabel: string; hideTitle?: boolean }) {
   const { t, lang } = useI18n();
   const id = useId();
   const shown = data.filter((d) => d.value > 0);
@@ -155,7 +158,7 @@ export function DonutChart({ title, subtitle, data, valueLabel }: { title: strin
     return { d, path: dPath, color: d.color ?? SERIES[i % SERIES.length] };
   });
   return (
-    <Frame title={title} subtitle={subtitle} empty={total === 0}>
+    <Frame title={title} subtitle={subtitle} empty={total === 0} hideTitle={hideTitle}>
       <div className="insight-donut">
         <svg viewBox="0 0 180 180" role="img" aria-labelledby={`${id}-t`} className="insight-donut-svg">
           <title id={`${id}-t`}>{`${title}: ${shown.map((a) => `${a.label} ${fmtNum(lang, a.value)}`).join('; ')}`}</title>
@@ -185,7 +188,7 @@ export function DonutChart({ title, subtitle, data, valueLabel }: { title: strin
 /** A tile in the existing dashboard style (.tiles/.tile so demo tours keep finding them). */
 export function Tile({ value, label, tone, hint, to }: { value: ReactNode; label: ReactNode; tone?: 'ok' | 'warn' | 'danger'; hint?: ReactNode; to?: ReactNode }) {
   return (
-    <div className={`tile insight-tile ${tone ? `insight-tile-${tone}` : ''}`}>
+    <div className={`tile insight-tile ${tone ? `insight-tile-${tone}` : ''} ${typeof value === 'string' && !/^[\d\s.,٠-٩]+$/.test(value) ? 'insight-tile-text' : ''}`}>
       <div className="tile-num">{value}</div>
       <div className="tile-label">{label}</div>
       {hint ? <div className="muted small">{hint}</div> : null}

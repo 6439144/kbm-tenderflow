@@ -69,6 +69,7 @@ export const en = {
   'insight.officer.noDeadlines': 'No submission deadline in the next 14 days.',
   'insight.officer.requestsReady': 'Approved requests to convert',
   'insight.officer.byStage': 'Tenders by stage',
+  'insight.officer.vendorsPending': 'Vendor registrations to review',
 
   // approvers
   'insight.approver.title': 'Approvals',
@@ -410,6 +411,7 @@ export const ar: Record<keyof typeof en, string> = {
   'insight.officer.noDeadlines': 'لا يوجد موعد نهائي لتقديم العطاءات خلال 14 يوماً.',
   'insight.officer.requestsReady': 'طلبات معتمدة جاهزة للتحويل',
   'insight.officer.byStage': 'المناقصات حسب المرحلة',
+  'insight.officer.vendorsPending': 'تسجيلات موردين بانتظار المراجعة',
 
   // approvers
   'insight.approver.title': 'الاعتمادات',

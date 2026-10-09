@@ -64,11 +64,11 @@ function OfficerPanel({ s }: { s: OfficerSection }) {
         <Tile value={s.documentsNeedingReview} label={<Link to="/procurement/documents">{t('insight.officer.docsReview')}</Link>} tone={s.documentsNeedingReview ? 'warn' : undefined} />
         <Tile value={s.upcomingDeadlines.length} label={t('insight.officer.deadlines14')} />
         <Tile value={s.requestsReadyToConvert} label={<Link to="/procurement/requests">{t('insight.officer.requestsReady')}</Link>} />
-        <Tile value={s.vendorsPendingReview} label={<Link to="/procurement/vendors">{t('vst.PENDING_REVIEW')}</Link>} tone={s.vendorsPendingReview ? 'warn' : undefined} />
+        <Tile value={s.vendorsPendingReview} label={<Link to="/procurement/vendors">{t('insight.officer.vendorsPending')}</Link>} tone={s.vendorsPendingReview ? 'warn' : undefined} />
       </div>
       <div className="insight-grid">
         <Card title={t('insight.officer.byStage')}>
-          <BarChart title={t('insight.officer.byStage')} data={stages.filter((x) => x.value > 0)} valueLabel={t('insight.chart.tenders')} />
+          <BarChart hideTitle title={t('insight.officer.byStage')} data={stages.filter((x) => x.value > 0)} valueLabel={t('insight.chart.tenders')} />
         </Card>
         <Card title={t('insight.officer.myDrafts')}>
           {s.myDrafts.length === 0 ? <EmptyState message={t('insight.officer.noDrafts')} /> : (
@@ -146,23 +146,36 @@ function ApproverPanel({ s }: { s: ApproverSection }) {
         ) : null}
         <Tile value={s.publishedThisMonth.count} label={t('insight.approver.publishedMonth')} hint={t('insight.since', { date: fmtDate(s.publishedThisMonth.since) })} />
       </div>
+      <Card title={t('insight.approver.list')}>
+        {s.waiting.length === 0 ? <EmptyState message={t('insight.approver.none')} /> : (
+          <Table head={[t('insight.kind'), t('tenders.number'), t('common.title'), t('insight.level'), t('insight.waitingSince'), t('insight.age')]}>
+            {s.waiting.map((w) => (
+              <tr key={`${w.kind}-${w.id}`}>
+                <td><Badge tone="info" label={te('insight.wait.', w.kind)} /></td>
+                <td dir="ltr"><Link to={link(w)}>{w.number}</Link></td>
+                <td>{pick(w.titleEn, w.titleAr)}</td>
+                <td>{t('insight.levelOf', { n: w.level, of: w.of })}</td>
+                <td>{fmtDate(w.waitingSince)}</td>
+                <td><Age days={w.ageDays} warnAt={3} /></td>
+              </tr>
+            ))}
+          </Table>
+        )}
+      </Card>
       <div className="insight-grid">
         <Card title={t('insight.approver.waitingAge')}>
-          <BarChart title={t('insight.approver.waitingAge')} subtitle={t('insight.approver.waitingAgeHint')}
+          <BarChart hideTitle title={t('insight.approver.waitingAge')} subtitle={t('insight.approver.waitingAgeHint')}
             data={s.waiting.map((w) => ({ key: `${w.kind}-${w.id}`, label: w.number, value: w.ageDays, hint: pick(w.titleEn, w.titleAr) }))}
             valueLabel={t('insight.age')} digits={1} unit={` ${t('insight.dUnit')}`} />
         </Card>
-        <Card title={t('insight.approver.list')}>
-          {s.waiting.length === 0 ? <EmptyState message={t('insight.approver.none')} /> : (
-            <Table head={[t('insight.kind'), t('tenders.number'), t('common.title'), t('insight.level'), t('insight.waitingSince'), t('insight.age')]}>
-              {s.waiting.map((w) => (
-                <tr key={`${w.kind}-${w.id}`}>
-                  <td><Badge tone="info" label={te('insight.wait.', w.kind)} /></td>
-                  <td dir="ltr"><Link to={link(w)}>{w.number}</Link></td>
-                  <td>{pick(w.titleEn, w.titleAr)}</td>
-                  <td>{t('insight.levelOf', { n: w.level, of: w.of })}</td>
-                  <td>{fmtDate(w.waitingSince)}</td>
-                  <td><Age days={w.ageDays} warnAt={3} /></td>
+        <Card title={t('insight.approver.publishedMonth')}>
+          {s.publishedThisMonth.items.length === 0 ? <EmptyState message={t('insight.noData')} /> : (
+            <Table head={[t('tenders.number'), t('common.title'), t('insight.board.published')]}>
+              {s.publishedThisMonth.items.map((x) => (
+                <tr key={x.id}>
+                  <td dir="ltr"><Link to={`/procurement/tenders/${x.id}`}>{x.tenderNumber}</Link></td>
+                  <td>{pick(x.titleEn, x.titleAr)}</td>
+                  <td>{fmtDate(x.publishedAt)}</td>
                 </tr>
               ))}
             </Table>
@@ -187,7 +200,7 @@ function CommitteePanel({ s }: { s: CommitteeSection }) {
       </div>
       <div className="insight-grid">
         <Card title={t('insight.committee.progress')}>
-          <BarChart title={t('insight.committee.progress')} subtitle={t('insight.committee.progressHint')}
+          <BarChart hideTitle title={t('insight.committee.progress')} subtitle={t('insight.committee.progressHint')}
             data={s.evaluations.map((e) => ({ key: e.id, label: e.tenderNumber, value: e.evaluationsSubmitted, hint: t('insight.committee.progressItem', { bids: e.scorableBids, evaluators: e.evaluators }) }))}
             valueLabel={t('insight.committee.evaluationsSubmitted')} />
         </Card>
@@ -259,11 +272,11 @@ export function AuditorPanel({ s }: { s: AuditorSection }) {
       </div>
       <div className="insight-grid">
         <Card title={t('insight.auditor.perDay')}>
-          <LineChart title={t('insight.auditor.perDay')} subtitle={t('insight.auditor.perDayHint')}
+          <LineChart hideTitle title={t('insight.auditor.perDay')} subtitle={t('insight.auditor.perDayHint')}
             points={s.eventsPerDay.map((p) => ({ x: p.day, label: dayLabel(p.day), y: p.count }))} valueLabel={t('insight.auditor.eventsCol')} />
         </Card>
         <Card title={t('insight.auditor.aiRuns')}>
-          <DonutChart title={t('insight.auditor.aiRuns')} subtitle={t('insight.auditor.aiRunsHint')} valueLabel={t('insight.chart.runs')} data={[
+          <DonutChart hideTitle title={t('insight.auditor.aiRuns')} subtitle={t('insight.auditor.aiRunsHint')} valueLabel={t('insight.chart.runs')} data={[
             { key: 'acc', label: t('insight.ai.accepted'), value: ai.accepted, color: SERIES[2] },
             { key: 'edit', label: t('insight.ai.edited'), value: ai.edited, color: SERIES[0] },
             { key: 'ign', label: t('insight.ai.ignored'), value: ai.ignored, color: SERIES[3] },
@@ -274,7 +287,7 @@ export function AuditorPanel({ s }: { s: AuditorSection }) {
       </div>
       <div className="insight-grid">
         <Card title={t('insight.auditor.topActions')}>
-          <BarChart title={t('insight.auditor.topActions')} data={s.topActions.map((a) => ({ key: a.action, label: a.action, value: a.count }))} valueLabel={t('insight.auditor.eventsCol')} />
+          <BarChart hideTitle title={t('insight.auditor.topActions')} data={s.topActions.map((a) => ({ key: a.action, label: a.action, value: a.count }))} valueLabel={t('insight.auditor.eventsCol')} />
         </Card>
         <Card title={t('insight.evidence.recent')} actions={<Link className="btn btn-secondary" to="/admin/evidence">{t('insight.evidence.open')}</Link>}>
           {s.evidencePacks.length === 0 ? <EmptyState message={t('insight.evidence.none')} /> : (
@@ -313,17 +326,17 @@ export function AdminPanel({ s }: { s: AdminSection }) {
       </div>
       <div className="insight-grid">
         <Card title={t('insight.admin.usersByRole')}>
-          <DonutChart title={t('insight.admin.usersByRole')} valueLabel={t('insight.chart.users')}
+          <DonutChart hideTitle title={t('insight.admin.usersByRole')} valueLabel={t('insight.chart.users')}
             data={s.usersByRole.map((r, i) => ({ key: r.role, label: te('role.', r.role), value: r.active, color: SERIES[i % SERIES.length] }))} />
         </Card>
         <Card title={t('insight.admin.vendorsByGrade')}>
-          <BarChart title={t('insight.admin.vendorsByGrade')} subtitle={t('insight.admin.vendorsByGradeHint')} valueLabel={t('insight.chart.vendors')}
+          <BarChart hideTitle title={t('insight.admin.vendorsByGrade')} subtitle={t('insight.admin.vendorsByGradeHint')} valueLabel={t('insight.chart.vendors')}
             data={s.vendorsByGrade.map((g) => ({ key: String(g.grade), label: g.grade ? t(grades[g.grade] ?? 'insight.grade.none') : t('insight.grade.none'), value: g.vendors }))} />
         </Card>
       </div>
       <div className="insight-grid">
         <Card title={t('insight.admin.vendorsByStatus')}>
-          <DonutChart title={t('insight.admin.vendorsByStatus')} valueLabel={t('insight.chart.vendors')}
+          <DonutChart hideTitle title={t('insight.admin.vendorsByStatus')} valueLabel={t('insight.chart.vendors')}
             data={['APPROVED', 'PENDING_REVIEW', 'REJECTED'].map((k, i) => ({ key: k, label: te('vst.', k), value: s.vendorsByStatus[k] ?? 0, color: [SERIES[2], SERIES[3], SERIES[7]][i] }))} />
         </Card>
         <Card title={t('insight.admin.templateVersions')}>
@@ -425,6 +438,21 @@ function VendorPanel({ s, subscription }: { s: VendorSection; subscription: Reco
           </Table>
         )}
       </Card>
+      <Card title={t('insight.vendor.bids')}>
+        {s.bids.length === 0 ? <EmptyState message={t('vendor.noBids')} /> : (
+          <Table head={[t('tenders.number'), t('common.title'), t('td.submittedAt'), t('insight.vendor.receiptHash'), t('insight.vendor.outcome')]}>
+            {s.bids.map((b) => (
+              <tr key={b.id}>
+                <td dir="ltr"><Link to={`/vendor/tenders/${b.tenderId}`}>{b.tenderNumber}</Link></td>
+                <td>{pick(b.titleEn, b.titleAr)}</td>
+                <td>{fmtDate(b.submittedAt)}</td>
+                <td><Hash value={b.receiptSha256} /></td>
+                <td><Badge tone={OUTCOME_TONE[b.outcome] ?? 'neutral'} label={te('insight.outcome.', b.outcome)} /></td>
+              </tr>
+            ))}
+          </Table>
+        )}
+      </Card>
       <div className="insight-grid">
         <Card title={t('insight.vendor.purchases')}>
           {s.purchases.length === 0 ? <EmptyState message={t('insight.vendor.noPurchases')} /> : (
@@ -440,27 +468,11 @@ function VendorPanel({ s, subscription }: { s: VendorSection; subscription: Reco
             </Table>
           )}
         </Card>
-        <Card title={t('insight.vendor.bids')}>
-          {s.bids.length === 0 ? <EmptyState message={t('vendor.noBids')} /> : (
-            <Table head={[t('tenders.number'), t('common.title'), t('td.submittedAt'), t('insight.vendor.receiptHash'), t('insight.vendor.outcome')]}>
-              {s.bids.map((b) => (
-                <tr key={b.id}>
-                  <td dir="ltr"><Link to={`/vendor/tenders/${b.tenderId}`}>{b.tenderNumber}</Link></td>
-                  <td>{pick(b.titleEn, b.titleAr)}</td>
-                  <td>{fmtDate(b.submittedAt)}</td>
-                  <td><Hash value={b.receiptSha256} /></td>
-                  <td><Badge tone={OUTCOME_TONE[b.outcome] ?? 'neutral'} label={te('insight.outcome.', b.outcome)} /></td>
-                </tr>
-              ))}
-            </Table>
-          )}
-        </Card>
-      </div>
-      <div className="insight-grid">
         <Card title={t('insight.vendor.bidOutcomes')}>
-          <DonutChart title={t('insight.vendor.bidOutcomes')} valueLabel={t('insight.chart.bids')}
+          <DonutChart hideTitle title={t('insight.vendor.bidOutcomes')} valueLabel={t('insight.chart.bids')}
             data={OUTCOMES.map((o, i) => ({ key: o, label: te('insight.outcome.', o), value: s.bids.filter((b) => b.outcome === o).length, color: OUTCOME_COLOR[i] }))} />
         </Card>
+      </div>
       <Card title={t('insight.vendor.expiring')}>
         {s.expiring.length === 0 ? <EmptyState message={t('insight.vendor.noExpiring')} /> : (
           <Table head={[t('insight.kind'), t('common.title'), t('insight.vendor.expires')]}>
@@ -475,7 +487,6 @@ function VendorPanel({ s, subscription }: { s: VendorSection; subscription: Reco
         )}
         <p className="muted small">{t('insight.vendor.expiringHint')}</p>
       </Card>
-      </div>
     </Section>
   );
 }

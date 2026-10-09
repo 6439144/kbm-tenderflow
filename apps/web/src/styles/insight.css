@@ -66,7 +66,7 @@
 .insight-axis-label,
 .insight-tick {
   fill: var(--ink-2);
-  font-size: 12px;
+  font-size: 13px;
   font-family: var(--font);
 }
 .insight-tick {
@@ -75,7 +75,7 @@
 }
 .insight-value {
   fill: var(--ink);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   font-family: var(--font);
@@ -281,4 +281,14 @@ path.insight-mark:hover {
   .insight-filters {
     display: none;
   }
+}
+
+/* tender / receipt numbers never wrap at their hyphens */
+.insight-dash td[dir='ltr'],
+.insight-board-num {
+  white-space: nowrap;
+}
+.insight-tile-text .tile-num {
+  font-size: 1.25rem;
+  line-height: 1.3;
 }
