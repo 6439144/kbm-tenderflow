@@ -2,8 +2,8 @@
 
 > **This runbook is optional.** TenderFlow works tonight with the base `Document` class
 > (`FILENET_DOC_CLASS=Document`, `FILENET_SET_CUSTOM_PROPERTIES=false`). Follow these steps only to show
-> TenderFlow metadata (tenant, tender, vendor, document type, SHA-256) on documents in FileNet. Allow about
-> 15 minutes.
+> TenderFlow metadata (tenant, tender, vendor, document type, SHA-256) on documents in FileNet, and (§1b) to
+> mark records at award. Allow about 15–20 minutes.
 >
 > The Content Services GraphQL API has no mutations for class or property definitions (see
 > `docs/evidence/G2-b/mutations.txt`). A person must do these steps in ACCE.
@@ -47,6 +47,35 @@ For each row in the table:
 | `TF_DocType` | String | 64 | TenderFlow document type (TENDER_PACK, BID_TECHNICAL, ...) |
 | `TF_Sha256` | String | 64 | SHA-256 (hex) of the stored bytes |
 
+## 1b. Record-declaration properties (only for `FILENET_RECORDS_MODE=property`)
+
+Skip this section unless you want TenderFlow to mark documents as records in FileNet when a tender is awarded.
+Create two more property templates the same way as in §1, with these differences:
+
+| Display / symbolic name | Data type | Max length | Description |
+|---|---|---|---|
+| `TF_RecordDeclared` | **Boolean** | — | TenderFlow declared this document a record (set at award) |
+| `TF_RecordDeclaredAt` | String | 64 | When TenderFlow declared the record (ISO-8601 UTC text) |
+
+- For `TF_RecordDeclared` choose **Boolean** on the **Select the Data Type** page; there is no maximum length.
+- `TF_RecordDeclaredAt` is a **String** on purpose: TenderFlow writes the timestamp as text, so no date
+  conversion can fail.
+
+Add both templates to `TF_Document` in §2 step 4 (or later: open **Classes → Document → TF_Document →
+Property Definitions → Add**). Then set in `.env`:
+
+```dotenv
+FILENET_DOC_CLASS=TF_Document
+FILENET_RECORDS_MODE=property
+```
+
+`npm run verify:filenet` step 9 then sets `TF_RecordDeclared=true` on the verify text document and reads it back.
+
+> These properties are a **marker**, not a lock. FileNet itself only refuses change or deletion with IBM
+> Enterprise Records or a retention policy (CmRetentionDate). TenderFlow says this in the record detail it stores.
+> `FILENET_RECORDS_MODE=retention` (with `FILENET_RETENTION_DAYS`) sets CmRetentionDate instead; it needs no
+> ACCE change but is **not verified live** — see `docs/filenet/SHOWCASE.md`.
+
 ## 2. Create document class `TF_Document`
 
 1. In the OS1 tab, expand **Data Design → Classes → Document**.
@@ -58,6 +87,7 @@ For each row in the table:
    - Click **Next**.
 4. **Select Properties**: in the available list, filter by `TF_`. Add all five templates: `TF_TenantId`,
    `TF_TenderId`, `TF_VendorId`, `TF_DocType`, `TF_Sha256`. Click **Next**.
+   If you did §1b, also add `TF_RecordDeclared` and `TF_RecordDeclaredAt`.
 5. On the summary page, click **Finish**, then **Close**.
 6. Refresh **Classes → Document** and confirm that `TF_Document` appears. Open it and check the **Property
    Definitions** tab: all five `TF_*` properties should be listed, along with the inherited ones.
@@ -110,6 +140,7 @@ names match exactly, including case.
 
 ## Rollback
 
-Set `FILENET_DOC_CLASS=Document` and `FILENET_SET_CUSTOM_PROPERTIES=false` in `.env`, then restart the API.
+Set `FILENET_DOC_CLASS=Document`, `FILENET_SET_CUSTOM_PROPERTIES=false` and `FILENET_RECORDS_MODE=none` in `.env`,
+then restart the API.
 Documents already created as `TF_Document` stay valid and readable. Do not delete the class or the templates
 while documents still use them.

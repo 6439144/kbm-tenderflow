@@ -1937,6 +1937,166 @@ ul.plain {
   padding: 0.75rem 0.8rem;
 }
 .cyc-bell-list {
+/* ---------------------------------------------------------------- filenet (FileNet workstream) */
+.fn-icon {
+  flex: none;
+  vertical-align: -2px;
+}
+.fn-doc-cell {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+.fn-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0.22rem 0.45rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.fn-badge-version {
+  background: var(--info-bg);
+  color: var(--info);
+  border-color: color-mix(in srgb, var(--info) 30%, white);
+}
+.fn-badge-record {
+  background: var(--success-bg);
+  color: var(--success);
+  border-color: color-mix(in srgb, var(--success) 30%, white);
+}
+.fn-evidence-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  white-space: nowrap;
+}
+.fn-modal-title,
+.fn-page-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.fn-page-title .fn-icon {
+  width: 24px;
+  height: 24px;
+  color: var(--primary);
+}
+.fn-evidence .fn-mode {
+  margin: 0;
+}
+.fn-head {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding-block-end: 0.5rem;
+  border-block-end: 1px solid var(--line-2);
+}
+.fn-doc-title {
+  font-size: 1.05rem;
+  overflow-wrap: anywhere;
+}
+.fn-kv {
+  margin: 0;
+}
+.fn-ltr {
+  text-align: start;
+  unicode-bidi: isolate;
+}
+[dir='rtl'] .fn-ltr {
+  text-align: right;
+}
+.fn-ref {
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+.fn-h3 {
+  font-size: 0.95rem;
+  margin: 0.75rem 0 0.4rem;
+}
+.fn-chain {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  border-inline-start: 2px solid var(--primary-line);
+  padding-inline-start: 0.75rem;
+}
+.fn-chain li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: var(--radius-sm);
+}
+.fn-chain li.fn-chain-this {
+  background: var(--primary-soft);
+}
+.fn-chain-title {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.fn-tiles .fn-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+}
+.fn-tile-success {
+  border-block-start-color: var(--success);
+}
+.fn-tile-danger {
+  border-block-start-color: var(--danger);
+}
+.fn-tile-warn {
+  border-block-start-color: var(--warn);
+}
+.fn-tile-info {
+  border-block-start-color: var(--info);
+}
+.fn-tile-neutral {
+  border-block-start-color: var(--line);
+}
+.fn-tile-value {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-weight: 700;
+  font-size: 1.05rem;
+  overflow-wrap: anywhere;
+}
+.fn-tile-detail {
+  overflow-wrap: anywhere;
+}
+.fn-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--muted);
+}
+.fn-dot-success {
+  background: var(--success);
+}
+.fn-dot-danger {
+  background: var(--danger);
+}
+.fn-dot-warn {
+  background: var(--warn);
+}
+.fn-dot-info {
+  background: var(--info);
+}
+.fn-tree,
+.fn-tree ul {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -2012,4 +2172,56 @@ ul.plain {
 .field .row > input.cyc-color-text.cyc-color-text {
   flex: 1;
   max-inline-size: 9rem;
+.fn-tree ul {
+  padding-left: 1.1rem;
+  border-left: 1px dashed var(--line);
+  margin-left: 0.4rem;
+}
+.fn-tree-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.2rem 0;
+  color: var(--ink-2);
+}
+.fn-tree-name {
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  color: var(--ink);
+}
+.fn-tree-count {
+  font-size: 0.75rem;
+  color: var(--muted);
+  background: var(--line-2);
+  border-radius: 999px;
+  padding: 0.05rem 0.45rem;
+}
+.fn-num {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.fn-ref-cell code {
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+.fn-op-error {
+  color: var(--danger);
+  overflow-wrap: anywhere;
+  max-width: 40ch;
+}
+.fn-why {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.75rem 1.25rem;
+}
+.fn-why-item {
+  border-inline-start: 3px solid var(--primary-line);
+  padding-inline-start: 0.75rem;
+}
+.fn-why-item .fn-h3 {
+  margin-top: 0;
+}
+.fn-why-item p {
+  margin: 0;
+  color: var(--ink-2);
 }

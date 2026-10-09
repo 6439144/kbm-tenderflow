@@ -1,9 +1,11 @@
 // Filesystem content store (dev/tests). Root = DATA_DIR/content.
 import fs from 'node:fs';
 import path from 'node:path';
-import type { ContentStore, StoredObject } from './types.js';
+import { createHash } from 'node:crypto';
+import type { ContentStore, FolderNode, RepositoryDescription, StoredObject } from './types.js';
 
 const safeSegment = (s: string) => s.replace(/[^A-Za-z0-9._-]/g, '_').replace(/^\.+/, '_') || '_';
+const META_SUFFIX = '.meta.json';
 
 export class FilesystemStore implements ContentStore {
   type = 'filesystem' as const;
@@ -34,7 +36,7 @@ export class FilesystemStore implements ContentStore {
     const abs = this.resolve(rel);
     await fs.promises.mkdir(path.dirname(abs), { recursive: true });
     await fs.promises.writeFile(abs, input.bytes, { flag: 'wx' });
-    await fs.promises.writeFile(`${abs}.meta.json`, JSON.stringify({
+    await fs.promises.writeFile(`${abs}${META_SUFFIX}`, JSON.stringify({
       tenantId: input.tenantId, mimeType: input.mimeType, byteSize: input.bytes.length,
       properties: input.properties, storedAt: new Date().toISOString(),
     }, null, 2));
@@ -43,5 +45,34 @@ export class FilesystemStore implements ContentStore {
 
   async get(storeRef: string): Promise<Buffer> {
     return fs.promises.readFile(this.resolve(storeRef));
+  }
+
+  /** Honest minimal description: the bytes are read back and hashed. No absolute paths are returned. */
+  async describe(storeRef: string): Promise<RepositoryDescription> {
+    const abs = this.resolve(storeRef);
+    const bytes = await fs.promises.readFile(abs);
+    let storedAt: string | null = null;
+    let mimeType: string | null = null;
+    try {
+      const meta = JSON.parse(await fs.promises.readFile(`${abs}${META_SUFFIX}`, 'utf8'));
+      storedAt = typeof meta.storedAt === 'string' ? meta.storedAt : null;
+      mimeType = typeof meta.mimeType === 'string' ? meta.mimeType : null;
+    } catch { /* sidecar is optional */ }
+    return { type: 'filesystem', byteSize: bytes.length, storedSha256: createHash('sha256').update(bytes).digest('hex'), dateCreated: storedAt, mimeType };
+  }
+
+  /** Folder tree below a relative folder, `depth` levels deep, counting stored files (not sidecars). */
+  async folderTree(folderPath: string, depth: number): Promise<FolderNode | null> {
+    const segments = folderPath.split('/').filter(Boolean).map(safeSegment);
+    const abs = this.resolve(path.posix.join('.', ...segments));
+    if (!fs.existsSync(abs) || !fs.statSync(abs).isDirectory()) return null;
+    const walk = async (dir: string, rel: string, left: number): Promise<FolderNode> => {
+      const entries = await fs.promises.readdir(dir, { withFileTypes: true });
+      const files = entries.filter((e) => e.isFile() && !e.name.endsWith(META_SUFFIX) && !e.name.startsWith('.ping-'));
+      const dirs = entries.filter((e) => e.isDirectory()).sort((a, b) => a.name.localeCompare(b.name));
+      const children = left > 0 ? await Promise.all(dirs.slice(0, 200).map((d) => walk(path.join(dir, d.name), `${rel}/${d.name}`, left - 1))) : [];
+      return { name: rel.split('/').pop() || '/', path: rel || '/', documentCount: files.length, deeper: left === 0 && dirs.length > 0 ? true : undefined, children };
+    };
+    return walk(abs, '/' + segments.join('/'), Math.max(0, Math.min(depth, 3)));
   }
 }

@@ -159,6 +159,12 @@ const PUBLISHED_PLUS = ['PUBLISHED', 'CLOSED', 'OPENED', 'EVALUATION', 'AWARDED'
 
 /** GET /documents/:id — deny by default. BID_* documents are never served here. */
 export async function downloadDocument(ctx: Ctx, actor: Actor, id: string) {
+  const d = await loadReadableDocument(ctx, actor, id);
+  return { doc: d, bytes: await readPlain(ctx, d) };
+}
+
+/** Access rule of GET /documents/:id (deny by default; BID_* never), shared with the FileNet evidence route. */
+export async function loadReadableDocument(ctx: Ctx, actor: Actor, id: string): Promise<DocumentRow> {
   if (!isUuid(id)) throw notFound('Document');
   const rows = await ctx.db.query<DocumentRow & { tender_status: string | null; tender_category: string | null }>(
     `SELECT d.*, t.status AS tender_status, t.category AS tender_category
@@ -192,5 +198,5 @@ export async function downloadDocument(ctx: Ctx, actor: Actor, id: string) {
       allowed = false; // BID_* only via /bids/:id/documents/:docId
   }
   if (!allowed) throw notFound('Document');
-  return { doc: d, bytes: await readPlain(ctx, d) };
+  return d;
 }

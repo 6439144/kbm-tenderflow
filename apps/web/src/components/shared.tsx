@@ -3,6 +3,7 @@ import { api, type BidReceipt, type Citation, type DocumentMeta } from '../api';
 import { useI18n } from '../i18n';
 import { DocButton } from './Layout';
 import { Badge, Button, EmptyState, fmtBytes, Hash, Table } from './ui';
+import { DocumentBadges, DocumentEvidence } from '../features/filenet';
 
 export function DocList({ docs, empty, pathFor }: { docs: DocumentMeta[]; empty: string; pathFor?: (d: DocumentMeta) => string }) {
   const { t, te, fmtDate } = useI18n();
@@ -11,7 +12,12 @@ export function DocList({ docs, empty, pathFor }: { docs: DocumentMeta[]; empty:
     <Table head={[t('common.title'), t('common.type'), t('common.size'), t('common.sha256'), t('common.date'), t('common.actions')]}>
       {docs.map((d) => (
         <tr key={d.id}>
-          <td>{d.title}</td>
+          <td>
+            <span className="fn-doc-cell">
+              <span>{d.title}</span>
+              <DocumentBadges doc={d} />
+            </span>
+          </td>
           <td>
             {d.ownerType ? <Badge label={te('doc.', d.addendum ? 'ADDENDUM' : d.ownerType)} tone={d.ownerType === 'ADDENDUM' || d.addendum ? 'warn' : 'neutral'} /> : '—'}
           </td>
@@ -26,6 +32,7 @@ export function DocList({ docs, empty, pathFor }: { docs: DocumentMeta[]; empty:
               name={d.title}
               mode={d.mimeType?.includes('html') ? 'open' : 'download'}
             />
+            <DocumentEvidence doc={d} />
           </td>
         </tr>
       ))}
