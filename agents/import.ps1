@@ -68,6 +68,17 @@ $Llm = Get-Setting 'WXO_LLM'
 if (-not $Url) { throw "WXO_INSTANCE_URL is not set (add it to $EnvFile)" }
 if (-not $ApiKey) { throw "WXO_API_KEY is not set (add it to $EnvFile)" }
 if (-not (Get-Command orchestrate -ErrorAction SilentlyContinue)) {
+    # pip may have installed the CLI into a Python 'Scripts' folder that is not on PATH; look for it.
+    foreach ($py in @('py', 'python', 'python3')) {
+        if (Get-Command $py -ErrorAction SilentlyContinue) {
+            $scripts = & $py -c "import sysconfig; print(sysconfig.get_path('scripts'))" 2>$null
+            if ($scripts -and (Test-Path (Join-Path $scripts 'orchestrate.exe'))) { $env:Path = "$scripts;$env:Path"; Write-Host "Using orchestrate CLI from $scripts"; break }
+            $userScripts = & $py -c "import sysconfig,os; print(sysconfig.get_path('scripts', os.name + '_user'))" 2>$null
+            if ($userScripts -and (Test-Path (Join-Path $userScripts 'orchestrate.exe'))) { $env:Path = "$userScripts;$env:Path"; Write-Host "Using orchestrate CLI from $userScripts"; break }
+        }
+    }
+}
+if (-not (Get-Command orchestrate -ErrorAction SilentlyContinue)) {
     throw "The 'orchestrate' CLI was not found. Install it with: pip install --upgrade ibm-watsonx-orchestrate (Python 3.11+), then reopen PowerShell."
 }
 if ($AuthType -eq 'ibm_iam' -and $Url -notmatch '\.cloud\.ibm\.com') {
