@@ -20,10 +20,16 @@ export function RoleTour() {
   const titleRef = useRef<HTMLHeadingElement>(null);
   const [popH, setPopH] = useState(200);
 
-  // navigate to the step's screen first
+  // Navigate to the step's screen once per step (Next/Back). If the user then goes somewhere else themselves,
+  // the tour steps aside instead of pulling them back.
+  const arrived = useRef<string | null>(null);
+  const stepKey = `${tour?.id}-${tour?.step}`;
   useEffect(() => {
-    if (step?.path && pathname !== step.path) navigate(step.path);
-  }, [step, pathname, navigate]);
+    if (!step?.path) { arrived.current = stepKey; return; }
+    if (pathname === step.path) { arrived.current = stepKey; return; }
+    if (arrived.current === stepKey) { setDemo({ tour: null }); return; }
+    navigate(step.path);
+  }, [stepKey, step, pathname, navigate]);
 
   const waitingForPath = Boolean(step?.path && pathname !== step.path);
   const target = useSpotTarget(waitingForPath ? undefined : step?.spot, `${tour?.id}-${tour?.step}-${waitingForPath}`);

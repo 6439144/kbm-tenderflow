@@ -8,7 +8,7 @@ import { DemoPanel } from './DemoPanel';
 import { RoleTour } from './RoleTour';
 import { SpotRing, useSpotTarget } from './Spotlight';
 import { lsGet, lsSet, setDemo, tourSeenKey, useDemoState, useDemoStatus, type Spot } from './state';
-import { tourFor } from './tours';
+import { TOURS, tourFor } from './tours';
 
 /** Header control: "Guided demo" (demo mode only) with a menu item "Replay my tour"; otherwise a small "Tour" button. */
 export function DemoLauncher() {
@@ -99,10 +99,13 @@ export function DemoOverlay() {
     if (!id) return;
     const key = tourSeenKey(user.tenantId, user.username, id);
     if (lsGet(key)) return;
+    // Start only on the screen the tour begins on (the role's home), never over a deep link the user opened.
+    const first = TOURS[id][0]?.path;
+    if (first && pathname !== first) return;
     lsSet(key, '1');
     setDemo({ tour: { id, step: 0 } });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, user?.tenantId, roles, enabled]);
+  }, [user?.id, user?.tenantId, roles, enabled, pathname]);
 
   // Sign-out ends a running tour.
   useEffect(() => {
