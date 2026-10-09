@@ -1,0 +1,106 @@
+import { useEffect, useMemo, useState } from 'react';
+import { Navigate, Route, Routes } from 'react-router-dom';
+import { I18nContext, makeI18n, type Lang } from './i18n';
+import { homeFor, SessionProvider, useSession } from './session';
+import { ToastProvider } from './components/ui';
+import { Portal, type NavItem } from './components/Layout';
+import Login from './pages/Login';
+import Register from './pages/Register';
+import VendorHome from './pages/vendor/VendorHome';
+import VendorTender from './pages/vendor/VendorTender';
+import Dashboard from './pages/procurement/Dashboard';
+import VendorsQueue from './pages/procurement/VendorsQueue';
+import TendersList from './pages/procurement/TendersList';
+import TenderForm from './pages/procurement/TenderForm';
+import TenderDetailPage from './pages/procurement/TenderDetail';
+import { AdminUsers, AdminAudit, AdminSystem } from './pages/admin/Admin';
+
+const LANG_KEY = 'tf.lang';
+
+function initialLang(): Lang {
+  try {
+    const v = localStorage.getItem(LANG_KEY);
+    if (v === 'en' || v === 'ar') return v;
+  } catch {
+    /* ignore */
+  }
+  return 'ar';
+}
+
+const PROCUREMENT_NAV: NavItem[] = [
+  { to: '/procurement', label: 'nav.dashboard', end: true },
+  { to: '/procurement/tenders', label: 'nav.tenders' },
+  { to: '/procurement/tenders/new', label: 'nav.newTender', roles: ['PROCUREMENT_OFFICER'] },
+  { to: '/procurement/vendors', label: 'nav.vendors', roles: ['PROCUREMENT_OFFICER', 'DIRECTOR'] },
+];
+const VENDOR_NAV: NavItem[] = [{ to: '/vendor', label: 'nav.myCompany', end: true }];
+const ADMIN_NAV: NavItem[] = [
+  { to: '/admin', label: 'nav.users', end: true },
+  { to: '/admin/audit', label: 'nav.audit' },
+  { to: '/admin/system', label: 'nav.system' },
+];
+
+function Home() {
+  const { user } = useSession();
+  return <Navigate to={user ? homeFor(user) : '/login'} replace />;
+}
+
+function NotFound() {
+  return (
+    <main className="page" id="main">
+      <h1>404</h1>
+    </main>
+  );
+}
+
+export default function App() {
+  const [lang, setLangState] = useState<Lang>(initialLang);
+  const setLang = (l: Lang) => {
+    setLangState(l);
+    try {
+      localStorage.setItem(LANG_KEY, l);
+    } catch {
+      /* ignore */
+    }
+  };
+  useEffect(() => {
+    document.documentElement.lang = lang;
+    document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+  }, [lang]);
+  const i18n = useMemo(() => makeI18n(lang, setLang), [lang]);
+
+  return (
+    <I18nContext.Provider value={i18n}>
+      <ToastProvider>
+        <SessionProvider>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/vendor" element={<Portal roles={['VENDOR']} nav={VENDOR_NAV} />}>
+              <Route index element={<VendorHome />} />
+              <Route path="tenders/:id" element={<VendorTender />} />
+            </Route>
+            <Route
+              path="/procurement"
+              element={<Portal roles={['PROCUREMENT_OFFICER', 'DIRECTOR', 'COMMITTEE_CHAIR', 'EVALUATOR']} nav={PROCUREMENT_NAV} />}
+            >
+              <Route index element={<Dashboard />} />
+              <Route path="vendors" element={<VendorsQueue />} />
+              <Route path="tenders" element={<TendersList />} />
+              <Route path="tenders/new" element={<TenderForm />} />
+              <Route path="tenders/:id" element={<TenderDetailPage />} />
+              <Route path="tenders/:id/edit" element={<TenderForm />} />
+            </Route>
+            <Route path="/admin" element={<Portal roles={['TENANT_ADMIN', 'AUDITOR']} nav={ADMIN_NAV} />}>
+              <Route index element={<AdminUsers />} />
+              <Route path="audit" element={<AdminAudit />} />
+              <Route path="system" element={<AdminSystem />} />
+            </Route>
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </SessionProvider>
+      </ToastProvider>
+    </I18nContext.Provider>
+  );
+}
