@@ -64,7 +64,7 @@ export function registerNotifyRoutes(r: express.Router, ctx: Ctx) {
   r.put('/admin/notification-contacts/:userId', requireRoles(ADMIN), h((req) => admin.setContact(ctx, actor(req), req.params.userId, req.body)));
 
   // Background jobs
-  r.get('/admin/jobs', readers, h(() => listJobs(ctx)));
+  r.get('/admin/jobs', readers, h((req) => listJobs(ctx, actor(req).tenantId)));
   r.post('/admin/jobs/:name/run', requireRoles(ADMIN), h(async (req) => {
     if (!registeredJobs().some((j) => j.name === req.params.name)) throw notFound('Job');
     return runJob(ctx, req.params.name, { tenantId: actor(req).tenantId, trigger: 'MANUAL' });

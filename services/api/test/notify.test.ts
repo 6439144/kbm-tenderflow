@@ -260,6 +260,15 @@ test('scheduler: single-run guard, durable last run / result / error, unknown jo
   assert.equal(f.lastStatus, 'ERROR');
   assert.equal(f.lastError, 'boom');
   assert.ok(jobs.body.some((j: any) => j.name === 'notification-deliveries'));
+  // an entity admin's "run now" only covers that entity; its result is not shown to another entity's admin
+  const own = await api(run, 'POST', '/api/v1/admin/jobs/approval-escalation/run', { token: admin });
+  assert.equal(own.body.status, 'OK', own.text);
+  assert.equal(own.body.result.entities, 1);
+  const mine = (await api(run, 'GET', '/api/v1/admin/jobs', { token: admin })).body.find((j: any) => j.name === 'approval-escalation');
+  assert.equal(mine.lastResult.scope, 'ENTITY');
+  assert.equal(mine.lastResult.tenantId, undefined);
+  const theirs = (await api(run, 'GET', '/api/v1/admin/jobs', { token: await login(run, 'other', 'admin') })).body.find((j: any) => j.name === 'approval-escalation');
+  assert.deepEqual(theirs.lastResult, { trigger: 'MANUAL', scope: 'OTHER_ENTITY' });
   assert.equal((await api(run, 'POST', '/api/v1/admin/jobs/nope/run', { token: admin })).status, 404);
   assert.equal((await api(run, 'POST', '/api/v1/admin/jobs/approval-escalation/run', { token: await login(run, 'ent', 'officer') })).status, 403);
 });

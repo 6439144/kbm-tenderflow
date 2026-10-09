@@ -112,7 +112,7 @@ export async function runJob(ctx: Ctx, name: string, opts: JobContext): Promise<
       await ctx.db.query(
         `UPDATE scheduled_jobs SET locked_until=NULL, locked_by=NULL, last_finished_at=$2, last_status=$3, last_result=$4::jsonb, last_error=$5,
                 run_count=run_count+1, updated_at=$2 WHERE name=$1 AND locked_by=$6`,
-        [name, new Date(), out.status, JSON.stringify({ ...(out.result ?? {}), trigger: opts.trigger, scope: opts.tenantId ? 'ENTITY' : 'ALL' }),
+        [name, new Date(), out.status, JSON.stringify({ ...(out.result ?? {}), trigger: opts.trigger, scope: opts.tenantId ? 'ENTITY' : 'ALL', ...(opts.tenantId ? { tenantId: opts.tenantId } : {}) }),
           out.error?.slice(0, 2000) ?? null, owner]);
     } catch (err) {
       if (!rt?.stopped) console.error(`[scheduler] ${name}: could not record the run:`, (err as Error).message);
@@ -132,16 +132,20 @@ export async function runJob(ctx: Ctx, name: string, opts: JobContext): Promise<
   }
 }
 
-export async function listJobs(ctx: Ctx) {
+/** Jobs with their last run. `viewerTenantId`: the result of another entity's manual run is not shown (only its time). */
+export async function listJobs(ctx: Ctx, viewerTenantId?: string) {
   const rows = await ctx.db.query<any>('SELECT * FROM scheduled_jobs ORDER BY name');
   const rt = runtimes.get(ctx);
   return [...registry.values()].map((j) => {
     const r = rows.find((x) => x.name === j.name);
+    const res = r?.last_result as Record<string, unknown> | null | undefined;
+    const foreign = Boolean(viewerTenantId && res?.tenantId && res.tenantId !== viewerTenantId);
+    const lastResult = res ? (foreign ? { trigger: res.trigger, scope: 'OTHER_ENTITY' } : Object.fromEntries(Object.entries(res).filter(([k]) => k !== 'tenantId'))) : null;
     return {
       name: j.name, labelEn: j.labelEn ?? j.name, labelAr: j.labelAr ?? j.name, everyMs: j.everyMs,
       scheduled: Boolean(rt?.enabled && !rt.stopped), running: Boolean(rt?.running.has(j.name)) || Boolean(r?.locked_until && new Date(r.locked_until) > new Date()),
       lastStartedAt: r?.last_started_at ?? null, lastFinishedAt: r?.last_finished_at ?? null, lastStatus: r?.last_status ?? null,
-      lastResult: r?.last_result ?? null, lastError: r?.last_error ?? null, runCount: r?.run_count ?? 0,
+      lastResult, lastError: foreign ? null : r?.last_error ?? null, runCount: r?.run_count ?? 0,
     };
   });
 }
