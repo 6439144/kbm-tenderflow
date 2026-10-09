@@ -1,5 +1,8 @@
 # TenderFlow v0.9.0 — User Guide
 
+> **Language Editions**:  
+> 🇬🇧 [English User Quick Guide](file:///c:/Users/kabed/Downloads/KBM_Tender_Product/docs/guides/user-guide-en.md) | 🇰🇼 [دليل المستخدم السريع باللغة العربية](file:///c:/Users/kabed/Downloads/KBM_Tender_Product/docs/guides/user-guide-ar.md)
+
 This guide covers workflows for Buyers (Procurement App) and Bidders (Vendor Portal).
 
 ---

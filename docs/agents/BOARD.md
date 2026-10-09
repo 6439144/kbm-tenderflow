@@ -39,7 +39,7 @@
 | **T16** | A4 | Tue 13 Oct | T10, T14 | Opening record and committee report stored; bid ACL switch | At opening ceremony, ACL unlocks technical proposals for committee. | **Done** |
 | **T17** | A5 | Tue 13 Oct | T11, T14 | `bid-compliance-screener` AI agent & `import.sh` (<15 min rebuild) | Screen unsealed bids only; AI actions audited; rapid rebuild script. | **Done** |
 | **T18** | A6 | Tue 13 Oct | T13, T14 | Automated E2E runner for steps 5-8, nightly DB dump, zero CVEs | Steps 5-8 passing; `backup-db.sh` automated; security audit passing. | **Done** |
-| **T19** | A1 | Tue 13 Oct | T12 | Product guides: Admin guide, install guide, user quick guide (AR/EN) | Bilingual guides in `docs/guides/` matching review demo workflows. | **In Progress** |
+| **T19** | A1 | Tue 13 Oct | T12 | Product guides: Admin guide, install guide, user quick guide (AR/EN), release notes v0.9.0 | Bilingual guides in `docs/guides/` matching review demo workflows and v0.9.0 release notes. | **Done** |
 | **T20** | A0 | Tue 13 Oct | T18 | Scope cuts review (18:00 Kuwait time) | Cut incomplete features to `docs/roadmap.md`; protect product-grade release. | `Todo` |
 | **T21** | A0 / A4 | Wed 14 Oct | T16, T18 | Repeatability deployment test on fresh TechZone instance | Time execution of `install.sh`, `provision/`, and `import.sh`. | `Todo` |
 | **T22** | A6 | Wed 14 Oct | T18 | Clean VM install recording & full demo video fallback | Video capture of 10-step demo as failsafe for ESA evaluation. | `Todo` |
