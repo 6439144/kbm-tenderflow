@@ -1,0 +1,8 @@
+{
+  "name": "check_service_health",
+  "description": "Calls the hosted TenderFlow API /health endpoint to check operational readiness.",
+  "parameters": {
+    "type": "object",
+    "properties": {}
+  }
+}

@@ -74,6 +74,15 @@
   - **T21 (Wed 14 Oct)**: Rerun `provision/` against fresh TechZone object store and time execution.
 - **Constraints**: Environment variables only (`FILENET_GRAPHQL_URL`, `FILENET_OBJECT_STORE`, `FILENET_SERVICE_USER`, etc.). Never hard-code credentials.
 
+### A5 — AI Agent
+- **Role**: watsonx Orchestrate SaaS integration via ADK, YAML agent definitions, OpenAPI tool declarations, advisory evaluation datasets, and audit logging for AI actions.
+- **Owned Folders**: `agents/`.
+- **Assigned Tasks**:
+  - **T05 (Sun 11 Oct)**: Hello agent plus OpenAPI tool calling hosted `/health` endpoint.
+  - **T11 (Mon 12 Oct)**: `tender-pack-checker` and `clarification-assistant` agents in YAML with OpenAPI tools; outputs are drafts requiring human approval. `evals/`: 20 Arabic and 20 English benchmark questions on `seed/` with scoring script and `evals/results.md`.
+  - **T17 (Tue 13 Oct)**: `bid-compliance-screener` (unsealed bids only); all agent actions logged to TenderFlow audit log; `import.sh` rebuilds agents in <15 minutes.
+- **Constraints**: Synthetic data only. Never put secrets in agent YAML. Connection via `orchestrate env` with IBM IAM token. Every action strictly advisory (Rule 7).
+
 ---
 
-*(Additional agents A5 through A6 will be appended as their briefs are introduced)*
+*(Agent A6 will be appended when its brief is introduced)*

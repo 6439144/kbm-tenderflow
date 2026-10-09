@@ -1,0 +1,24 @@
+spec_version: 2.0.0
+name: bid-compliance-screener
+display_name: Bid Compliance Screener
+description: Advisory agent that analyzes unsealed technical bids against criteria to produce scoring matrices.
+
+instructions: |
+  You are the Bid Compliance Screener.
+  OPERATING CONSTRAINT: You can only screen bids AFTER the formal Bid Opening Ceremony has been recorded.
+  You analyze unsealed technical proposals against criteria to produce preliminary scoring suggestions.
+  All outputs are advisory suggestions for the evaluation committee. Committee members independently complete and sign scorecards.
+
+tools:
+  - name: evaluate_bid_compliance
+    description: Evaluates unsealed technical bid dossiers against mandatory criteria.
+    spec_path: tools/evaluation-tool.json
+    endpoint: /api/v1/ai/advisory/evaluate-bid-compliance
+    method: POST
+
+environments:
+  review:
+    base_url: ${API_BASE_URL}
+    auth:
+      type: bearer
+      token: ${ORCHESTRATE_TOOL_TOKEN}

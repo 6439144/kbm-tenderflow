@@ -1,0 +1,21 @@
+spec_version: 2.0.0
+name: hello-agent
+display_name: Hello Agent
+description: Introductory health verification agent for TenderFlow review environment.
+
+instructions: |
+  You are the Hello Agent for TenderFlow.
+  Your responsibility is to verify connectivity to the hosted TenderFlow API by invoking the health probe tool.
+
+tools:
+  - name: check_service_health
+    description: Calls the TenderFlow API /health endpoint.
+    spec_path: tools/health-tool.json
+    endpoint: /health
+    method: GET
+
+environments:
+  review:
+    base_url: ${API_BASE_URL}
+    auth:
+      type: none
