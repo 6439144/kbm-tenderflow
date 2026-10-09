@@ -13,7 +13,8 @@ let adminA: string;
 let vendorUserId: string;
 
 const codeAt = (manualKey: string, offsetSteps = 0) => totp(base32Decode(manualKey), now().getTime() / 1000 + offsetSteps * 30);
-const nextStep = () => setClockOffset((now().getTime() - Date.now()) + 30_000);
+/** Move the server clock to 1 s after the start of the next 30-second step (deterministic: no boundary crossing mid-test). */
+const nextStep = () => { const t = now().getTime(); setClockOffset((t - Date.now()) + (30_000 - (t % 30_000)) + 1_000); };
 
 before(async () => {
   run = await startApp();
@@ -65,6 +66,7 @@ let recoveryCodes: string[] = [];
 
 test('MFA OPTIONAL: vendor enrols (scan → confirm) and gets 8 recovery codes once; then sign-in needs a code', async () => {
   await setSettings(adminA, { mfaVendors: 'OPTIONAL' });
+  nextStep(); // the replay check below must stay inside one time step
   const vt = await login(run, 'sa', 'vend'); // not enrolled yet → no second step
   const st = await api(run, 'POST', '/api/v1/security/mfa/enrol/start', { token: vt });
   assert.equal(st.status, 200, st.text);
