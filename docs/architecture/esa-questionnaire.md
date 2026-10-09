@@ -42,9 +42,9 @@ TenderFlow embeds two flagship IBM enterprise platforms:
 ### 2.2 What constitutes KBM's Intellectual Property (Value-Add Layer)?
 KBM has engineered the entire application, workflow, security, and presentation layers surrounding the embedded IBM engines:
 - **TenderFlow Micro-Frontend Suite** (`apps/`): Three role-aware Next.js web applications (`vendor-portal`, `procurement-app`, and `control-panel`) with a shared bilingual design system (`packages/ui`) supporting real-time Arabic (RTL) and English (LTR) rendering.
-- **Authoritative REST API Gateway** (`services/api`): Node.js/TypeScript REST service enforcing server-side tenant isolation, role-based access control (RBAC), and procurement workflow state machines. *(Hardening in v1.0: Real JWKS token verification via `jose` and PostgreSQL persistence under H-01 & H-02).*
-- **Sealed Bid Cryptographic Vault** (`services/api/src/services/sealed-bid-vault.ts`): Implements client-side SHA-256 digest receipts and server-side envelope encryption, guaranteeing zero pre-opening read access. *(Hardening in v1.0: AES-256-GCM envelope encryption per bid wrapped with `BID_MASTER_KEY` under H-03).*
-- **Tamper-Evident Audit Ledger** (`services/api/src/services/audit.ts`): HMAC-SHA256 hash-chained immutable audit log providing non-repudiation and verification. *(Hardening in v1.0: Durable PostgreSQL append-only ledger under H-15).*
+- **Authoritative REST API Gateway** (`services/api`): Node.js/TypeScript REST service enforcing server-side tenant isolation, role-based access control (RBAC), and procurement workflow state machines. *(In progress for Gate 1: Cryptographic JWT verification via Keycloak JWKS `jose` and removal of header-based actor overrides under G1-b / H-01).*
+- **Sealed Bid Cryptographic Vault** (`services/api/src/services/sealed-bid-vault.ts`): Implements client-side SHA-256 digest receipts and zero pre-opening read access enforcement. *(In progress for Gate 1: Real AES-256-GCM envelope encryption per bid wrapped with `BID_MASTER_KEY` under G1-c / H-03; v0.9 used an in-memory prototype without real ciphertext storage).*
+- **Tamper-Evident Audit Ledger** (`services/api/src/services/audit.ts`): HMAC-SHA256 hash-chained immutable audit log providing non-repudiation and verification. *(In progress for Gate 3: Durable PostgreSQL append-only ledger under G3-d / H-15).*
 - **Multi-Tenant Packaging Engine** (`packages/tenant-config`): Declarative JSON/YAML tenant configuration system allowing rapid instantiation of branding, currencies, categories, and approval thresholds in <1 hour.
 
 ---
@@ -52,15 +52,15 @@ KBM has engineered the entire application, workflow, security, and presentation 
 ## 3. Technical Integration & Architectural Boundaries
 
 ### 3.1 Content & Storage Integration (IBM FileNet Content Manager)
-- **Interface Boundary**: All document operations pass through the `ContentStore` abstraction (`services/content-adapter/src/types.ts`). The core API never accesses FileNet directly.
-- **Database Boundary (Rule)**: Zero document binary bodies are stored in the PostgreSQL database. PostgreSQL holds metadata, workflow state, and FileNet document IDs (`docId`).
-- **TechZone Provisioning Automation**: Automated provisioning scripts and ACCE runbooks ([`services/content-adapter/provision/`](file:///c:/Users/kabed/Downloads/KBM_Tender_Product/services/content-adapter/provision)) configure classes, property templates, and security groups. *(In progress for v1.0 under H-06)*.
+- **Interface Boundary**: All document operations pass through the `ContentStore` abstraction (`services/content-adapter/src/types.ts`). In v0.9, testing ran against local `FileSystemContentStore`. Live IBM FileNet Content Services GraphQL integration (`FileNetGraphQLContentStore`) is in active implementation for Gate 2 (G2-a / H-05).
+- **Database Boundary (Rule)**: Zero document binary bodies are stored in the PostgreSQL database. PostgreSQL holds metadata, workflow state, and document IDs (`docId`).
+- **TechZone Provisioning Automation**: Provisioning runbook (`ACCE-RUNBOOK.md`) and schema verification script (`provision/verify.js`) are in active implementation for Gate 2 (G2-b / H-06).
 
 ### 3.2 AI & Automation Integration (IBM watsonx Orchestrate)
-- **ADK Agent Definitions**: Defined in standard declarative YAML ([`agents/tender-pack-checker.yaml`](file:///c:/Users/kabed/Downloads/KBM_Tender_Product/agents/tender-pack-checker.yaml), [`agents/clarification-assistant.yaml`](file:///c:/Users/kabed/Downloads/KBM_Tender_Product/agents/clarification-assistant.yaml), [`agents/bid-compliance-screener.yaml`](file:///c:/Users/kabed/Downloads/KBM_Tender_Product/agents/bid-compliance-screener.yaml)). *(ADK native format refactor in progress under H-09)*.
-- **Tool Calling Architecture**: OpenAPI 3.0 tool declarations ([`agents/tools/`](file:///c:/Users/kabed/Downloads/KBM_Tender_Product/agents/tools)) invoke TenderFlow endpoints over HTTPS. Every tool call carries the end-user identity via dedicated session tokens, and the API enforces user permissions. *(In progress under H-08 & H-10)*.
-- **Rule 7 Compliance (Advisory Only)**: AI tools produce drafts and scores requiring formal human sign-off; the API blocks any attempt by an AI actor to transition state, publish, or issue awards.
-- **Rapid Rebuild Script**: [`agents/import.sh`](file:///c:/Users/kabed/Downloads/KBM_Tender_Product/agents/import.sh) rebuilds all agents and tools on a fresh SaaS tenant in under 15 minutes.
+- **ADK Agent Definitions**: Defined in YAML format. Native ADK v1 agent definitions and IBM IAM connectivity are in active development for Gate 2 (G2-d / H-09).
+- **Tool Calling Architecture**: OpenAPI 3.0 tool declarations ([`agents/tools/`](file:///c:/Users/kabed/Downloads/KBM_Tender_Product/agents/tools)) and short-lived `ai_session` token propagation are in active implementation for Gate 2 (G2-c / H-08).
+- **Rule 7 Compliance (Advisory Only)**: AI tools produce advisory drafts and compliance checklists requiring formal human sign-off; the API strictly blocks state mutations by AI actors.
+- **Rapid Rebuild Script**: Automation script (`agents/import.sh`) is in development for native ADK CLI without mock mode (G2-d / H-09).
 
 ---
 
@@ -68,12 +68,12 @@ KBM has engineered the entire application, workflow, security, and presentation 
 
 | Non-Negotiable Rule | Architecture Enforcement Mechanism | Current Verification / Hardening Status |
 |---|---|---|
-| **Rule 1: Sealed Bids Zero Access** | Client-side digest receipt + envelope encryption; server rejects any read prior to recorded Opening Ceremony. | Architectural contract established; AES-256-GCM envelope encryption per bid with `BID_MASTER_KEY` wrapping and deadline scheduler in active hardening (H-03). |
-| **Rule 2: Immutable Audit Trail** | Every state change & privileged action logs actor, tenant, timestamp, previous state, new state, and reason into HMAC-SHA256 hash chain. | In-memory HMAC hash-chaining verified; durable PostgreSQL append-only persistence in active hardening (H-15). |
-| **Rule 3: Tenant & Role Isolation** | Server-side middleware validates tenant binding on every query; strict RBAC prevents Vendors from calling procurement APIs. | Architectural RBAC verified; cryptographically verified OIDC JWT validation via `jose` and PostgreSQL RLS in active hardening (H-01, H-02). |
+| **Rule 1: Sealed Bids Zero Access** | Client-side SHA-256 digest receipt; API rejects pre-opening read requests. Real AES-256-GCM envelope encryption wrapped with `BID_MASTER_KEY` is in active development. | Pre-opening read block verified; real AES-256-GCM envelope encryption in progress (G1-c / H-03). |
+| **Rule 2: Immutable Audit Trail** | State transitions and privileged actions log actor, tenant, timestamp, and changes into HMAC-SHA256 hash chain. | In-memory HMAC hash chain verified; durable PostgreSQL append-only persistence in progress (G3-d / H-15). |
+| **Rule 3: Tenant & Role Isolation** | Server-side middleware validates tenant binding on every query; RBAC checks user roles. Real Keycloak JWKS token verification via `jose` and header override removal are in active development. | Route access checks defined; real JWKS token verification and removal of header overrides in progress (G1-b / H-01). |
 | **Rule 4: Synthetic Data Only** | Seed datasets in `seed/` use fictitious entities ("Ministry A", "Ministry B") and vendors; zero customer/MOI data. | `npm run seed` verified clean. |
 | **Rule 5: Zero Secrets in Repo** | Environment variables only; `.env.example` placeholders; pre-commit scanner. | [`scripts/secret-scan.js`](file:///c:/Users/kabed/Downloads/KBM_Tender_Product/scripts/secret-scan.js) scans 126 files with 0 findings. |
-| **Rule 7: Advisory AI Gatekeepers** | AI agents advise; human Director/Officer sign-off required for all state transitions. | Advisory state gating active in API; live watsonx Orchestrate benchmark evals against FileNet documents in active hardening (H-11). |
+| **Rule 7: Advisory AI Gatekeepers** | AI agents advise; human Director/Officer sign-off required for all state transitions. | Advisory state gating active in API; real evaluations against live Orchestrate models and FileNet documents not yet run (in progress under G2-f / H-11). |
 | **Rule 8: Neutral Branding** | UI text and public documentation use generic enterprise terminology without vendor branding. | Audited across all presentation components and user guides. |
 
 ---

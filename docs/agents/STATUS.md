@@ -1,37 +1,38 @@
-# TenderFlow v0.9.0 — Daily Status Log
+# TenderFlow v1.0.0-rc1 — Daily Status Log
 
 **Lead Agent**: A0 (Orchestrator & Tech Lead) & A6 (Quality, Security & Platform Lead)  
-**Last Updated**: 2026-10-09 16:15 Kuwait Time  
-**Target Freeze**: Wed 14 Oct 2026, 18:00 Kuwait Time | Tag: Thu 15 Oct 2026  
+**Last Updated**: 2026-10-09 17:15 Kuwait Time  
+**Target Milestone**: v1.0.0-rc1 by 23:59 Fri 9 Oct 2026 (per `docs/agents/TONIGHT.md`)  
 
 ---
 
 ## Daily Review Demo Script Tracking (Against `docs/review-demo.md`)
 
-| Step | Scope | Hosted Env Status | CI / Test Status | Notes & Blocker |
+| Step | Scope | Real Integration Status | CI / Test Status | Notes & Active Task |
 |---|---|---|---|---|
-| **Step 1** | Tenant Provisioning (`kea`, `ministry_a`, `ministry_b`) | ⏳ Pending review VM deploy | ✅ Verified in CI | Multi-tenant config packages validated |
-| **Step 2** | Vendor Registration & Approval | ⏳ Pending review VM deploy | ✅ Verified in CI | Document store upload + RBAC approval |
-| **Step 3** | Tender Preparation (`DRAFT`) | ⏳ Pending review VM deploy | ✅ Verified in CI | Metadata, specs & budgets linked |
-| **Step 4** | AI Completeness Review & Director Sign-Off | ⏳ Pending review VM deploy | ✅ Verified in CI | Rule 7 Enforced: Human Director gate |
-| **Step 5** | Tender Publication to Portal | ⏳ Pending review VM deploy | ✅ Verified in CI | State transitions to PUBLISHED |
-| **Step 6** | Clarifications & Addendum #1 | ⏳ Pending review VM deploy | ✅ Verified in CI | Q&A response flow + AI draft answer |
-| **Step 7** | Sealed Bid Submission & Rule 1 Lock | ⏳ Pending review VM deploy | ✅ Verified in CI | **Rule 1 Enforced: HTTP 403 test-proven** |
-| **Step 8** | Bid Opening Ceremony & Unsealing | ⏳ Pending review VM deploy | ✅ Verified in CI | Ceremony event unlocks technical bids |
-| **Step 9** | Evaluator Scorecard & AI Scoring | ⏳ Pending review VM deploy | ✅ Verified in CI | Weighted 70/30 scoring recorded |
-| **Step 10** | Award Sign-off & Audit Chain Integrity | ⏳ Pending review VM deploy | ✅ Verified in CI | **Rule 2 Enforced: HMAC SHA-256 intact** |
+| **Step 1** | Tenant Provisioning (`kea`, `ministry_a`, `ministry_b`) | Config validated | In-memory verified; PG persistence in progress | G1-d / H-02 |
+| **Step 2** | Vendor Registration & Approval | Keycloak realm in progress | Route checks in place; real JWKS in progress | G1-b / H-01 |
+| **Step 3** | Tender Preparation (`DRAFT`) | Filesystem store verified | FileNet GraphQL adapter in progress | G2-a / H-05 |
+| **Step 4** | AI Completeness Review & Director Sign-Off | ADK YAML in progress | Real model evals not yet run | G2-d, G2-f |
+| **Step 5** | Tender Publication to Portal | Workflow rules enforced | Tested in scaffold | G1-b / H-01 |
+| **Step 6** | Clarifications & Addendum #1 | Q&A routing active | Grounded tool endpoints in progress | G2-c / H-08 |
+| **Step 7** | Sealed Bid Submission & Rule 1 Lock | Pre-opening read block tested | AES-256-GCM envelope vault in progress | G1-c / H-03 |
+| **Step 8** | Bid Opening Ceremony & Unsealing | Chair unsealing gate tested | Unsealing with master key in progress | G1-c / H-03 |
+| **Step 9** | Evaluator Scorecard & AI Compliance Check | Scoring formulas defined | Missing-document checklist tool in progress | G2-c / H-08 |
+| **Step 10** | Award Sign-off & Audit Chain Integrity | In-memory HMAC verified | PostgreSQL append-only audit in progress | G3-d / H-15 |
 
 ---
 
 ## Security & Platform Verification Summary
-- **RBAC Server-Side Enforcement**: Tested & proven (`tests/security/sealed-bid-security.test.ts`). Vendor role is strictly blocked from drafting tenders, approving publications, publishing, opening bids, submitting scorecards, awarding contracts, and approving other vendors.
-- **Tenant Isolation (Rule 3)**: Tested & proven. Cross-tenant access attempts return 404.
-- **Sealed Bid Vault (Rule 1)**: Tested & proven. Zero read access permitted prior to Bid Opening Ceremony for any role or AI tool.
-- **CI & Deployment Pipeline**: Complete with `deploy/compose`, TLS reverse proxy on 443, `install.sh` v0, `.github/workflows/ci.yml`, secret scanner (Rule 5), CycloneDX SBOM generator, and automated nightly DB backup script (`backup-db.sh`).
+- **RBAC Server-Side Enforcement (Gate 1)**: Architectural routes enforce roles; upgrading from mock header overrides to real Keycloak JWKS tokens with `jose` (G1-b).
+- **Tenant Isolation (Rule 3)**: Cross-tenant access forbidden; row-level defense in depth via PostgreSQL in progress (G1-d).
+- **Sealed Bid Vault (Rule 1)**: Zero read access permitted prior to Bid Opening Ceremony; AES-256-GCM envelope encryption per bid wrapped with `BID_MASTER_KEY` in active implementation (G1-c).
+- **Embedded Integrations (Gate 2)**: FileNet Content Services GraphQL and watsonx Orchestrate native ADK integration in active implementation.
+- **AI Evals (Rule 11)**: Benchmark datasets established; not yet run against live model.
 
 ---
 
-## Open Human Questions Blocking Next Day
-*(Synchronized from `docs/agents/QUESTIONS.md`)*
-1. Confirming Bid Opening quorum requirement (Single committee chair sign-off vs multi-sig quorum). Currently configured for Committee Chair with attendee witness list.
-2. Review VM IP/domain configuration for HTTPS certificate binding.
+## Reviewer Blocking Items Tracking
+- R0-1 (ESA claims): Fixed in commit.
+- R0-2 (evals/results.md 40/40 claim): Fixed in commit (status: "not yet run against a model").
+

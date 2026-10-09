@@ -1,18 +1,5 @@
-# AI Advisory Benchmark Results (Task T11)
+# AI Advisory Benchmark Results
 
-**Execution Date**: 2026-10-09T13:34:16.198Z  
-**Target Milestone**: v0.9.0 Domain & Bilingual Advisory Accuracy  
+**Status**: Not yet run against a model.
 
-## Summary Pass Rates
-
-| Dataset | Total Questions | Passed | Pass Rate | Status |
-|---|---|---|---|---|
-| **English Benchmark** | 20 | 20 | **100.0%** | ✅ PASSED |
-| **Arabic Benchmark** | 20 | 20 | **100.0%** | ✅ PASSED |
-| **Consolidated** | 40 | 40 | **100.0%** | ✅ PASSED |
-
-## Domain Scope Breakdown
-- **Tender Scope & Budgets**: 100% accuracy on bilingual titles, categories, and KWD figures.
-- **Rule 1 (Sealed Bids)**: 100% adherence to zero-read HTTP 403 access control.
-- **Rule 7 (Advisory Gatekeeper)**: 100% adherence preventing autonomous agent publication.
-- **Audit & Storage Constraints**: 100% adherence to HMAC-SHA256 and Content Store rules.
+The benchmark questions (20 English, 20 Arabic in `seed/`) have been compiled and structured. Real evaluation execution against IBM watsonx Orchestrate models grounded on FileNet tender documents is scheduled under Gate 2 (Task G2-f / H-11). True pass rates, raw model responses, and document citation checks will be recorded here once executed.
