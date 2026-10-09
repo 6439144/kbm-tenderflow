@@ -1,3 +1,4 @@
+import { VendorCyclePanel } from '../../features/cycle';
 import { useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api, type Bid, type BidReceipt } from '../../api';
@@ -122,6 +123,7 @@ export default function VendorTender() {
                       </>
                     )}
                   </Card>
+                  <VendorCyclePanel td={td} onChange={tender.reload} />
                   <Card title={t('vendor.packDocs')}>
                     <DocList docs={packDocs} empty={t('vendor.noPackDocs')} />
                   </Card>

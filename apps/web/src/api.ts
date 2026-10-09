@@ -6,6 +6,7 @@ export type Role =
   | 'VENDOR'
   | 'PROCUREMENT_OFFICER'
   | 'DIRECTOR'
+  | 'UNDERSECRETARY'
   | 'COMMITTEE_CHAIR'
   | 'EVALUATOR'
   | 'TENANT_ADMIN'
@@ -14,6 +15,7 @@ export type Role =
 export const ALL_ROLES: Role[] = [
   'PROCUREMENT_OFFICER',
   'DIRECTOR',
+  'UNDERSECRETARY',
   'COMMITTEE_CHAIR',
   'EVALUATOR',
   'TENANT_ADMIN',
@@ -26,6 +28,7 @@ export const CATEGORIES: Category[] = ['IT', 'WORKS', 'SERVICES', 'SUPPLIES'];
 
 export type TenderStatus =
   | 'DRAFT'
+  | 'PENDING_APPROVAL'
   | 'APPROVED'
   | 'PUBLISHED'
   | 'CLOSED'
@@ -34,7 +37,7 @@ export type TenderStatus =
   | 'AWARDED'
   | 'CANCELLED';
 
-export const LIFECYCLE: TenderStatus[] = ['DRAFT', 'APPROVED', 'PUBLISHED', 'CLOSED', 'OPENED', 'EVALUATION', 'AWARDED'];
+export const LIFECYCLE: TenderStatus[] = ['DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'PUBLISHED', 'CLOSED', 'OPENED', 'EVALUATION', 'AWARDED'];
 export const ALL_TENDER_STATUSES: TenderStatus[] = [...LIFECYCLE, 'CANCELLED'];
 
 export type VendorStatus = 'PENDING_REVIEW' | 'PENDING' | 'APPROVED' | 'REJECTED';
@@ -64,7 +67,10 @@ export type DocumentOwnerType =
   | 'BID_TECHNICAL'
   | 'BID_FINANCIAL'
   | 'OPENING_RECORD'
-  | 'COMMITTEE_REPORT';
+  | 'COMMITTEE_REPORT'
+  | 'REQUEST_LETTER'
+  | 'NOTICE'
+  | 'EVALUATION_NARRATIVE';
 
 export interface DocumentMeta {
   id: string;
@@ -82,6 +88,10 @@ export interface DocumentMeta {
   addendum?: boolean;
   uploadedBy?: string;
   createdAt?: string;
+  versionNo?: number;
+  supersedesId?: string | null;
+  isRecord?: boolean;
+  recordDeclaredAt?: string | null;
 }
 
 export interface Vendor {
@@ -222,6 +232,12 @@ export interface Tender {
   awardedAt?: string | null;
   createdAt?: string;
   updatedAt?: string;
+  template?: { id: string; code: string; version: number; nameEn: string; nameAr: string } | null;
+  cycle?: import('./api-platform').CycleConfig;
+  requestId?: string | null;
+  eligibility?: { activityCodes?: string[]; minGrade?: number | null };
+  financialOpenedAt?: string | null;
+  recordsLockedAt?: string | null;
 }
 
 /** GET /tenders/:id — documents and clarifications visible to the caller, bid count, ai runs for staff.
@@ -233,6 +249,15 @@ export interface TenderDetail extends Tender {
   aiRuns?: AiRun[];
   opening?: Opening | null;
   award?: Award | null;
+  stages?: import('./api-platform').StageInfo[];
+  eligibilityRule?: { activityCodes: string[]; minGrade: number | null };
+  publications?: import('./api-platform').Publication[];
+  approvalChain?: import('./api-platform').ChainStep[];
+  awardChain?: import('./api-platform').ChainStep[] | null;
+  purchaseCount?: number;
+  request?: { id: string; requestNumber: string; department: string; subject: string; source: string; sourceReference: string | null; letterDocumentId: string | null; status: string } | null;
+  myEligibility?: import('./api-platform').Eligibility;
+  myPurchase?: import('./api-platform').Purchase | null;
 }
 
 export interface TenderInput {
@@ -475,6 +500,11 @@ const post = <T>(path: string, body?: unknown) =>
 const patch = <T>(path: string, body: unknown) =>
   json<T>(path, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 const postForm = <T>(path: string, form: FormData) => json<T>(path, { method: 'POST', body: form });
+const put = <T>(path: string, body: unknown) =>
+  json<T>(path, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+
+/** Low-level typed HTTP helpers for feature clients (api-*.ts). Same auth, errors and camelCase handling. */
+export const http = { get, post, patch, put, postForm };
 
 function qs(params: Record<string, string | number | undefined | null>): string {
   const u = new URLSearchParams();

@@ -7,7 +7,7 @@ import type { Config } from '../config.js';
 import { ApiError } from '../util.js';
 
 export const AUDIENCE = 'tenderflow';
-export const ROLES = ['VENDOR', 'PROCUREMENT_OFFICER', 'DIRECTOR', 'COMMITTEE_CHAIR', 'EVALUATOR', 'TENANT_ADMIN', 'AUDITOR'] as const;
+export const ROLES = ['VENDOR', 'PROCUREMENT_OFFICER', 'DIRECTOR', 'UNDERSECRETARY', 'COMMITTEE_CHAIR', 'EVALUATOR', 'TENANT_ADMIN', 'AUDITOR'] as const;
 export type Role = (typeof ROLES)[number];
 
 export interface Actor {

@@ -66,7 +66,7 @@ test('demo seed runs through the real services (SEED_DEMO=true)', async () => {
   const run = await startApp(undefined, { SEED_DEMO: 'true', DEMO_PASSWORD: 'Demo-Passw0rd!' });
   try {
     const tenants = await api(run, 'GET', '/api/v1/public/tenants');
-    assert.deepEqual(tenants.body.map((t: any) => t.id), ['kea', 'ministry_a']);
+    assert.deepEqual(tenants.body.map((t: any) => t.id), ['gcia', 'kea']);
     const officer = await login(run, 'kea', 'officer', 'Demo-Passw0rd!');
     const list = await api(run, 'GET', '/api/v1/tenders', { token: officer });
     const byNum = Object.fromEntries(list.body.map((t: any) => [t.tenderNumber, t]));
@@ -80,7 +80,7 @@ test('demo seed runs through the real services (SEED_DEMO=true)', async () => {
     assert.ok(bids.body.every((b: any) => b.status === 'SEALED'));
     // sealed bid files really encrypted in the store
     const enc = walk(path.join(run.dataDir, 'content')).filter((f) => f.endsWith('.enc'));
-    assert.equal(enc.length, 6);
+    assert.equal(enc.length, 10); // kea: 3 bids x 2 files, gcia: 2 bids x 2 files
     assert.ok(enc.every((f) => !fs.readFileSync(f).includes(Buffer.from('Technical Proposal'))));
     // vendor4 pending → sees nothing; vendor1 approved → sees published + closed IT tenders
     const v4 = await api(run, 'GET', '/api/v1/tenders', { token: await login(run, 'kea', 'vendor4', 'Demo-Passw0rd!') });

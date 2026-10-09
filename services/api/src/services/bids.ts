@@ -8,13 +8,22 @@ import { newDataKey, unwrapKey, wrapKey } from './vault.js';
 import { loadTender, type TenderRow } from './tenders.js';
 import { getVendorRow } from './vendors.js';
 import { openingRecordHtml, type OpeningBidSummary } from './reports.js';
+import { assertEligible, assertPurchased } from './eligibility.js';
+import { configOf } from './templates.js';
+import { escapeHtml } from '../util.js';
 
 export interface BidRow {
   id: string; tenant_id: string; tender_id: string; vendor_id: string; status: string; wrapped_key: string; wrap_iv: string;
   wrap_tag: string; receipt_sha256: string; submitted_at: Date; opened_at: Date | null;
+  technical_result?: string | null; technical_score?: string | number | null; financial_opened_at?: Date | null;
 }
 
-const BID_READERS = ['COMMITTEE_CHAIR', 'EVALUATOR', 'DIRECTOR'];
+/** Two-envelope tenders keep the financial envelope sealed until the chair opens it for bids that passed. */
+export function financialSealed(t: TenderRow, bid: BidRow): boolean {
+  return configOf(t).envelopes === 'TWO' && !bid.financial_opened_at;
+}
+
+const BID_READERS = ['COMMITTEE_CHAIR', 'EVALUATOR', 'DIRECTOR', 'UNDERSECRETARY'];
 
 function receiptOf(bid: { id: string; tender_id: string; vendor_id: string; submitted_at: Date }, files: { title: string; sha256: string; type: string }[]) {
   return sha256Hex(canonicalJson({ bidId: bid.id, tenderId: bid.tender_id, vendorId: bid.vendor_id, submittedAt: bid.submitted_at, files }));
@@ -27,6 +36,8 @@ export async function submitBid(ctx: Ctx, actor: Actor, tenderId: string, files:
   const t = await loadTender(ctx, actor, tenderId); // auto-closes at deadline
   if (t.status !== 'PUBLISHED' || now() >= new Date(t.submission_deadline))
     throw conflict('SUBMISSION_CLOSED', 'Bids are accepted only while the tender is PUBLISHED and before the deadline');
+  await assertEligible(ctx.db, t, vendor.id);
+  await assertPurchased(ctx.db, t, vendor.id);
   const tech = validateUpload(files.technical, 'technical');
   const fin = validateUpload(files.financial, 'financial');
 
@@ -85,9 +96,13 @@ export async function listBids(ctx: Ctx, actor: Actor, tenderId: string) {
   const out = [];
   for (const b of rows) {
     const item: any = { id: b.id, vendorId: b.vendor_id, vendorNameEn: b.legal_name_en, vendorNameAr: b.legal_name_ar, status: b.status,
-      submittedAt: b.submitted_at, receiptSha256: b.receipt_sha256, openedAt: b.opened_at };
+      submittedAt: b.submitted_at, receiptSha256: b.receipt_sha256, openedAt: b.opened_at,
+      technicalResult: b.technical_result ?? null, technicalScore: b.technical_score === null || b.technical_score === undefined ? null : Number(b.technical_score),
+      financialOpenedAt: b.financial_opened_at ?? null, financialSealed: financialSealed(t, b) };
     if (b.status === 'OPENED' && hasRole(actor, ...BID_READERS)) {
-      const docs = await ctx.db.query<DocumentRow>('SELECT * FROM documents WHERE bid_id=$1 ORDER BY owner_type', [b.id]);
+      const sealedFin = financialSealed(t, b);
+      const docs = (await ctx.db.query<DocumentRow>('SELECT * FROM documents WHERE bid_id=$1 ORDER BY owner_type', [b.id]))
+        .filter((d) => !(sealedFin && d.owner_type === 'BID_FINANCIAL'));
       item.documents = docs.map((d) => ({ id: d.id, type: d.owner_type, title: d.title, mimeType: d.mime_type, byteSize: d.byte_size, sha256: d.sha256_plain }));
     }
     out.push(item);
@@ -103,10 +118,11 @@ export async function loadBid(ctx: Ctx, tenantId: string, id: string): Promise<B
 }
 
 /** Decrypted bid documents; used by the download route, compliance screening and the opening integrity check. */
-export async function decryptBidDocuments(ctx: Ctx, bid: BidRow): Promise<{ doc: DocumentRow; bytes: Buffer }[]> {
+export async function decryptBidDocuments(ctx: Ctx, bid: BidRow, opts: { technicalOnly?: boolean } = {}): Promise<{ doc: DocumentRow; bytes: Buffer }[]> {
   const key = unwrapKey(ctx.config.bidMasterKey, bid);
   try {
-    const docs = await ctx.db.query<DocumentRow>('SELECT * FROM documents WHERE bid_id=$1 ORDER BY owner_type', [bid.id]);
+    const docs = (await ctx.db.query<DocumentRow>('SELECT * FROM documents WHERE bid_id=$1 ORDER BY owner_type', [bid.id]))
+      .filter((d) => !(opts.technicalOnly && d.owner_type === 'BID_FINANCIAL'));
     const out = [];
     for (const d of docs) out.push({ doc: d, bytes: await readSealed(ctx, d, key) });
     return out;
@@ -124,6 +140,10 @@ export async function downloadBidDocument(ctx: Ctx, actor: Actor, bidId: string,
   if (!isUuid(docId)) throw notFound('Document');
   const d = (await ctx.db.query<DocumentRow>('SELECT * FROM documents WHERE id=$1 AND bid_id=$2 AND tenant_id=$3', [docId, bid.id, actor.tenantId]))[0];
   if (!d) throw notFound('Document');
+  if (!isOwner && d.owner_type === 'BID_FINANCIAL') {
+    const t = (await ctx.db.query<TenderRow>('SELECT * FROM tenders WHERE id=$1', [bid.tender_id]))[0];
+    if (financialSealed(t, bid)) throw new ApiError(403, 'FINANCIAL_SEALED', 'The financial envelope stays sealed until the chair opens it for bids that passed the technical evaluation');
+  }
   const key = unwrapKey(ctx.config.bidMasterKey, bid);
   let bytes: Buffer;
   try { bytes = await readSealed(ctx, d, key); } finally { key.fill(0); }
@@ -172,7 +192,62 @@ export async function openTender(ctx: Ctx, actor: Actor, tenderId: string, b: an
       [openingId, actor.tenantId, t.id, actor.id, JSON.stringify(attendees), notes, doc.id, openedAt]);
     await auditTx(ctx, q, { tenantId: actor.tenantId, actor, action: 'TENDER_OPENED', resourceType: 'TENDER', resourceId: t.id,
       prevState: 'CLOSED', newState: 'OPENED', details: { openingId, recordDocumentId: doc.id, bidCount: bids.length,
+        envelope: configOf(t).envelopes === 'TWO' ? 'TECHNICAL' : 'SINGLE',
         integrity: bidSummaries.map((s) => ({ bidId: s.bidId, integrity: s.integrity })) } });
     return { opening: camel(rows[0]), recordDocumentId: doc.id, bids: bidSummaries };
+  });
+}
+
+
+/**
+ * Two-envelope: the chair opens the financial envelopes. Each opened bid's technical score is the average, over
+ * evaluators, of its weighted technical criteria. Bids at or above the template pass mark PASS and have their
+ * financial envelope opened; the others FAIL and stay sealed. A financial opening record is generated.
+ */
+export async function openFinancial(ctx: Ctx, actor: Actor, tenderId: string, b: any) {
+  const t = await loadTender(ctx, actor, tenderId);
+  const cfg = configOf(t);
+  if (cfg.envelopes !== 'TWO') throw conflict('NOT_TWO_ENVELOPE', 'This tender uses a single envelope');
+  if (!['OPENED', 'EVALUATION'].includes(t.status)) throw conflict('INVALID_STATE', `Financial opening requires OPENED or EVALUATION (tender is ${t.status})`);
+  if (t.financial_opened_at) throw conflict('INVALID_STATE', 'Financial envelopes are already opened');
+  const fin = new Set(cfg.evaluation.financialCriteria);
+  const tech = t.criteria.filter((c) => !fin.has(c.key));
+  const techWeight = tech.reduce((a, c) => a + Number(c.weight), 0);
+  const pass = Number(cfg.evaluation.technicalPassMark);
+  const bids = await ctx.db.query<BidRow & { legal_name_en: string; legal_name_ar: string }>(
+    `SELECT b.*, v.legal_name_en, v.legal_name_ar FROM bids b JOIN vendors v ON v.id=b.vendor_id WHERE b.tender_id=$1 AND b.status='OPENED' ORDER BY b.submitted_at`, [t.id]);
+  const evals = await ctx.db.query<{ bid_id: string; scores: { criterion: string; score: number }[] }>('SELECT bid_id, scores FROM evaluations WHERE tender_id=$1', [t.id]);
+  const results = bids.map((bid) => {
+    const mine = evals.filter((e) => e.bid_id === bid.id);
+    if (!mine.length) throw conflict('TECHNICAL_EVALUATION_INCOMPLETE', `Bid of ${bid.legal_name_en} has no technical evaluation yet`);
+    const perEval = mine.map((e) => tech.reduce((a, c) => a + Number(e.scores.find((s) => s.criterion === c.key)?.score ?? 0) * Number(c.weight), 0) / techWeight);
+    const score = Math.round((perEval.reduce((a, x) => a + x, 0) / perEval.length) * 100) / 100;
+    return { bid, score, result: score >= pass ? 'PASSED' : 'FAILED' };
+  });
+  const openedAt = now();
+  const notes = str(b?.notes, 'notes', { max: 4000 }) ?? null;
+  const rowsHtml = results.map((r) => `<tr><td>${escapeHtml(r.bid.legal_name_en)}<br><span dir="rtl">${escapeHtml(r.bid.legal_name_ar)}</span></td><td>${r.score}</td><td>${r.result === 'PASSED' ? 'PASSED — financial envelope opened / ناجح — فتح المظروف المالي' : 'FAILED — financial envelope stays sealed / غير ناجح — يبقى المظروف المالي مغلقاً'}</td></tr>`).join('');
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Financial opening record ${escapeHtml(t.tender_number)}</title>
+<style>body{font-family:system-ui,Segoe UI,Tahoma,sans-serif;margin:32px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #999;padding:6px 8px;text-align:start}</style></head><body>
+<h1>Financial opening record / محضر فتح المظاريف المالية</h1>
+<p>Tender ${escapeHtml(t.tender_number)} — ${escapeHtml(t.title_en)} / <span dir="rtl">${escapeHtml(t.title_ar)}</span></p>
+<p>Opened at ${openedAt.toISOString()} by ${escapeHtml(actor.username)}. Technical pass mark: ${pass}. ${notes ? 'Notes: ' + escapeHtml(notes) : ''}</p>
+<table><thead><tr><th>Vendor / المورد</th><th>Technical score / الدرجة الفنية</th><th>Result / النتيجة</th></tr></thead><tbody>${rowsHtml}</tbody></table>
+</body></html>`;
+  const prepared = await putDocument(ctx, {
+    tenantId: actor.tenantId, ownerType: 'OPENING_RECORD', ownerId: t.id, tenderId: t.id, tenderNumber: t.tender_number,
+    title: `Financial opening record ${t.tender_number}`, fileName: `financial-opening-${t.tender_number}.html`, mimeType: 'text/html',
+    bytes: Buffer.from(html, 'utf8'), uploadedBy: actor.id,
+  });
+  return ctx.db.tx(async (q) => {
+    const upd = await q.query(`UPDATE tenders SET financial_opened_at=$1, updated_at=$1 WHERE id=$2 AND financial_opened_at IS NULL RETURNING id`, [openedAt, t.id]);
+    if (!upd.length) throw conflict('INVALID_STATE', 'Financial envelopes are already opened');
+    const doc = await insertDocument(q, prepared);
+    for (const r of results)
+      await q.query(`UPDATE bids SET technical_result=$1, technical_score=$2, financial_opened_at=$3 WHERE id=$4`,
+        [r.result, r.score, r.result === 'PASSED' ? openedAt : null, r.bid.id]);
+    await auditTx(ctx, q, { tenantId: actor.tenantId, actor, action: 'FINANCIAL_ENVELOPES_OPENED', resourceType: 'TENDER', resourceId: t.id,
+      details: { passMark: pass, recordDocumentId: doc.id, results: results.map((r) => ({ bidId: r.bid.id, score: r.score, result: r.result })) } });
+    return { recordDocumentId: doc.id, passMark: pass, results: results.map((r) => ({ bidId: r.bid.id, vendorNameEn: r.bid.legal_name_en, vendorNameAr: r.bid.legal_name_ar, technicalScore: r.score, result: r.result })) };
   });
 }

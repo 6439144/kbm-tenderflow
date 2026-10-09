@@ -14,6 +14,10 @@ import TendersList from './pages/procurement/TendersList';
 import TenderForm from './pages/procurement/TenderForm';
 import TenderDetailPage from './pages/procurement/TenderDetail';
 import { AdminUsers, AdminAudit, AdminSystem } from './pages/admin/Admin';
+import { CycleDesignerPage, EntitySettingsPage, RequestDetailPage, RequestsPage } from './features/cycle';
+import { DemoOverlay } from './features/demo';
+import { FileNetHealthPage } from './features/filenet';
+import { AssistantDock } from './features/assistant';
 
 const LANG_KEY = 'tf.lang';
 
@@ -29,6 +33,7 @@ function initialLang(): Lang {
 
 const PROCUREMENT_NAV: NavItem[] = [
   { to: '/procurement', label: 'nav.dashboard', end: true },
+  { to: '/procurement/requests', label: 'nav.requests' },
   { to: '/procurement/tenders', label: 'nav.tenders' },
   { to: '/procurement/tenders/new', label: 'nav.newTender', roles: ['PROCUREMENT_OFFICER'] },
   { to: '/procurement/vendors', label: 'nav.vendors', roles: ['PROCUREMENT_OFFICER', 'DIRECTOR'] },
@@ -36,7 +41,10 @@ const PROCUREMENT_NAV: NavItem[] = [
 const VENDOR_NAV: NavItem[] = [{ to: '/vendor', label: 'nav.myCompany', end: true }];
 const ADMIN_NAV: NavItem[] = [
   { to: '/admin', label: 'nav.users', end: true },
+  { to: '/admin/cycle', label: 'nav.cycleDesigner', roles: ['TENANT_ADMIN'] },
+  { to: '/admin/entity', label: 'nav.entity', roles: ['TENANT_ADMIN'] },
   { to: '/admin/audit', label: 'nav.audit' },
+  { to: '/admin/filenet', label: 'nav.filenet' },
   { to: '/admin/system', label: 'nav.system' },
 ];
 
@@ -83,10 +91,12 @@ export default function App() {
             </Route>
             <Route
               path="/procurement"
-              element={<Portal roles={['PROCUREMENT_OFFICER', 'DIRECTOR', 'COMMITTEE_CHAIR', 'EVALUATOR']} nav={PROCUREMENT_NAV} />}
+              element={<Portal roles={['PROCUREMENT_OFFICER', 'DIRECTOR', 'UNDERSECRETARY', 'COMMITTEE_CHAIR', 'EVALUATOR']} nav={PROCUREMENT_NAV} />}
             >
               <Route index element={<Dashboard />} />
               <Route path="vendors" element={<VendorsQueue />} />
+              <Route path="requests" element={<RequestsPage />} />
+              <Route path="requests/:id" element={<RequestDetailPage />} />
               <Route path="tenders" element={<TendersList />} />
               <Route path="tenders/new" element={<TenderForm />} />
               <Route path="tenders/:id" element={<TenderDetailPage />} />
@@ -95,10 +105,15 @@ export default function App() {
             <Route path="/admin" element={<Portal roles={['TENANT_ADMIN', 'AUDITOR']} nav={ADMIN_NAV} />}>
               <Route index element={<AdminUsers />} />
               <Route path="audit" element={<AdminAudit />} />
+              <Route path="cycle" element={<CycleDesignerPage />} />
+              <Route path="entity" element={<EntitySettingsPage />} />
+              <Route path="filenet" element={<FileNetHealthPage />} />
               <Route path="system" element={<AdminSystem />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
+          <DemoOverlay />
+          <AssistantDock />
         </SessionProvider>
       </ToastProvider>
     </I18nContext.Provider>

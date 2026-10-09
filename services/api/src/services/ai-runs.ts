@@ -8,7 +8,7 @@ import { ApiError, badRequest, camel, conflict, isUuid, notFound, now, str, uuid
 import { readPlain, type DocumentRow } from './documents.js';
 import { extractText } from '../content/extract.js';
 import { loadClarification, loadTender, type TenderRow } from './tenders.js';
-import { decryptBidDocuments, type BidRow } from './bids.js';
+import { decryptBidDocuments, financialSealed, type BidRow } from './bids.js';
 
 type Kind = 'PACK_CHECK' | 'CLARIFICATION_DRAFT' | 'COMPLIANCE_SCREEN';
 
@@ -91,7 +91,7 @@ export async function complianceScreen(ctx: Ctx, actor: Actor, tenderId: string,
   const requiredDocuments = t.required_documents.map((d) => ({ key: d.key, nameEn: d.name_en, nameAr: d.name_ar }));
   const runs = [];
   for (const bid of bids) {
-    const files = await decryptBidDocuments(ctx, bid);
+    const files = await decryptBidDocuments(ctx, bid, { technicalOnly: financialSealed(t, bid) });
     const documents: DocText[] = [];
     for (const f of files) documents.push(await extractText({ documentId: f.doc.id, title: f.doc.title, mimeType: f.doc.mime_type }, f.bytes));
     runs.push(await recordRun(ctx, actor, t.id, 'COMPLIANCE_SCREEN', { bidId: bid.id, documents: docSummary(documents) }, () => ctx.ai.screenCompliance({

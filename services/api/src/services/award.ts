@@ -4,7 +4,11 @@ import { auditTx, hasRole } from '../ctx.js';
 import type { Actor } from '../auth/tokens.js';
 import { badRequest, camel, conflict, forbidden, now, reqStr, str, uuid } from '../util.js';
 import { loadTender, type TenderRow } from './tenders.js';
-import { loadBid } from './bids.js';
+import { financialSealed, loadBid } from './bids.js';
+import { configOf } from './templates.js';
+import { approvalChainView, currentRound, nextLevel } from './tenders.js';
+import { notifyRole } from './notifications.js';
+import { uuid as newId } from '../util.js';
 import { insertDocument, putDocument } from './documents.js';
 import { committeeReportHtml, type ReportBid } from './reports.js';
 
@@ -14,19 +18,30 @@ export async function submitEvaluation(ctx: Ctx, actor: Actor, bidId: string, b:
   if (!['OPENED', 'EVALUATION'].includes(t.status)) throw conflict('INVALID_STATE', `Evaluation requires OPENED or EVALUATION (tender is ${t.status})`);
   if (bid.status !== 'OPENED') throw conflict('INVALID_STATE', 'Bid is not opened');
   if (!Array.isArray(b?.scores)) throw badRequest('scores must be an array');
+  // Two-envelope: before the financial opening only technical criteria are scored; afterwards all criteria,
+  // and only for bids that passed. Bids that failed the technical stage cannot receive financial scores.
+  const cfg = configOf(t);
+  const fin = new Set(cfg.envelopes === 'TWO' ? cfg.evaluation.financialCriteria : []);
+  const finSealed = financialSealed(t, bid);
+  if (cfg.envelopes === 'TWO' && t.financial_opened_at && bid.technical_result === 'FAILED')
+    throw conflict('TECHNICAL_FAILED', 'This bid failed the technical stage; its financial envelope stays sealed');
+  if (cfg.envelopes === 'TWO' && t.financial_opened_at && !b.scores.some((s: any) => fin.has(s?.criterion)))
+    throw badRequest('Financial envelopes are open: include the financial criteria scores');
+  const scored = t.criteria.filter((c) => !(finSealed && fin.has(c.key)));
   const byKey = new Map<string, { criterion: string; score: number; comment: string }>();
   for (const s of b.scores) {
     const criterion = s?.criterion; const score = Number(s?.score);
     if (!t.criteria.some((c) => c.key === criterion)) throw badRequest(`Unknown criterion '${criterion}'`);
+    if (finSealed && fin.has(criterion)) throw conflict('FINANCIAL_SEALED', `Criterion '${criterion}' is scored after the financial envelopes are opened`);
     if (!Number.isFinite(score) || score < 0 || score > 100) throw badRequest(`Score for ${criterion} must be 0-100`);
     byKey.set(criterion, { criterion, score, comment: str(s?.comment, 'comment', { max: 4000 }) ?? '' });
   }
-  const missing = t.criteria.filter((c) => !byKey.has(c.key)).map((c) => c.key);
+  const missing = scored.filter((c) => !byKey.has(c.key)).map((c) => c.key);
   if (missing.length) throw badRequest(`Missing scores for criteria: ${missing.join(', ')}`);
-  const totalWeight = t.criteria.reduce((a, c) => a + Number(c.weight), 0);
-  const weighted = t.criteria.reduce((a, c) => a + byKey.get(c.key)!.score * Number(c.weight), 0) / totalWeight;
+  const totalWeight = scored.reduce((a, c) => a + Number(c.weight), 0);
+  const weighted = scored.reduce((a, c) => a + byKey.get(c.key)!.score * Number(c.weight), 0) / totalWeight;
   const weightedTotal = Math.round(weighted * 100) / 100;
-  const scores = t.criteria.map((c) => byKey.get(c.key)!);
+  const scores = scored.map((c) => byKey.get(c.key)!);
   return ctx.db.tx(async (q) => {
     const rows = await q.query(
       `INSERT INTO evaluations (id, tenant_id, tender_id, bid_id, evaluator_id, scores, weighted_total, submitted_at)
@@ -48,8 +63,8 @@ export async function submitEvaluation(ctx: Ctx, actor: Actor, bidId: string, b:
 
 export async function listEvaluations(ctx: Ctx, actor: Actor, tenderId: string) {
   const t = await loadTender(ctx, actor, tenderId);
-  const all = hasRole(actor, 'COMMITTEE_CHAIR', 'DIRECTOR');
-  if (!all && !hasRole(actor, 'EVALUATOR')) throw forbidden('Requires COMMITTEE_CHAIR, DIRECTOR or EVALUATOR');
+  const all = hasRole(actor, 'COMMITTEE_CHAIR', 'DIRECTOR', 'UNDERSECRETARY');
+  if (!all && !hasRole(actor, 'EVALUATOR')) throw forbidden('Requires COMMITTEE_CHAIR, DIRECTOR, UNDERSECRETARY or EVALUATOR');
   const rows = await ctx.db.query(
     `SELECT e.*, u.display_name AS evaluator_name FROM evaluations e JOIN users u ON u.id=e.evaluator_id
       WHERE e.tender_id=$1 AND e.tenant_id=$2 AND ($3::boolean OR e.evaluator_id=$4) ORDER BY e.submitted_at`,
@@ -62,6 +77,10 @@ export async function recommendAward(ctx: Ctx, actor: Actor, tenderId: string, b
   if (t.status !== 'EVALUATION') throw conflict('INVALID_STATE', `Recommendation requires EVALUATION (tender is ${t.status})`);
   const bid = await loadBid(ctx, actor.tenantId, reqStr(b?.bidId, 'bidId', 60));
   if (bid.tender_id !== t.id) throw badRequest('bidId does not belong to this tender');
+  if (configOf(t).envelopes === 'TWO') {
+    if (!t.financial_opened_at) throw conflict('FINANCIAL_SEALED', 'Open the financial envelopes before recommending an award');
+    if (bid.technical_result !== 'PASSED') throw conflict('TECHNICAL_FAILED', 'Only a bid that passed the technical stage can be recommended');
+  }
   const justification = reqStr(b?.justification, 'justification', 8000);
   return ctx.db.tx(async (q) => {
     const ex = await q.query<any>('SELECT * FROM awards WHERE tender_id=$1', [t.id]);
@@ -100,6 +119,23 @@ export async function approveAward(ctx: Ctx, actor: Actor, tenderId: string, b: 
   if (!award || award.status !== 'RECOMMENDED') throw conflict('INVALID_STATE', 'No pending award recommendation');
   if (award.recommended_by === actor.id) throw forbidden('Segregation of duties: the recommending chair cannot approve the award');
   const reason = str(b?.reason, 'reason', { max: 4000 }) ?? null;
+  const cfg = configOf(t);
+  const chain = cfg.approvals.award;
+  const since = new Date(award.created_at);
+  const done = await currentRound(ctx.db, t.id, 'AWARD', since);
+  const step = nextLevel(chain, done, actor, [{ id: award.recommended_by, why: 'the recommending chair cannot approve the award' }]);
+  if (!step.final) {
+    await ctx.db.tx(async (q) => {
+      await q.query(`INSERT INTO approvals (id, tenant_id, subject_type, subject_id, gate, level, role, approver_id, decision, reason, decided_at)
+                     VALUES ($1,$2,'TENDER',$3,'AWARD',$4,$5,$6,'APPROVED',$7,$8)`, [newId(), t.tenant_id, t.id, step.levelNo, step.level.role, actor.id, reason, now()]);
+      const nxt = chain[step.levelNo];
+      await notifyRole(q, t.tenant_id, nxt.role, { kind: 'APPROVAL_WAITING', titleEn: `Award approval level ${step.levelNo + 1} waiting: ${t.tender_number}`,
+        titleAr: `بانتظار اعتماد الترسية المستوى ${step.levelNo + 1}: ${t.tender_number}`, body: { tenderId: t.id } });
+      await auditTx(ctx, q, { tenantId: t.tenant_id, actor, action: 'AWARD_APPROVAL_LEVEL_APPROVED', resourceType: 'TENDER', resourceId: t.id,
+        reason, details: { level: step.levelNo, of: chain.length, role: step.level.role, bidId: award.bid_id } });
+    });
+    return { award: camel(award), approvalChain: await approvalChainView(ctx.db, t.id, 'AWARD', chain, since), final: false };
+  }
   const names = new Map((await ctx.db.query<any>('SELECT id, display_name FROM users WHERE tenant_id=$1', [actor.tenantId])).map((u) => [u.id, u.display_name]));
   const approvedAt = now();
   const html = committeeReportHtml({ tender: t, bids: await reportBids(ctx, t), awardedBidId: award.bid_id,
@@ -116,8 +152,41 @@ export async function approveAward(ctx: Ctx, actor: Actor, tenderId: string, b: 
     const doc = await insertDocument(q, prepared);
     const rows = await q.query(`UPDATE awards SET status='APPROVED', approved_by=$1, approved_at=$2, report_document_id=$3 WHERE id=$4 AND status='RECOMMENDED' RETURNING *`,
       [actor.id, approvedAt, doc.id, award.id]);
+    await q.query(`INSERT INTO approvals (id, tenant_id, subject_type, subject_id, gate, level, role, approver_id, decision, reason, decided_at)
+                   VALUES ($1,$2,'TENDER',$3,'AWARD',$4,$5,$6,'APPROVED',$7,$8)`, [newId(), t.tenant_id, t.id, step.levelNo, step.level.role, actor.id, reason, approvedAt]);
     await auditTx(ctx, q, { tenantId: actor.tenantId, actor, action: 'AWARD_APPROVED', resourceType: 'TENDER', resourceId: t.id,
-      prevState: 'EVALUATION', newState: 'AWARDED', reason, details: { bidId: award.bid_id, reportDocumentId: doc.id } });
-    return { award: camel(rows[0]), reportDocumentId: doc.id };
+      prevState: 'EVALUATION', newState: 'AWARDED', reason, details: { bidId: award.bid_id, reportDocumentId: doc.id, level: step.levelNo, of: chain.length } });
+    return { award: camel(rows[0]), reportDocumentId: doc.id, final: true };
+  }).then(async (out) => {
+    if (cfg.stages.recordsLock) (out as any).records = await lockRecords(ctx, actor, t.id);
+    return out;
   });
+}
+
+/**
+ * Records lock at award: every tender document (pack, addenda, notices, opening records, report, bids) is
+ * declared a record in TenderFlow (no further change), and — where the content store supports it — in the
+ * repository too. The repository result is reported as-is (never assumed).
+ */
+export async function lockRecords(ctx: Ctx, actor: Actor, tenderId: string) {
+  const docs = await ctx.db.query<any>('SELECT id, store_ref, store_meta FROM documents WHERE tender_id=$1 AND NOT is_record', [tenderId]);
+  const at = now();
+  const repo: { documentId: string; ok: boolean; detail: string }[] = [];
+  for (const d of docs) {
+    if (ctx.store.declareRecord) {
+      try { const r = await ctx.store.declareRecord(d.store_ref, { reason: `Tender awarded (${tenderId})` }); repo.push({ documentId: d.id, ...r }); }
+      catch (e) { repo.push({ documentId: d.id, ok: false, detail: (e as Error).message }); }
+    }
+  }
+  await ctx.db.tx(async (q) => {
+    for (const d of docs) {
+      const r = repo.find((x) => x.documentId === d.id);
+      await q.query(`UPDATE documents SET is_record=true, record_declared_at=$1, store_meta = store_meta || $2::jsonb WHERE id=$3`,
+        [at, JSON.stringify({ record: r ? { repository: r.ok, detail: r.detail } : { repository: false, detail: 'content store has no records capability' } }), d.id]);
+    }
+    await q.query('UPDATE tenders SET records_locked_at=$1 WHERE id=$2', [at, tenderId]);
+    await auditTx(ctx, q, { tenantId: actor.tenantId, actor, action: 'RECORDS_DECLARED', resourceType: 'TENDER', resourceId: tenderId,
+      details: { documents: docs.length, repositoryDeclared: repo.filter((r) => r.ok).length, repositoryFailed: repo.filter((r) => !r.ok).length } });
+  });
+  return { documents: docs.length, repositoryDeclared: repo.filter((r) => r.ok).length, repository: repo };
 }

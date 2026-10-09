@@ -4,6 +4,8 @@ import { downloadFile, openFile, type Role } from '../api';
 import { useI18n, type TKey } from '../i18n';
 import { useSession } from '../session';
 import { Button, useToast, errText } from './ui';
+import { NotificationsBell } from '../features/cycle';
+import { DemoLauncher } from '../features/demo';
 
 export interface NavItem {
   to: string;
@@ -33,6 +35,8 @@ export function Header({ children }: { children?: ReactNode }) {
       </div>
       {children}
       <div className="topbar-end">
+        {user && <DemoLauncher />}
+        {user && <NotificationsBell />}
         {user && (
           <div className="whoami" aria-label={t('header.signedInAs')}>
             <div className="whoami-name">{user.displayName || user.username}</div>

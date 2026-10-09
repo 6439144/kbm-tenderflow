@@ -1,8 +1,12 @@
 import { createContext, useContext } from 'react';
+import * as cycleL from './locales/cycle';
+import * as demoL from './locales/demo';
+import * as filenetL from './locales/filenet';
+import * as assistantL from './locales/assistant';
 
 export type Lang = 'ar' | 'en';
 
-const en = {
+const coreEn = {
   // app shell
   'app.name': 'TenderFlow',
   'app.tagline': 'Digital tendering',
@@ -16,6 +20,10 @@ const en = {
   'nav.users': 'Users',
   'nav.audit': 'Audit log',
   'nav.system': 'System status',
+  'nav.requests': 'Requests',
+  'nav.cycleDesigner': 'Cycle Designer',
+  'nav.entity': 'Entity settings',
+  'nav.filenet': 'IBM FileNet',
   'nav.skip': 'Skip to content',
   'header.logout': 'Log out',
   'header.language': 'العربية',
@@ -110,6 +118,7 @@ const en = {
   'role.VENDOR': 'Vendor',
   'role.PROCUREMENT_OFFICER': 'Procurement officer',
   'role.DIRECTOR': 'Director',
+  'role.UNDERSECRETARY': 'Undersecretary',
   'role.COMMITTEE_CHAIR': 'Committee chair',
   'role.EVALUATOR': 'Evaluator',
   'role.TENANT_ADMIN': 'Administrator',
@@ -117,6 +126,7 @@ const en = {
 
   // tender status
   'st.DRAFT': 'Draft',
+  'st.PENDING_APPROVAL': 'In approval',
   'st.APPROVED': 'Approved',
   'st.PUBLISHED': 'Published',
   'st.CLOSED': 'Closed',
@@ -402,9 +412,10 @@ const en = {
   'misc.days': '{d}d {h}h {m}m',
 } as const;
 
+const en = { ...coreEn, ...cycleL.en, ...demoL.en, ...filenetL.en, ...assistantL.en };
 export type TKey = keyof typeof en;
 
-const ar: Record<TKey, string> = {
+const coreAr: Record<keyof typeof coreEn, string> = {
   'app.name': 'تندرفلو',
   'app.tagline': 'المناقصات الرقمية',
   'nav.dashboard': 'لوحة المعلومات',
@@ -417,6 +428,10 @@ const ar: Record<TKey, string> = {
   'nav.users': 'المستخدمون',
   'nav.audit': 'سجل التدقيق',
   'nav.system': 'حالة النظام',
+  'nav.requests': 'الطلبات',
+  'nav.cycleDesigner': 'مصمم الدورة',
+  'nav.entity': 'إعدادات الجهة',
+  'nav.filenet': 'IBM FileNet',
   'nav.skip': 'انتقل إلى المحتوى',
   'header.logout': 'تسجيل الخروج',
   'header.language': 'English',
@@ -506,12 +521,14 @@ const ar: Record<TKey, string> = {
   'role.VENDOR': 'مورد',
   'role.PROCUREMENT_OFFICER': 'مسؤول المشتريات',
   'role.DIRECTOR': 'المدير',
+  'role.UNDERSECRETARY': 'الوكيل',
   'role.COMMITTEE_CHAIR': 'رئيس اللجنة',
   'role.EVALUATOR': 'مقيّم',
   'role.TENANT_ADMIN': 'مسؤول النظام',
   'role.AUDITOR': 'مدقق',
 
   'st.DRAFT': 'مسودة',
+  'st.PENDING_APPROVAL': 'قيد الاعتماد',
   'st.APPROVED': 'معتمدة',
   'st.PUBLISHED': 'منشورة',
   'st.CLOSED': 'مغلقة',
@@ -785,6 +802,8 @@ const ar: Record<TKey, string> = {
   'err.notFound': 'الصفحة غير موجودة',
   'misc.days': '{d}ي {h}س {m}د',
 };
+
+const ar: Record<TKey, string> = { ...coreAr, ...cycleL.ar, ...demoL.ar, ...filenetL.ar, ...assistantL.ar };
 
 const dict: Record<Lang, Record<TKey, string>> = { en, ar };
 

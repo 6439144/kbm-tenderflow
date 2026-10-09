@@ -16,15 +16,17 @@ import * as award from './services/award.js';
 import * as aiRuns from './services/ai-runs.js';
 import { downloadDocument, MAX_UPLOAD_BYTES, type DocumentRow, type UploadFile } from './services/documents.js';
 import { verifyAudit } from './services/audit.js';
+import { registerPlatformRoutes } from './routes-platform.js';
+import { registerFeatureRoutes } from './features/index.js';
 
 declare module 'express-serve-static-core' {
   interface Request { actor?: Actor }
 }
 
 const OFFICER = 'PROCUREMENT_OFFICER';
-const h = (fn: (req: Request, res: Response) => Promise<unknown>): RequestHandler =>
+export const h = (fn: (req: Request, res: Response) => Promise<unknown>): RequestHandler =>
   (req, res, next) => { fn(req, res).then((out) => { if (!res.headersSent) res.json(out); }).catch(next); };
-const actor = (req: Request) => req.actor!;
+export const actor = (req: Request) => req.actor!;
 
 export function authenticate(ctx: Ctx): RequestHandler {
   return (req, _res, next) => {
@@ -50,9 +52,9 @@ export const requireRoles = (...roles: string[]): RequestHandler => (req, _res, 
   next();
 };
 
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_UPLOAD_BYTES, files: 2, fields: 20 } });
+export const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_UPLOAD_BYTES, files: 2, fields: 20 } });
 
-function sendDoc(res: Response, doc: DocumentRow, bytes: Buffer) {
+export function sendDoc(res: Response, doc: DocumentRow, bytes: Buffer) {
   res.setHeader('Content-Type', doc.mime_type.startsWith('text/') ? `${doc.mime_type}; charset=utf-8` : doc.mime_type);
   res.setHeader('Content-Length', String(bytes.length));
   const ascii = doc.title.replace(/[^\x20-\x7e]/g, '_').replace(/"/g, '');
@@ -95,8 +97,9 @@ export function apiRouter(ctx: Ctx): express.Router {
   r.post('/tenders/:id/documents', requireRoles(OFFICER), upload.single('file'),
     h(async (req, res) => { res.status(201); return tenders.uploadTenderDocument(ctx, actor(req), req.params.id, req.file as UploadFile | undefined, req.body); }));
   r.post('/tenders/:id/ai/pack-check', requireRoles(OFFICER), h(async (req, res) => { res.status(201); return aiRuns.packCheck(ctx, actor(req), req.params.id, req.body); }));
-  r.post('/tenders/:id/approve', requireRoles('DIRECTOR'), h((req) => tenders.approveTender(ctx, actor(req), req.params.id, req.body)));
-  r.post('/tenders/:id/return', requireRoles('DIRECTOR'), h((req) => tenders.returnTender(ctx, actor(req), req.params.id, req.body)));
+  // Approval chains: the service checks the role of the level being decided (template-configured).
+  r.post('/tenders/:id/approve', requireRoles('DIRECTOR', 'UNDERSECRETARY', 'COMMITTEE_CHAIR', 'TENANT_ADMIN'), h((req) => tenders.approveTender(ctx, actor(req), req.params.id, req.body)));
+  r.post('/tenders/:id/return', requireRoles('DIRECTOR', 'UNDERSECRETARY', 'COMMITTEE_CHAIR', 'TENANT_ADMIN'), h((req) => tenders.returnTender(ctx, actor(req), req.params.id, req.body)));
   r.post('/tenders/:id/publish', requireRoles(OFFICER), h((req) => tenders.publishTender(ctx, actor(req), req.params.id)));
   r.post('/tenders/:id/cancel', requireRoles('DIRECTOR'), h((req) => tenders.cancelTender(ctx, actor(req), req.params.id, req.body)));
 
@@ -128,9 +131,9 @@ export function apiRouter(ctx: Ctx): express.Router {
   r.post('/tenders/:id/ai/compliance-screen', requireRoles('COMMITTEE_CHAIR', 'EVALUATOR'),
     h(async (req, res) => { res.status(201); return aiRuns.complianceScreen(ctx, actor(req), req.params.id, req.body); }));
   r.post('/bids/:id/evaluation', requireRoles('EVALUATOR'), h((req) => award.submitEvaluation(ctx, actor(req), req.params.id, req.body)));
-  r.get('/tenders/:id/evaluations', requireRoles('COMMITTEE_CHAIR', 'DIRECTOR', 'EVALUATOR'), h((req) => award.listEvaluations(ctx, actor(req), req.params.id)));
+  r.get('/tenders/:id/evaluations', requireRoles('COMMITTEE_CHAIR', 'DIRECTOR', 'UNDERSECRETARY', 'EVALUATOR'), h((req) => award.listEvaluations(ctx, actor(req), req.params.id)));
   r.post('/tenders/:id/award/recommend', requireRoles('COMMITTEE_CHAIR'), h((req) => award.recommendAward(ctx, actor(req), req.params.id, req.body)));
-  r.post('/tenders/:id/award/approve', requireRoles('DIRECTOR'), h((req) => award.approveAward(ctx, actor(req), req.params.id, req.body)));
+  r.post('/tenders/:id/award/approve', requireRoles('DIRECTOR', 'UNDERSECRETARY', 'COMMITTEE_CHAIR', 'TENANT_ADMIN'), h((req) => award.approveAward(ctx, actor(req), req.params.id, req.body)));
 
   // Documents (generic, deny by default)
   r.get('/documents/:id', h(async (req, res) => {
@@ -168,6 +171,9 @@ export function apiRouter(ctx: Ctx): express.Router {
       aiRunsFailed: await one(`SELECT count(*)::text AS n FROM ai_runs WHERE tenant_id=$1 AND status='ERROR'`),
     };
   }));
+
+  registerPlatformRoutes(r, ctx);
+  registerFeatureRoutes(r, ctx);
 
   r.use((_req, _res, next) => next(new ApiError(404, 'NOT_FOUND', 'No such API route')));
   return r;

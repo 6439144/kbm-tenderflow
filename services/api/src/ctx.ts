@@ -14,7 +14,7 @@ export interface Ctx {
   tokens: TokenService;
 }
 
-export const STAFF_ROLES = ['PROCUREMENT_OFFICER', 'DIRECTOR', 'COMMITTEE_CHAIR', 'EVALUATOR', 'TENANT_ADMIN', 'AUDITOR'];
+export const STAFF_ROLES = ['PROCUREMENT_OFFICER', 'DIRECTOR', 'UNDERSECRETARY', 'COMMITTEE_CHAIR', 'EVALUATOR', 'TENANT_ADMIN', 'AUDITOR'];
 export const isStaff = (a: Actor) => a.roles.some((r) => STAFF_ROLES.includes(r));
 export const isVendor = (a: Actor) => a.roles.includes('VENDOR') && !isStaff(a);
 export const hasRole = (a: Actor, ...roles: string[]) => a.roles.some((r) => roles.includes(r));

@@ -13,6 +13,7 @@ export interface DocumentRow {
   id: string; tenant_id: string; owner_type: string; owner_id: string; tender_id: string | null; vendor_id: string | null;
   bid_id: string | null; title: string; mime_type: string; byte_size: number; sha256_plain: string; store_type: string;
   store_ref: string; encrypted: boolean; enc_iv: string | null; enc_tag: string | null; uploaded_by: string | null; created_at: Date;
+  supersedes_id?: string | null; version_no?: number; is_record?: boolean; record_declared_at?: Date | null; store_meta?: any;
 }
 
 export const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
@@ -46,7 +47,8 @@ export function validateUpload(file: UploadFile | undefined, field = 'file'): Up
 
 export interface StoreDocInput {
   tenantId: string;
-  ownerType: 'VENDOR' | 'TENDER_PACK' | 'ADDENDUM' | 'BID_TECHNICAL' | 'BID_FINANCIAL' | 'OPENING_RECORD' | 'COMMITTEE_REPORT';
+  ownerType: 'VENDOR' | 'TENDER_PACK' | 'ADDENDUM' | 'BID_TECHNICAL' | 'BID_FINANCIAL' | 'OPENING_RECORD' | 'COMMITTEE_REPORT'
+    | 'REQUEST_LETTER' | 'NOTICE' | 'EVALUATION_NARRATIVE';
   ownerId: string;
   tenderId?: string | null;
   tenderNumber?: string | null;
@@ -59,6 +61,10 @@ export interface StoreDocInput {
   uploadedBy: string | null;
   /** If given, the file is AES-256-GCM encrypted with this data key before it reaches the content store. */
   dataKey?: Buffer;
+  /** The document this one supersedes (it becomes the next version of it). */
+  supersedes?: DocumentRow | null;
+  /** Folder segment used when there is no tender number (default 'vendors'). */
+  folderKey?: string;
 }
 
 export interface PreparedDoc { row: Omit<DocumentRow, 'created_at'> }
@@ -74,7 +80,7 @@ export async function putDocument(ctx: Ctx, d: StoreDocInput): Promise<PreparedD
     const s = encrypt(d.dataKey, d.bytes, `doc:${id}`);
     bytes = s.data; encIv = s.iv; encTag = s.tag;
   }
-  const folderPath = `/${d.tenantId}/${d.tenderNumber ?? 'vendors'}/${d.ownerType}`;
+  const folderPath = `/${d.tenantId}/${d.tenderNumber ?? d.folderKey ?? 'vendors'}/${d.ownerType}`;
   const safeName = d.fileName.replace(/[^\p{L}\p{N}._-]+/gu, '_').slice(-120) || 'file';
   let stored;
   try {
@@ -85,6 +91,7 @@ export async function putDocument(ctx: Ctx, d: StoreDocInput): Promise<PreparedD
         TF_TenantId: d.tenantId, TF_TenderId: d.tenderId ?? '', TF_VendorId: d.vendorId ?? '',
         TF_DocType: d.ownerType, TF_Sha256: sha,
       },
+      supersedesRef: d.supersedes?.store_ref,
     });
   } catch (err) {
     if (err instanceof ContentStoreUnavailableError || (err as any)?.code === 'CONTENT_STORE_UNAVAILABLE')
@@ -97,6 +104,8 @@ export async function putDocument(ctx: Ctx, d: StoreDocInput): Promise<PreparedD
       vendor_id: d.vendorId ?? null, bid_id: d.bidId ?? null, title: d.title, mime_type: d.mimeType,
       byte_size: d.bytes.length, sha256_plain: sha, store_type: stored.storeType, store_ref: stored.storeRef,
       encrypted: !!d.dataKey, enc_iv: encIv, enc_tag: encTag, uploaded_by: d.uploadedBy,
+      supersedes_id: d.supersedes?.id ?? null, version_no: (d.supersedes?.version_no ?? 0) + 1, is_record: false, record_declared_at: null,
+      store_meta: { folderPath, ...(stored.meta ?? {}) },
     },
   };
 }
@@ -105,17 +114,19 @@ export async function insertDocument(q: Queryable, p: PreparedDoc): Promise<Docu
   const r = p.row;
   const rows = await q.query<DocumentRow>(
     `INSERT INTO documents (id, tenant_id, owner_type, owner_id, tender_id, vendor_id, bid_id, title, mime_type, byte_size,
-       sha256_plain, store_type, store_ref, encrypted, enc_iv, enc_tag, uploaded_by, created_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING *`,
+       sha256_plain, store_type, store_ref, encrypted, enc_iv, enc_tag, uploaded_by, created_at, supersedes_id, version_no, store_meta)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21::jsonb) RETURNING *`,
     [r.id, r.tenant_id, r.owner_type, r.owner_id, r.tender_id, r.vendor_id, r.bid_id, r.title, r.mime_type, r.byte_size,
-      r.sha256_plain, r.store_type, r.store_ref, r.encrypted, r.enc_iv, r.enc_tag, r.uploaded_by, now()]);
+      r.sha256_plain, r.store_type, r.store_ref, r.encrypted, r.enc_iv, r.enc_tag, r.uploaded_by, now(),
+      r.supersedes_id ?? null, r.version_no ?? 1, JSON.stringify(r.store_meta ?? {})]);
   return rows[0];
 }
 
 export const publicDoc = (d: DocumentRow) => camel({
   id: d.id, owner_type: d.owner_type, owner_id: d.owner_id, tender_id: d.tender_id, vendor_id: d.vendor_id, bid_id: d.bid_id,
   title: d.title, mime_type: d.mime_type, byte_size: d.byte_size, sha256_plain: d.sha256_plain, store_type: d.store_type,
-  encrypted: d.encrypted, created_at: d.created_at,
+  encrypted: d.encrypted, created_at: d.created_at, supersedes_id: d.supersedes_id ?? null, version_no: d.version_no ?? 1,
+  is_record: d.is_record ?? false, record_declared_at: d.record_declared_at ?? null,
 });
 
 async function fetchBytes(ctx: Ctx, d: DocumentRow): Promise<Buffer> {
@@ -170,7 +181,12 @@ export async function downloadDocument(ctx: Ctx, actor: Actor, id: string) {
       break;
     case 'OPENING_RECORD':
     case 'COMMITTEE_REPORT':
+    case 'REQUEST_LETTER':
+    case 'EVALUATION_NARRATIVE':
       allowed = isStaff(actor);
+      break;
+    case 'NOTICE':
+      allowed = isStaff(actor) || (isVendor(actor) && !!d.tender_status && PUBLISHED_PLUS.includes(d.tender_status));
       break;
     default:
       allowed = false; // BID_* only via /bids/:id/documents/:docId

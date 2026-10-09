@@ -13,12 +13,16 @@ import * as tenders from './services/tenders.js';
 import { submitBid } from './services/bids.js';
 import type { UploadFile } from './services/documents.js';
 import { SYSTEM_ACTOR } from './services/audit.js';
+import { installStarterTemplates } from './services/templates.js';
+import { setClassification, upsertActivityCode, purchaseDocuments } from './services/eligibility.js';
+import { createRequest } from './services/requests.js';
 
 export const SEED_FILES_DIR = path.join(REPO_ROOT, 'seed', 'files');
 
 const STAFF = [
   { username: 'officer', displayName: 'Officer Noura Al-Fictitious', roles: ['PROCUREMENT_OFFICER'] },
   { username: 'director', displayName: 'Director Yousef Al-Sample', roles: ['DIRECTOR'] },
+  { username: 'undersecretary', displayName: 'Undersecretary Sara Al-Placeholder', roles: ['UNDERSECRETARY'] },
   { username: 'chair', displayName: 'Chair Mariam Al-Demo', roles: ['COMMITTEE_CHAIR'] },
   { username: 'evaluator1', displayName: 'Evaluator Hamad Testa', roles: ['EVALUATOR'] },
   { username: 'evaluator2', displayName: 'Evaluator Lulwa Exampli', roles: ['EVALUATOR'] },
@@ -54,13 +58,13 @@ const asActor = (u: UserRow): Actor => ({ id: u.id, tenantId: u.tenant_id, roles
 const iso = (ms: number) => new Date(Date.now() + ms).toISOString();
 const HOUR = 3600_000;
 
-async function seedTenantUsers(ctx: Ctx, tenantId: string, password: string) {
+async function seedTenantUsers(ctx: Ctx, tenantId: string, password: string, categories = ['IT']) {
   const users: Record<string, Actor> = {};
   for (const s of STAFF) users[s.username] = asActor(await createUser(ctx, SYSTEM_ACTOR, { tenantId, password, ...s }));
   for (const v of VENDORS) {
     const res = await registerVendor(ctx, {
       tenantId, legalNameEn: v.en, legalNameAr: v.ar, crNumber: v.cr, email: `${v.username}@vendors.example`, phone: '+965 0000 0000',
-      categories: ['IT'], username: v.username, password,
+      categories, username: v.username, password,
     });
     users[v.username] = { id: res.user.id, tenantId, roles: ['VENDOR'], vendorId: res.vendor.id, username: v.username, issuer: 'local' };
     if (v.approve) await decideVendor(ctx, users.officer, res.vendor.id, { decision: 'APPROVE', reason: 'Documents verified (demo seed)' });
@@ -68,13 +72,40 @@ async function seedTenantUsers(ctx: Ctx, tenantId: string, password: string) {
   return users;
 }
 
+async function codes(ctx: Ctx, admin: Actor, list: [string, string, string][]) {
+  for (const [code, nameEn, nameAr] of list) await upsertActivityCode(ctx, admin, { code, nameEn, nameAr });
+}
+
 export async function seedDemo(ctx: Ctx): Promise<void> {
   const password = ctx.config.demoPassword!;
-  console.log('[seed] creating demo tenants, users, vendors and tenders …');
+  console.log('[seed] creating demo entities, cycle templates, users, vendors, requests and tenders …');
+
+  // ---------------- Entity 1: Kuwait Energy Authority (fictitious) — public tender, one envelope ----------------
   await createTenant(ctx, { id: 'kea', nameEn: 'Kuwait Energy Authority (fictitious)', nameAr: 'هيئة الطاقة الكويتية (وهمية)', primaryColor: '#0B4F6C' });
-  await createTenant(ctx, { id: 'ministry_a', nameEn: 'Ministry A (fictitious)', nameAr: 'الوزارة أ (وهمية)', primaryColor: '#5B2A86' });
+  await ctx.db.query(`UPDATE tenants SET profile=$1::jsonb WHERE id='kea'`, [JSON.stringify({
+    numberingPattern: 'KEA-{YYYY}-{SEQ3}', receiptPattern: 'KEA-R-{YYYY}-{SEQ5}', identityProvider: 'LOCAL',
+    channels: { knet: false, gazette: true, capt: false }, fiscalYearStartMonth: 4, logoText: 'KEA', sector: 'Energy and utilities' })]);
   const u = await seedTenantUsers(ctx, 'kea', password);
-  await seedTenantUsers(ctx, 'ministry_a', password);
+  await installStarterTemplates(ctx, { ...u.admin, tenantId: 'kea' }, 'PUBLIC_TENDER');
+  await codes(ctx, u.admin, [
+    ['IT-01', 'Software and systems integration', 'البرمجيات وتكامل الأنظمة'],
+    ['IT-02', 'Networks and telecommunications', 'الشبكات والاتصالات'],
+    ['ENG-03', 'Electrical works', 'الأعمال الكهربائية'],
+    ['CONS-01', 'IT consulting', 'استشارات تقنية المعلومات'],
+  ]);
+  const kv = async (n: number) => (await ctx.db.query<{ id: string }>(`SELECT v.id FROM vendors v JOIN users x ON x.vendor_id=v.id WHERE x.tenant_id=$1 AND x.username=$2`, ['kea', `vendor${n}`]))[0].id;
+  await setClassification(ctx, u.officer, await kv(1), { activityCode: 'IT-01', grade: 1 });
+  await setClassification(ctx, u.officer, await kv(1), { activityCode: 'IT-02', grade: 2 });
+  await setClassification(ctx, u.officer, await kv(2), { activityCode: 'IT-01', grade: 2 });
+  await setClassification(ctx, u.officer, await kv(3), { activityCode: 'IT-01', grade: 3 });
+  await setClassification(ctx, u.officer, await kv(3), { activityCode: 'CONS-01', grade: 1 });
+
+  // Departmental request with the scanned GM letter (stored in the content store → FileNet)
+  await createRequest(ctx, u.officer, {
+    source: 'LETTER', department: 'Distribution Operations Department', subject: 'Smart meter data management platform',
+    description: 'Meter data management platform for 120,000 smart meters with head-end integration, billing interface and an outage dashboard.',
+    estimatedBudget: 650000, letterTitle: 'GM letter — smart meter platform (scan)',
+  }, file('kea-gm-letter-smart-meters.md'));
 
   // 1) DRAFT tender with pack files
   const draft = await tenders.createTender(ctx, u.officer, {
@@ -82,6 +113,7 @@ export async function seedDemo(ctx: Ctx): Promise<void> {
     descriptionEn: 'Replacement of core and access network switches across head office and two substations.',
     descriptionAr: 'استبدال محولات الشبكة الرئيسية وشبكة الوصول في المقر الرئيسي ومحطتين فرعيتين.',
     estimatedBudget: 450000, currency: 'KWD', submissionDeadline: iso(21 * 24 * HOUR), criteria: CRITERIA, requiredDocuments: REQUIRED_DOCS,
+    eligibility: { activityCodes: ['IT-02'], minGrade: 2 },
   });
   await tenders.uploadTenderDocument(ctx, u.officer, draft.id, file('kea-network-refresh-pack.md'), { title: 'Network refresh — tender pack (EN/AR)' });
 
@@ -91,6 +123,7 @@ export async function seedDemo(ctx: Ctx): Promise<void> {
     descriptionEn: 'Supply and implementation of an enterprise document management system with Arabic OCR.',
     descriptionAr: 'توريد وتنفيذ نظام مؤسسي لإدارة الوثائق مع التعرف الضوئي على النصوص العربية.',
     estimatedBudget: 300000, currency: 'KWD', submissionDeadline: iso(2 * 24 * HOUR), criteria: CRITERIA, requiredDocuments: REQUIRED_DOCS,
+    eligibility: { activityCodes: ['IT-01'], minGrade: null },
   });
   await tenders.uploadTenderDocument(ctx, u.officer, pub.id, file('kea-dms-rfp-pack.md'), { title: 'DMS RFP pack (EN)' });
   await tenders.uploadTenderDocument(ctx, u.officer, pub.id, file('kea-dms-rfp-pack-ar.md'), { title: 'كراسة شروط نظام إدارة الوثائق (AR)' });
@@ -109,6 +142,7 @@ export async function seedDemo(ctx: Ctx): Promise<void> {
       descriptionEn: 'Supply, implementation and 3-year support of an ITIL-aligned service desk platform.',
       descriptionAr: 'توريد وتنفيذ ودعم لمدة 3 سنوات لمنصة مكتب خدمة متوافقة مع ITIL.',
       estimatedBudget: 180000, currency: 'KWD', submissionDeadline: iso(-1 * HOUR), criteria: CRITERIA, requiredDocuments: REQUIRED_DOCS,
+      eligibility: { activityCodes: ['IT-01'], minGrade: null },
     });
     await tenders.uploadTenderDocument(ctx, u.officer, closed.id, file('kea-it-rfp-pack.md'), { title: 'IT Service Desk RFP pack (EN)' });
     await tenders.uploadTenderDocument(ctx, u.officer, closed.id, file('kea-it-rfp-pack-ar.md'), { title: 'كراسة شروط منصة مكتب الخدمة (AR)' });
@@ -122,6 +156,60 @@ export async function seedDemo(ctx: Ctx): Promise<void> {
   } finally {
     setClockOffset(0);
   }
+
+  // ---------------- Entity 2: Gulf Coast Infrastructure Authority (fictitious) — RFP, two envelopes ----------------
+  await createTenant(ctx, { id: 'gcia', nameEn: 'Gulf Coast Infrastructure Authority (fictitious)', nameAr: 'هيئة البنية التحتية الساحلية (وهمية)', primaryColor: '#7A4B0B' });
+  await ctx.db.query(`UPDATE tenants SET profile=$1::jsonb WHERE id='gcia'`, [JSON.stringify({
+    numberingPattern: 'GCIA-RFP-{YYYY}-{SEQ3}', receiptPattern: 'GCIA-R-{YYYY}-{SEQ5}', identityProvider: 'LOCAL',
+    channels: { knet: true, gazette: true, capt: true }, fiscalYearStartMonth: 4, logoText: 'GCIA', sector: 'Infrastructure and works' })]);
+  const g = await seedTenantUsers(ctx, 'gcia', password, ['WORKS']);
+  await installStarterTemplates(ctx, { ...g.admin, tenantId: 'gcia' }, 'RFP_TWO_ENVELOPE');
+  await codes(ctx, g.admin, [
+    ['ENG-01', 'Civil works', 'الأعمال المدنية'],
+    ['ENG-02', 'Marine works', 'الأعمال البحرية'],
+    ['ENG-04', 'Roads and bridges', 'الطرق والجسور'],
+  ]);
+  const gv = async (n: number) => (await ctx.db.query<{ id: string }>(`SELECT v.id FROM vendors v JOIN users x ON x.vendor_id=v.id WHERE x.tenant_id=$1 AND x.username=$2`, ['gcia', `vendor${n}`]))[0].id;
+  await setClassification(ctx, g.officer, await gv(1), { activityCode: 'ENG-02', grade: 1 });
+  await setClassification(ctx, g.officer, await gv(2), { activityCode: 'ENG-01', grade: 2 });
+  await setClassification(ctx, g.officer, await gv(3), { activityCode: 'ENG-01', grade: 3 }); // below the Second-grade minimum
+  const JETTY = { category: 'WORKS', currency: 'KWD', criteria: CRITERIA, requiredDocuments: REQUIRED_DOCS, eligibility: { activityCodes: ['ENG-01', 'ENG-02'], minGrade: 2 } };
+
+  // a) waiting for level 2 (undersecretary) of the publication chain
+  const pend = await tenders.createTender(ctx, g.officer, { ...JETTY, titleEn: 'Coastal Road Drainage Upgrade', titleAr: 'تطوير تصريف مياه الطريق الساحلي',
+    descriptionEn: 'Storm-water drainage upgrade along 6 km of the coastal road.', descriptionAr: 'تطوير شبكة تصريف مياه الأمطار على امتداد 6 كم من الطريق الساحلي.',
+    estimatedBudget: 900000, submissionDeadline: iso(30 * 24 * HOUR), eligibility: { activityCodes: ['ENG-01', 'ENG-04'], minGrade: 2 } });
+  await tenders.uploadTenderDocument(ctx, g.officer, pend.id, file('gcia-jetty-rfp-pack.md'), { title: 'Drainage RFP pack (EN)' });
+  await tenders.approveTender(ctx, g.director, pend.id, { reason: 'Level 1: technically complete' });
+
+  // b) PUBLISHED two-envelope RFP; vendor1 has bought the documents (TEST gateway)
+  const open = await tenders.createTender(ctx, g.officer, { ...JETTY, titleEn: 'Fishing Harbour Breakwater Repair', titleAr: 'إصلاح حاجز الأمواج في ميناء الصيد',
+    descriptionEn: 'Repair of 400 m of rock-armour breakwater and access ramp.', descriptionAr: 'إصلاح 400 م من حاجز الأمواج الصخري ومنحدر الوصول.',
+    estimatedBudget: 1200000, submissionDeadline: iso(3 * 24 * HOUR) });
+  await tenders.uploadTenderDocument(ctx, g.officer, open.id, file('gcia-jetty-rfp-pack.md'), { title: 'Breakwater RFP pack (EN)' });
+  await tenders.approveTender(ctx, g.director, open.id, { reason: 'Level 1' });
+  await tenders.approveTender(ctx, g.undersecretary, open.id, { reason: 'Level 2' });
+  await tenders.publishTender(ctx, g.officer, open.id);
+  await purchaseDocuments(ctx, g.vendor1, (await ctx.db.query<any>('SELECT * FROM tenders WHERE id=$1', [open.id]))[0], { gateway: 'TEST' });
+
+  // c) CLOSED two-envelope RFP with 2 sealed bids, ready for the technical opening
+  setClockOffset(-2 * HOUR);
+  try {
+    const jetty = await tenders.createTender(ctx, g.officer, { ...JETTY, titleEn: 'Marine Jetty Rehabilitation', titleAr: 'إعادة تأهيل الرصيف البحري',
+      descriptionEn: 'Rehabilitation of the 240 m service jetty at the Northern Harbour.', descriptionAr: 'إعادة تأهيل رصيف الخدمة بطول 240 م في الميناء الشمالي.',
+      estimatedBudget: 2400000, submissionDeadline: iso(-1 * HOUR) });
+    await tenders.uploadTenderDocument(ctx, g.officer, jetty.id, file('gcia-jetty-rfp-pack.md'), { title: 'Jetty RFP pack (EN)' });
+    await tenders.approveTender(ctx, g.director, jetty.id, {});
+    await tenders.approveTender(ctx, g.undersecretary, jetty.id, {});
+    await tenders.publishTender(ctx, g.officer, jetty.id);
+    const row = async () => (await ctx.db.query<any>('SELECT * FROM tenders WHERE id=$1', [jetty.id]))[0];
+    for (const n of [1, 2]) {
+      await purchaseDocuments(ctx, g[`vendor${n}`], await row(), { gateway: 'TEST' });
+      await submitBid(ctx, g[`vendor${n}`], jetty.id, { technical: file(`gcia-vendor${n}-technical.md`), financial: file(`gcia-vendor${n}-financial.md`) });
+    }
+  } finally {
+    setClockOffset(0);
+  }
   await tenders.closeDueTenders(ctx);
-  console.log('[seed] done: tenants kea, ministry_a; users officer/director/chair/evaluator1/evaluator2/admin/auditor/vendor1..4');
+  console.log('[seed] done: entities kea (public tender) and gcia (two-envelope RFP); users officer/director/undersecretary/chair/evaluator1/evaluator2/admin/auditor/vendor1..4');
 }

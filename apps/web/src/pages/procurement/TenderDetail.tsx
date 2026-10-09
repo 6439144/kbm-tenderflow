@@ -1,3 +1,5 @@
+import { TenderCyclePanel } from '../../features/cycle';
+import { TenderAiExtras } from '../../features/assistant';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
@@ -320,6 +322,9 @@ function Detail({
               </div>
             </div>
           </Card>
+
+          <TenderCyclePanel td={td} onChange={refresh} />
+          <TenderAiExtras td={td} onChange={refresh} />
 
           <Card id="sec-docs" title={t('td.documents')}>
             <DocList docs={packDocs} empty={t('td.noDocuments')} />
