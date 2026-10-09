@@ -46,6 +46,15 @@
   - **T19 & T23 (Tue-Wed 13-14 Oct)**: Install guide, admin guide, user quick guide (Arabic and English), release notes v0.9.0, `docs/roadmap.md`.
 - **Constraints**: Never invent legal or procurement rules; mark assumptions and log questions in `docs/agents/QUESTIONS.md`. All names must be fictitious.
 
+### A2 — Backend Agent
+- **Role**: Authoritative REST API service, PostgreSQL migrations, OIDC integration, server-side RBAC, sealed-bid vault, evaluation scoring, PDF reports, and AI tool endpoints.
+- **Owned Folders**: `services/api/`.
+- **Assigned Tasks**:
+  - **T03 (Sun 11 Oct)**: `openapi.yaml` v0.9 for every module (tenants, vendors, tenders, documents references, clarifications, addenda, bids, opening, evaluation, award, audit, reports, AI tools). Get A0, A3, A4, A5 review.
+  - **T08 (Mon 12 Oct)**: Service skeleton per ADR, migrations, OIDC with Keycloak, server-side RBAC & tenant isolation, audit module, core entity services with API tests.
+  - **T14 (Tue 13 Oct)**: Sealed-bid vault (per-bid encryption, release only after recorded opening event, deadline lock), opening, weighted evaluation scoring, award, PDF report generation for opening record and committee report. AI tool endpoints with caller permission verification.
+- **Constraints**: All documents go through the `ContentStore` interface. Never store document bodies in PostgreSQL. Server-side authorization and tenant isolation strictly enforced.
+
 ---
 
-*(Additional agents A2 through A6 will be appended as their briefs are introduced)*
+*(Additional agents A3 through A6 will be appended as their briefs are introduced)*

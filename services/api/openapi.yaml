@@ -314,6 +314,88 @@ paths:
               schema:
                 $ref: '#/components/schemas/Clarification'
 
+  /tenders/{tenderId}/addenda:
+    get:
+      summary: List addenda issued for tender
+      operationId: listAddenda
+      tags: [Addenda]
+      parameters:
+        - $ref: '#/components/parameters/TenderIdParam'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Addendum'
+    post:
+      summary: Issue formal addendum for tender
+      operationId: createAddendum
+      tags: [Addenda]
+      parameters:
+        - $ref: '#/components/parameters/TenderIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [addendumNumber, title, content]
+              properties:
+                addendumNumber:
+                  type: integer
+                title:
+                  type: string
+                content:
+                  type: string
+                documentId:
+                  type: string
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Addendum'
+
+  /tenders/{tenderId}/reports/opening-record:
+    get:
+      summary: Generate and download Bid Opening Ceremony Record Report (PDF/JSON)
+      operationId: getOpeningRecordReport
+      tags: [Reports]
+      parameters:
+        - $ref: '#/components/parameters/TenderIdParam'
+      responses:
+        '200':
+          description: Opening record report
+          content:
+            application/json:
+              schema:
+                type: object
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+
+  /tenders/{tenderId}/reports/committee-report:
+    get:
+      summary: Generate and download Committee Evaluation & Award Report (PDF/JSON)
+      operationId: getCommitteeReport
+      tags: [Reports]
+      parameters:
+        - $ref: '#/components/parameters/TenderIdParam'
+      responses:
+        '200':
+          description: Committee evaluation report
+          content:
+            application/json:
+              schema:
+                type: object
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+
   # ==========================================
   # Sealed Bids & Opening Ceremony (Rule 1)
   # ==========================================
@@ -767,6 +849,27 @@ components:
           type: string
           format: date-time
           nullable: true
+
+    Addendum:
+      type: object
+      required: [id, tenderId, addendumNumber, title, content, issuedAt]
+      properties:
+        id:
+          type: string
+        tenderId:
+          type: string
+        addendumNumber:
+          type: integer
+        title:
+          type: string
+        content:
+          type: string
+        documentId:
+          type: string
+          nullable: true
+        issuedAt:
+          type: string
+          format: date-time
 
     BidSummary:
       type: object
