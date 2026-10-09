@@ -1,82 +1,82 @@
-import * as crypto from 'crypto';
+// Append-only, HMAC-SHA256 chained audit log (one chain per tenant).
+import crypto from 'node:crypto';
+import type { Db, Queryable } from '../db.js';
+import { canonicalJson, now, uuid } from '../util.js';
 
-export interface AuditRecordInput {
+export interface AuditActor { id: string; roles: string[] }
+export const SYSTEM_ACTOR: AuditActor = { id: 'SYSTEM', roles: ['SYSTEM'] };
+
+export interface AuditInput {
   tenantId: string;
-  actorId: string;
-  actorRole: string;
+  actor: AuditActor;
   action: string;
   resourceType: string;
-  resourceId: string;
+  resourceId?: string | null;
   prevState?: string | null;
   newState?: string | null;
   reason?: string | null;
-  ipAddress?: string | null;
+  details?: Record<string, unknown>;
 }
 
-export interface StoredAuditEvent extends AuditRecordInput {
-  id: string;
-  timestamp: string;
-  prevSignature: string;
-  hmacSignature: string;
+interface AuditRow {
+  seq: string | number; id: string; tenant_id: string; actor_id: string; actor_roles: string[]; action: string;
+  resource_type: string; resource_id: string | null; prev_state: string | null; new_state: string | null;
+  reason: string | null; details: Record<string, unknown>; at: Date; prev_hmac: string | null; hmac: string;
 }
 
-export class AuditLogger {
-  private secretKey: string;
-  private lastSignature: string = '0000000000000000000000000000000000000000000000000000000000000000';
-  private logs: StoredAuditEvent[] = [];
+function payloadOf(r: {
+  id: string; tenantId: string; actorId: string; actorRoles: string[]; action: string; resourceType: string;
+  resourceId: string | null; prevState: string | null; newState: string | null; reason: string | null;
+  details: Record<string, unknown>; at: Date;
+}) {
+  return canonicalJson(r);
+}
+const mac = (key: string, prev: string | null, payload: string) =>
+  crypto.createHmac('sha256', key).update(`${prev ?? ''}|${payload}`).digest('hex');
 
-  constructor(secretKey?: string) {
-    this.secretKey = secretKey || process.env.AUDIT_SIGNING_KEY || 'tenderflow-audit-signing-secret-key-0.9.0';
-  }
-
-  /**
-   * Writes an immutable audit event conforming to Non-negotiable Rule 2.
-   */
-  async logEvent(input: AuditRecordInput): Promise<StoredAuditEvent> {
-    const id = `aud_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
-    const timestamp = new Date().toISOString();
-    const prevSignature = this.lastSignature;
-
-    const payload = `${id}|${input.tenantId}|${input.actorId}|${input.actorRole}|${input.action}|${input.resourceType}|${input.resourceId}|${input.prevState || ''}|${input.newState || ''}|${input.reason || ''}|${timestamp}|${prevSignature}`;
-
-    const hmac = crypto.createHmac('sha256', this.secretKey);
-    hmac.update(payload);
-    const hmacSignature = hmac.digest('hex');
-
-    const event: StoredAuditEvent = {
-      ...input,
-      id,
-      timestamp,
-      prevSignature,
-      hmacSignature
-    };
-
-    this.lastSignature = hmacSignature;
-    this.logs.push(event);
-
-    return event;
-  }
-
-  getLogs(filter?: { tenantId?: string; resourceType?: string; resourceId?: string }): StoredAuditEvent[] {
-    return this.logs.filter((log) => {
-      if (filter?.tenantId && log.tenantId !== filter.tenantId) return false;
-      if (filter?.resourceType && log.resourceType !== filter.resourceType) return false;
-      if (filter?.resourceId && log.resourceId !== filter.resourceId) return false;
-      return true;
-    });
-  }
-
-  verifyChain(): boolean {
-    let prev = '0000000000000000000000000000000000000000000000000000000000000000';
-    for (const log of this.logs) {
-      if (log.prevSignature !== prev) return false;
-      const payload = `${log.id}|${log.tenantId}|${log.actorId}|${log.actorRole}|${log.action}|${log.resourceType}|${log.resourceId}|${log.prevState || ''}|${log.newState || ''}|${log.reason || ''}|${log.timestamp}|${log.prevSignature}`;
-      const hmac = crypto.createHmac('sha256', this.secretKey).update(payload).digest('hex');
-      if (hmac !== log.hmacSignature) return false;
-      prev = log.hmacSignature;
-    }
-    return true;
-  }
+/** Append an event. Must be called inside a transaction (`db.tx`) so the chain read+write is atomic. */
+export async function appendAudit(q: Queryable, key: string, e: AuditInput): Promise<void> {
+  await q.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`audit:${e.tenantId}`]);
+  const last = await q.query<{ hmac: string }>(
+    'SELECT hmac FROM audit_events WHERE tenant_id = $1 ORDER BY seq DESC LIMIT 1', [e.tenantId]);
+  const prev = last[0]?.hmac ?? null;
+  const rec = {
+    id: uuid(), tenantId: e.tenantId, actorId: e.actor.id, actorRoles: e.actor.roles ?? [], action: e.action,
+    resourceType: e.resourceType, resourceId: e.resourceId ?? null, prevState: e.prevState ?? null,
+    newState: e.newState ?? null, reason: e.reason ?? null,
+    // round-trip through JSON so what we MAC is exactly what jsonb will give back
+    details: JSON.parse(JSON.stringify(e.details ?? {})), at: now(),
+  };
+  const hmac = mac(key, prev, payloadOf(rec));
+  await q.query(
+    `INSERT INTO audit_events (id, tenant_id, actor_id, actor_roles, action, resource_type, resource_id, prev_state,
+       new_state, reason, details, at, prev_hmac, hmac)
+     VALUES ($1,$2,$3,$4::text[],$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13,$14)`,
+    [rec.id, rec.tenantId, rec.actorId, rec.actorRoles, rec.action, rec.resourceType, rec.resourceId, rec.prevState,
+      rec.newState, rec.reason, JSON.stringify(rec.details), rec.at, prev, hmac]);
 }
 
-export const auditLogger = new AuditLogger();
+export async function audit(db: Db, key: string, e: AuditInput): Promise<void> {
+  await db.tx((q) => appendAudit(q, key, e));
+}
+
+export async function verifyAudit(db: Db, key: string, tenantId: string):
+  Promise<{ valid: boolean; count: number; brokenAt?: number; reason?: string }> {
+  const rows = await db.query<AuditRow>(
+    `SELECT seq::text AS seq, id, tenant_id, actor_id, actor_roles, action, resource_type, resource_id, prev_state,
+            new_state, reason, details, at, prev_hmac, hmac
+       FROM audit_events WHERE tenant_id = $1 ORDER BY audit_events.seq ASC`, [tenantId]);
+  let prev: string | null = null;
+  for (const r of rows) {
+    const seq = Number(r.seq);
+    if ((r.prev_hmac ?? null) !== prev) return { valid: false, count: rows.length, brokenAt: seq, reason: 'prev_hmac does not link to previous event' };
+    const expected = mac(key, prev, payloadOf({
+      id: r.id, tenantId: r.tenant_id, actorId: r.actor_id, actorRoles: r.actor_roles ?? [], action: r.action,
+      resourceType: r.resource_type, resourceId: r.resource_id, prevState: r.prev_state, newState: r.new_state,
+      reason: r.reason, details: r.details ?? {}, at: new Date(r.at),
+    }));
+    if (expected !== r.hmac) return { valid: false, count: rows.length, brokenAt: seq, reason: 'hmac mismatch (event content altered)' };
+    prev = r.hmac;
+  }
+  return { valid: true, count: rows.length };
+}
