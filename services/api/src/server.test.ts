@@ -15,6 +15,7 @@ let evaluatorToken: string;
 
 before(async () => {
   process.env.NODE_ENV = 'test';
+  process.env.BID_MASTER_KEY = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
   server = http.createServer(app);
   await new Promise<void>((resolve) => {
     server.listen(0, '127.0.0.1', () => resolve());
@@ -61,9 +62,14 @@ before(async () => {
 });
 
 after(async () => {
-  await new Promise<void>((resolve) => {
-    server.close(() => resolve());
-  });
+  if (server) {
+    server.closeAllConnections?.();
+    server.closeIdleConnections?.();
+    await new Promise<void>((resolve) => {
+      server.close(() => resolve());
+    });
+    server.unref();
+  }
 });
 
 async function request(path: string, options: {
@@ -151,8 +157,8 @@ test('TenderFlow 10-Step Acceptance Verification & Security Rules (v1.0 Hardened
     });
     assert.strictEqual(vendorDraft.status, 403);
 
-    // Submission deadline set 2 seconds in future for testing opening gates
-    const deadline = new Date(Date.now() + 2000).toISOString();
+    // Submission deadline set 2.5 seconds in future for testing opening gates
+    const deadline = new Date(Date.now() + 2500).toISOString();
 
     const res = await request('/api/v1/tenders', {
       method: 'POST',
@@ -271,8 +277,8 @@ test('TenderFlow 10-Step Acceptance Verification & Security Rules (v1.0 Hardened
   });
 
   await t.test('Step 8: Bid Opening Ceremony unseals bids (Rule 1 & 2)', async () => {
-    // Wait for the 2-second deadline to elapse
-    await new Promise((resolve) => setTimeout(resolve, 2200));
+    // Wait for the deadline to elapse (deadline is +2500ms from Step 3)
+    await new Promise((resolve) => setTimeout(resolve, 2700));
 
     const openRes = await request(`/api/v1/tenders/${tenderId}/bids/opening-ceremony`, {
       method: 'POST',

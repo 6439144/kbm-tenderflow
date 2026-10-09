@@ -1,3 +1,6 @@
+process.env.NODE_ENV = 'test';
+process.env.BID_MASTER_KEY = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+
 import { test } from 'node:test';
 import assert from 'node:assert';
 import app from '../../services/api/dist/server.js';
@@ -137,6 +140,53 @@ test('Security Penetration & Authorization Tests (Agent A6 / Tasks G1-b, G1-c, G
     assert.strictEqual(rAI.body.code, 'BIDS_SEALED_UNTIL_OPENING_EVENT');
   });
 
+  await t.test('RULE 1 / R1b-3: Uploaded proposal documents are shielded from competitor before bid submission (deny by default)', async () => {
+    // Vendor A uploads a financial proposal document
+    const uploadRes = await request('/api/v1/documents/upload', {
+      method: 'POST',
+      token: vendorToken,
+      body: {
+        title: 'Confidential Financial Proposal',
+        docType: 'FINANCIAL_PROPOSAL',
+        contentBase64: Buffer.from('SECRET PRICE 9999').toString('base64'),
+        tenderId
+      }
+    });
+    assert.strictEqual(uploadRes.status, 201);
+    const uploadedDocId = uploadRes.body.id;
+
+    // Competitor Vendor attempts to download it via /documents/:id -> MUST RETURN 403
+    const compDownload = await request(`/api/v1/documents/${uploadedDocId}`, {
+      token: competitorVendorToken
+    });
+    assert.strictEqual(compDownload.status, 403);
+
+    // Vendor A can download their own uploaded document
+    const ownDownload = await request(`/api/v1/documents/${uploadedDocId}`, {
+      token: vendorToken
+    });
+    assert.strictEqual(ownDownload.status, 200);
+
+    // Unregistered / unknown document ID -> MUST RETURN 404 (deny by default)
+    const unknownDownload = await request('/api/v1/documents/doc_non_existent_fake_id', {
+      token: vendorToken
+    });
+    assert.strictEqual(unknownDownload.status, 404);
+  });
+
+  await t.test('R1b-2: Tokens without tenant_id claim are rejected with HTTP 401', async () => {
+    const noTenantToken = await createTestToken({
+      sub: 'forged_officer',
+      role: 'PROCUREMENT_OFFICER'
+    });
+    const rNoTenant = await request('/api/v1/tenders', {
+      method: 'POST',
+      token: noTenantToken,
+      body: { tenderNumber: 'FORGED-01' }
+    });
+    assert.strictEqual(rNoTenant.status, 401);
+  });
+
   await t.test('RULE 1: Opening before deadline is rejected with HTTP 409 Conflict', async () => {
     // Attempting to open before deadline has elapsed
     const rEarlyOpen = await request(`/api/v1/tenders/${tenderId}/bids/opening-ceremony`, {
@@ -259,5 +309,8 @@ test('Security Penetration & Authorization Tests (Agent A6 / Tasks G1-b, G1-c, G
     assert.strictEqual(rCrossGet.body.code, 'TENANT_MISMATCH');
   });
 
-  server.close();
+  server.closeAllConnections?.();
+  server.closeIdleConnections?.();
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+  server.unref();
 });

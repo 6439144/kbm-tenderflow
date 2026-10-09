@@ -15,57 +15,57 @@ export interface AuthenticatedRequest extends Request {
   user?: AuthenticatedUser;
 }
 
-// Remote JWKS set cache
+// Remote JWKS set cache for Keycloak
 let remoteJWKSet: ReturnType<typeof jose.createRemoteJWKSet> | null = null;
 let currentJwksUrl: string | null = null;
 
-function getRemoteJWKSet(): ReturnType<typeof jose.createRemoteJWKSet> | null {
+// Test RSA key pair (used ONLY when process.env.NODE_ENV === 'test', never in production)
+let testKeyPair: { publicKey: any; privateKey: any } | null = null;
+
+export async function getOrCreateTestKeyPair() {
+  if (!testKeyPair) {
+    testKeyPair = await jose.generateKeyPair('RS256');
+  }
+  return testKeyPair;
+}
+
+function getRemoteJWKSet(): ReturnType<typeof jose.createRemoteJWKSet> {
   const issuerUrl = process.env.KEYCLOAK_ISSUER_URL || (process.env.KEYCLOAK_URL ? `${process.env.KEYCLOAK_URL}/realms/${process.env.KEYCLOAK_REALM || 'tenderflow'}` : null);
-  if (!issuerUrl) return null;
+  
+  if (!issuerUrl && process.env.NODE_ENV !== 'test') {
+    throw new Error('[Auth Startup] KEYCLOAK_ISSUER_URL is required in non-test environments.');
+  }
 
   const jwksUrl = `${issuerUrl}/protocol/openid-connect/certs`;
   if (remoteJWKSet && currentJwksUrl === jwksUrl) {
     return remoteJWKSet;
   }
 
-  try {
-    currentJwksUrl = jwksUrl;
-    remoteJWKSet = jose.createRemoteJWKSet(new URL(jwksUrl));
-    return remoteJWKSet;
-  } catch (err) {
-    console.error('[Auth] Failed to initialize JWKS set for', jwksUrl, err);
-    return null;
-  }
+  currentJwksUrl = jwksUrl;
+  remoteJWKSet = jose.createRemoteJWKSet(new URL(jwksUrl));
+  return remoteJWKSet;
 }
 
 /**
- * Secret key for symmetric testing / standalone operation (must be at least 32 chars)
- */
-const DEFAULT_TEST_SECRET = 'tenderflow_super_secure_jwt_signing_secret_for_local_tests_32b';
-function getSecretKey(): Uint8Array {
-  const secret = process.env.JWT_SECRET || DEFAULT_TEST_SECRET;
-  return new TextEncoder().encode(secret);
-}
-
-/**
- * Utility to mint a valid cryptographically signed JWT for tests using jose.
+ * Utility to mint a valid cryptographically signed RSA JWT for testing.
+ * Available ONLY in test environments.
  */
 export async function createTestToken(claims: {
   sub: string;
   username?: string;
   role: string;
   roles?: string[];
-  tenantId: string;
+  tenantId?: string;
   vendorId?: string;
   issuer?: string;
   audience?: string;
   expiresIn?: string;
 }): Promise<string> {
-  const secretKey = getSecretKey();
+  const keys = await getOrCreateTestKeyPair();
   const now = Math.floor(Date.now() / 1000);
   const roles = claims.roles || [claims.role];
 
-  return new jose.SignJWT({
+  const builder = new jose.SignJWT({
     preferred_username: claims.username || claims.sub,
     tenant_id: claims.tenantId,
     vendor_id: claims.vendorId || (claims.role === 'VENDOR' ? claims.sub : undefined),
@@ -73,58 +73,64 @@ export async function createTestToken(claims: {
     roles,
     role: claims.role
   })
-    .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
+    .setProtectedHeader({ alg: 'RS256', typ: 'JWT' })
     .setSubject(claims.sub)
     .setIssuedAt(now)
     .setIssuer(claims.issuer || process.env.KEYCLOAK_ISSUER_URL || 'http://localhost:8080/realms/tenderflow')
     .setAudience(claims.audience || process.env.KEYCLOAK_AUDIENCE || 'account')
-    .setExpirationTime(claims.expiresIn || '1h')
-    .sign(secretKey);
+    .setExpirationTime(claims.expiresIn || '1h');
+
+  return builder.sign(keys.privateKey);
 }
 
 /**
- * Strict JWT Verification using jose (Non-negotiable Rule 3 / Task G1-b)
- * Extracts roles and tenant ONLY from verified token claims.
+ * Strict JWT Verification using jose (Non-negotiable Rule 3 / Task G1-b / Reviewer R1b-1 & R1b-2)
+ * In production: accepts ONLY RS256 tokens verified against Keycloak JWKS.
+ * In test: verifies using test RSA public key.
  */
 export async function verifyToken(token: string): Promise<AuthenticatedUser> {
   let payload: jose.JWTPayload;
 
-  // 1. Try Keycloak JWKS if configured
-  const jwks = getRemoteJWKSet();
-  let verified = false;
-
-  if (jwks) {
+  if (process.env.NODE_ENV === 'test') {
+    // In test environment, verify against test RSA key
+    const keys = await getOrCreateTestKeyPair();
     try {
-      const result = await jose.jwtVerify(token, jwks, {
-        issuer: process.env.KEYCLOAK_ISSUER_URL,
-        audience: process.env.KEYCLOAK_AUDIENCE
+      const result = await jose.jwtVerify(token, keys.publicKey, {
+        algorithms: ['RS256']
       });
       payload = result.payload;
-      verified = true;
-    } catch (jwksErr) {
-      // If remote JWKS is unreachable or fails in test, fallback to symmetric secret check
+    } catch (testErr: any) {
+      throw new Error(`Token verification failed: ${testErr.message}`);
     }
-  }
+  } else {
+    // In production/staging: verify strictly against Keycloak JWKS
+    const jwks = getRemoteJWKSet();
+    const issuer = process.env.KEYCLOAK_ISSUER_URL;
+    const audience = process.env.KEYCLOAK_AUDIENCE;
 
-  // 2. Symmetric secret fallback (for test suite and local container operation)
-  if (!verified) {
+    if (!issuer || !audience) {
+      throw new Error('[Auth Error] KEYCLOAK_ISSUER_URL and KEYCLOAK_AUDIENCE must be set in environment.');
+    }
+
     try {
-      const result = await jose.jwtVerify(token, getSecretKey());
+      const result = await jose.jwtVerify(token, jwks, {
+        issuer,
+        audience,
+        algorithms: ['RS256']
+      });
       payload = result.payload;
-      verified = true;
-    } catch (symErr: any) {
-      throw new Error(`Token verification failed: ${symErr.message}`);
+    } catch (jwksErr: any) {
+      throw new Error(`Token verification failed against Keycloak JWKS: ${jwksErr.message}`);
     }
   }
 
-  // 3. Extract and normalize roles strictly from claims
-  const realmRoles: string[] = (payload!.realm_access as any)?.roles || [];
-  const customRoles: string[] = Array.isArray(payload!.roles) ? (payload!.roles as string[]) : [];
-  const singleRole: string | undefined = typeof payload!.role === 'string' ? (payload!.role as string) : undefined;
+  // 1. Extract and normalize roles strictly from claims
+  const realmRoles: string[] = (payload.realm_access as any)?.roles || [];
+  const customRoles: string[] = Array.isArray(payload.roles) ? (payload.roles as string[]) : [];
+  const singleRole: string | undefined = typeof payload.role === 'string' ? (payload.role as string) : undefined;
   
   const allRoles = Array.from(new Set([...realmRoles, ...customRoles, ...(singleRole ? [singleRole] : [])]));
 
-  // Standard role codes
   const KNOWN_ROLES = [
     'SUPER_ADMIN',
     'TENANT_ADMIN',
@@ -149,18 +155,23 @@ export async function verifyToken(token: string): Promise<AuthenticatedUser> {
     primaryRole = singleRole;
   }
 
-  // 4. Extract tenant strictly from claims
-  const tenantId = (payload!.tenant_id as string) || (payload!.tenantId as string) || 'kea';
-  const sub = payload!.sub || 'unknown';
-  const username = (payload!.preferred_username as string) || sub;
-  const vendorId = (payload!.vendor_id as string) || (primaryRole === 'VENDOR' ? sub : undefined);
+  // 2. Extract tenant_id strictly from claims (Reviewer R1b-2: no silent fallback to 'kea')
+  const tenantId = (payload.tenant_id as string) || (payload.tenantId as string);
+
+  if (!tenantId && primaryRole !== 'SUPER_ADMIN') {
+    throw new Error('MISSING_TENANT_CLAIM: Token must contain a valid tenant_id claim.');
+  }
+
+  const sub = payload.sub || 'unknown';
+  const username = (payload.preferred_username as string) || sub;
+  const vendorId = (payload.vendor_id as string) || (primaryRole === 'VENDOR' ? sub : undefined);
 
   return {
     id: sub,
     username,
     role: primaryRole,
     roles: allRoles,
-    tenantId,
+    tenantId: tenantId || 'system',
     vendorId
   };
 }
@@ -217,7 +228,7 @@ export async function authMiddleware(req: AuthenticatedRequest, res: Response, n
 
     // Check X-Tenant-ID header if provided against token claims
     const headerTenant = req.headers['x-tenant-id'] as string;
-    if (headerTenant && headerTenant !== user.tenantId) {
+    if (headerTenant && user.role !== 'SUPER_ADMIN' && headerTenant !== user.tenantId) {
       res.status(403).json({
         code: 'TENANT_MISMATCH',
         message: `Token tenant claim '${user.tenantId}' does not match requested tenant '${headerTenant}'.`

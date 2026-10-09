@@ -63,7 +63,7 @@ bidsRouter.post('/', requireRole(['VENDOR']), async (req: AuthenticatedRequest, 
   const authenticatedVendorId = req.user?.vendorId || req.user?.id || 'vnd_unknown';
 
   try {
-    const bid = await sealedBidVault.submitSealedBid({
+    const { bid } = await sealedBidVault.submitSealedBid({
       tenantId: req.tenantId!,
       tenderId,
       vendorId: authenticatedVendorId,

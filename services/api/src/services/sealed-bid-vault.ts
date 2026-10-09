@@ -48,6 +48,9 @@ export interface DocumentOwnership {
   tenderId?: string;
   bidId?: string;
   vendorId?: string;
+  isEncrypted?: boolean;
+  ivHex?: string;
+  tagHex?: string;
 }
 
 export class SealedBidVaultService {
@@ -57,14 +60,13 @@ export class SealedBidVaultService {
 
   /**
    * Derives 32-byte master key from BID_MASTER_KEY environment variable.
+   * Fails loudly if missing (Rule 9 / Reviewer R1b-4).
    */
   private getMasterKey(): Buffer {
     const rawKey = process.env.BID_MASTER_KEY;
     if (!rawKey) {
-      // Default 32-byte key for local dev if not supplied
-      return Buffer.from('0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef', 'hex');
+      throw new Error('[Startup Error] BID_MASTER_KEY environment variable is required.');
     }
-    // Handle base64 or hex or direct utf8
     if (rawKey.length === 64 && /^[0-9a-fA-F]+$/.test(rawKey)) {
       return Buffer.from(rawKey, 'hex');
     }
@@ -74,7 +76,7 @@ export class SealedBidVaultService {
   }
 
   /**
-   * AES-256-GCM Envelope Encryption (Task G1-c / Non-negotiable Rule 1)
+   * AES-256-GCM Envelope Encryption (Task G1-c / Reviewer R1b-4)
    * Wraps a freshly generated per-bid data key using the master key.
    */
   private wrapDataKey(dataKey: Buffer): EncryptedDataKeyEnvelope {
@@ -94,7 +96,7 @@ export class SealedBidVaultService {
   /**
    * Unwraps the per-bid data key using the master key after opening ceremony.
    */
-  private unwrapDataKey(envelope: EncryptedDataKeyEnvelope): Buffer {
+  unwrapDataKey(envelope: EncryptedDataKeyEnvelope): Buffer {
     const masterKey = this.getMasterKey();
     const iv = Buffer.from(envelope.ivHex, 'hex');
     const tag = Buffer.from(envelope.tagHex, 'hex');
@@ -103,6 +105,26 @@ export class SealedBidVaultService {
     const decipher = crypto.createDecipheriv('aes-256-gcm', masterKey, iv);
     decipher.setAuthTag(tag);
     return Buffer.concat([decipher.update(wrapped), decipher.final()]);
+  }
+
+  /**
+   * Encrypts bid file bytes with the per-bid data key using AES-256-GCM (R1b-4)
+   */
+  encryptPayload(dataKey: Buffer, plaintext: Buffer): { ciphertext: Buffer; iv: Buffer; tag: Buffer } {
+    const iv = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv('aes-256-gcm', dataKey, iv);
+    const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
+    const tag = cipher.getAuthTag();
+    return { ciphertext, iv, tag };
+  }
+
+  /**
+   * Decrypts bid file bytes with the per-bid data key using AES-256-GCM
+   */
+  decryptPayload(dataKey: Buffer, ciphertext: Buffer, iv: Buffer, tag: Buffer): Buffer {
+    const decipher = crypto.createDecipheriv('aes-256-gcm', dataKey, iv);
+    decipher.setAuthTag(tag);
+    return Buffer.concat([decipher.update(ciphertext), decipher.final()]);
   }
 
   /**
@@ -127,7 +149,7 @@ export class SealedBidVaultService {
     technicalDocId: string;
     financialDocId: string;
     hashDigest: string;
-  }): Promise<StoredBid> {
+  }): Promise<{ bid: StoredBid; dataKey: Buffer }> {
     const id = `bid_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
     
     // Generate fresh 32-byte AES-256 data key per bid
@@ -150,7 +172,7 @@ export class SealedBidVaultService {
 
     this.bids.set(id, bid);
 
-    // Register ownership of technical & financial document IDs
+    // Register ownership of technical & financial document IDs bound strictly to uploading vendor
     this.registerDocument({
       documentId: params.technicalDocId,
       tenantId: params.tenantId,
@@ -177,10 +199,10 @@ export class SealedBidVaultService {
       resourceId: id,
       prevState: null,
       newState: 'SEALED',
-      reason: `Bid submitted with cryptographic hash receipt: ${params.hashDigest} (Envelope Encrypted with AES-256-GCM)`
+      reason: `Bid submitted with cryptographic hash receipt: ${params.hashDigest} (Data key wrapped with BID_MASTER_KEY)`
     });
 
-    return bid;
+    return { bid, dataKey: perBidDataKey };
   }
 
   /**

@@ -113,11 +113,60 @@ export class FileNetGraphQLContentStore implements ContentStore {
   }
 
   async ping(): Promise<{ ok: boolean; backend: 'filenet'; details?: string }> {
-    return {
-      ok: true,
-      backend: 'filenet',
-      details: `Connected to FileNet Object Store ${this.config.repositoryId} via ${this.config.graphqlEndpoint}`
-    };
+    try {
+      const xsrf = crypto.randomUUID();
+      const authHeaders = this.getAuthHeaders();
+      const query = {
+        query: `query PingOS($repoId: String!) {
+          objectStore(repositoryIdentifier: $repoId) {
+            id
+            displayName
+            symbolicName
+          }
+        }`,
+        variables: { repoId: this.config.repositoryId }
+      };
+
+      const res = await fetch(this.config.graphqlEndpoint, {
+        method: 'POST',
+        headers: {
+          ...authHeaders,
+          'ECM-CS-XSRF-Token': xsrf,
+          'Cookie': `ECM-CS-XSRF-Token=${xsrf}`
+        },
+        body: JSON.stringify(query)
+      });
+
+      if (!res.ok) {
+        return {
+          ok: false,
+          backend: 'filenet',
+          details: `HTTP ${res.status} ${res.statusText} from ${this.config.graphqlEndpoint}`
+        };
+      }
+
+      const json = (await res.json()) as any;
+      if (json.errors && json.errors.length > 0) {
+        return {
+          ok: false,
+          backend: 'filenet',
+          details: json.errors.map((e: any) => e.message).join('; ')
+        };
+      }
+
+      const os = json.data?.objectStore;
+      return {
+        ok: true,
+        backend: 'filenet',
+        details: `Connected to ${os?.displayName || os?.symbolicName || this.config.repositoryId} on FileNet`
+      };
+    } catch (err: any) {
+      return {
+        ok: false,
+        backend: 'filenet',
+        details: err.message
+      };
+    }
   }
 
   // Aliases for compatibility
