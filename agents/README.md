@@ -1,14 +1,29 @@
 # TenderFlow AI agents (watsonx Orchestrate)
 
-TenderFlow's AI layer is three **advisory** watsonx Orchestrate native agents. The API (`services/api/src/ai/`)
-extracts document text from the content store and sends it **outbound** to an agent with the task; the agent
-answers only from that text and returns JSON with citations. There are no tools and no inbound callbacks.
+TenderFlow's AI layer is nine **advisory** watsonx Orchestrate native agents: eight specialists that cover the whole
+tender cycle, plus the supervisor **`tenderflow_assistant`** (the copilot shown in every portal) that lists the eight as
+ADK `collaborators`. The API (`services/api/src/ai/`) gathers the input — records from the database and document text
+extracted from the content store (IBM FileNet) — and sends it **outbound** to the agent; the agent answers only from that
+input and returns JSON (with citations where documents are involved). TenderFlow validates every answer, records it as an
+`ai_run` (+ audit) and shows it as advice; a person takes every decision. There are no inbound callbacks in the default
+flow (an optional read-only OpenAPI tool pack is described in [`tools/README.md`](tools/README.md)).
 
-| Agent (name on the instance) | File | Used by (BUILD-SPEC §1) | Output |
-|---|---|---|---|
-| `tenderflow_pack_checker` | `tenderflow_pack_checker.yaml` | stage 4, pack check | `{summary, findings[{severity, item, detail, citation}]}` |
-| `tenderflow_clarification_assistant` | `tenderflow_clarification_assistant.yaml` | stage 7, clarification draft | `{answer, language, notFound, citations[]}` |
-| `tenderflow_compliance_screener` | `tenderflow_compliance_screener.yaml` | stage 11, compliance screen | `{items[{requirement, status: PRESENT/MISSING/UNCLEAR, evidence, citation}]}` (no scores) |
+| # | Agent (name on the instance) | Cycle stage → TenderFlow screen | Who | Output (validated by TenderFlow) |
+|---|---|---|---|---|
+| 1 | `tenderflow_request_classifier` | Request intake → request detail, "Classify with Orchestrate" (`POST /requests/:id/ai/classify`) | staff | `{tenderType, activityCodes[], urgency LOW/MEDIUM/HIGH, estimatedBudget\|null, summaryEn, summaryAr, citations[]}` — codes must come from the lists, the budget from the text |
+| 2 | `tenderflow_pack_checker` | Draft → pack check (`POST /tenders/:id/ai/pack-check`) | officer | `{summary, findings[{severity, item, detail, citation}]}` |
+| 3 | `tenderflow_notice_drafter` | Publication → Kuwait Al-Youm / CAPT notice (`POST /tenders/:id/ai/notice`), saved as a DRAFT notice by the officer, approved by another person | officer | `{noticeAr, noticeEn, citations[]}` — every number must appear in the facts/pack |
+| 4 | `tenderflow_relevance_matcher` | Published → rank eligible vendors (`POST /tenders/:id/ai/relevance`); vendor home "Tenders for you" (`GET/POST /vendor/ai/tenders-for-me`) | staff / vendor | `{ranked[{id, score 0-100, reasonsEn, reasonsAr}]}` — candidates are only those that passed the rule-based eligibility; ids cannot be added |
+| 5 | `tenderflow_clarification_assistant` | Clarifications → draft answer (`POST /clarifications/:id/ai-draft`) | officer | `{answer, language, notFound, citations[]}` |
+| 6 | `tenderflow_compliance_screener` | Opening → compliance screen (`POST /tenders/:id/ai/compliance-screen`) | chair / evaluator | `{items[{requirement, status PRESENT/MISSING/UNCLEAR, evidence, citation}]}` (no scores) |
+| 7 | `tenderflow_evaluation_narrator` | Evaluation/award → committee narrative (`POST /tenders/:id/ai/narrative`), saved to FileNet by the chair (`POST /ai-runs/:id/save-narrative`) | chair | `{narrativeEn, narrativeAr}` — rejected if it quotes any number that is not in the evaluation data |
+| 8 | `tenderflow_grade_reviewer` | Vendor grading → document checklist (`POST /vendors/:id/ai/grade-review {grade}`) | officer / admin | `{items[{requirement, status PRESENT/MISSING/UNCLEAR, evidence, citation}]}` against a configurable checklist (`WXO_GRADE_CRITERIA`) |
+| 9 | `tenderflow_assistant` (supervisor; collaborators 1-8) | Every signed-in page → assistant dock (`POST /assistant/chat`) | everyone | `{answer, notFound, citations[]}` from a role-scoped context built by TenderFlow (user, pending tasks, entity rules, the visible tender) — never bid contents or other vendors' data; thread id kept per user for follow-ups |
+
+**Supervisor and collaborators.** TenderFlow calls each specialist directly for its own screen (deterministic input,
+strict validation). The supervisor answers the chat itself from the context TenderFlow sends; its `collaborators:` list
+lets it delegate a full specialist task when someone uses it in the Orchestrate chat UI. Import order therefore matters:
+the eight collaborators first, the supervisor last (the scripts do this).
 
 If the instance is not configured or a call fails, the API raises an error (`AI_NOT_CONFIGURED` / Orchestrate error /
 invalid-output error). It never returns canned output (AGENTS.md rules 9–11).
@@ -37,7 +52,7 @@ orchestrate --version
 #    optional: WXO_LLM=<model id from step 4>, WXO_TIMEOUT_MS=90000
 notepad .env
 
-# 3. Import the three agents (adds + activates env "techzone", imports, lists, verifies)
+# 3. Import the nine agents: 8 collaborators, then the supervisor (adds + activates env "techzone", imports, lists, verifies)
 powershell -ExecutionPolicy Bypass -File agents\import.ps1
 
 # 4. If an import fails because the model is not available on your tenant, pick one and re-run step 3:
@@ -49,12 +64,14 @@ npm install
 npm run build
 npm run verify:ai
 
-# 6. Run the bilingual eval set against the real agent; writes agents/evals/results.md
+# 6. Run the bilingual eval sets against the real agents; writes agents/evals/results.md (clarification)
+#    and agents/evals/agents/results.md (the six Phase 1 agents)
 npm run evals
+#    or one part only:  npm run evals -- agents      /  npm run evals -- clarification
 ```
 
 `import.ps1` stops on the first failing command, never prints the API key, answers the "update existing environment?"
-prompt so it can be re-run, and finishes by checking that all three agent names exist on the instance.
+prompt so it can be re-run, and finishes by checking that all nine agent names exist on the instance.
 `agents/import.sh` does the same on Linux/macOS (`bash agents/import.sh`).
 
 Manual equivalent (what the scripts run):
@@ -65,6 +82,12 @@ orchestrate env activate techzone --api-key <WXO_API_KEY>
 orchestrate agents import -f agents\tenderflow_pack_checker.yaml
 orchestrate agents import -f agents\tenderflow_clarification_assistant.yaml
 orchestrate agents import -f agents\tenderflow_compliance_screener.yaml
+orchestrate agents import -f agents\tenderflow_request_classifier.yaml
+orchestrate agents import -f agents\tenderflow_notice_drafter.yaml
+orchestrate agents import -f agents\tenderflow_relevance_matcher.yaml
+orchestrate agents import -f agents\tenderflow_evaluation_narrator.yaml
+orchestrate agents import -f agents\tenderflow_grade_reviewer.yaml
+orchestrate agents import -f agents\tenderflow_assistant.yaml   # supervisor last: its collaborators must exist
 orchestrate agents list
 ```
 
@@ -92,6 +115,13 @@ re-run the import script (the repo YAML files are not modified; patched copies g
 | `WXO_AGENT_PACK_CHECKER` | `tenderflow_pack_checker` | Agent **name** (resolved to id via the list endpoint) or agent **id** (UUID) |
 | `WXO_AGENT_CLARIFICATION` | `tenderflow_clarification_assistant` | same |
 | `WXO_AGENT_COMPLIANCE` | `tenderflow_compliance_screener` | same |
+| `WXO_AGENT_REQUEST_CLASSIFIER` | `tenderflow_request_classifier` | same |
+| `WXO_AGENT_NOTICE_DRAFTER` | `tenderflow_notice_drafter` | same |
+| `WXO_AGENT_RELEVANCE_MATCHER` | `tenderflow_relevance_matcher` | same |
+| `WXO_AGENT_EVALUATION_NARRATOR` | `tenderflow_evaluation_narrator` | same |
+| `WXO_AGENT_GRADE_REVIEWER` | `tenderflow_grade_reviewer` | same |
+| `WXO_AGENT_ASSISTANT` | `tenderflow_assistant` | same (the supervisor) |
+| `WXO_GRADE_CRITERIA` | built-in 6-item checklist | JSON checklist for the grade reviewer: `[{"key","nameEn","nameAr"}]` for all grades or `{"1":[...],"2":[...],"3":[...]}`. It is a configurable document checklist, not a statement of grading law |
 | `WXO_TIMEOUT_MS` | `60000` | Deadline for one agent call (create run + wait + read answer) |
 | `WXO_MAX_DOC_CHARS` | `24000` | Document-text budget per prompt; sections mentioning the key terms are preferred |
 
@@ -128,7 +158,9 @@ and the (redacted) IBM error body; API key and bearer token are never included.
 | `POST /v1/orchestrate/runs` request (`message`, `agent_id`, `thread_id`) and response (`thread_id`, `run_id`, …) | https://developer.watson-orchestrate.ibm.com/apis/orchestrate-agent/chat-with-orchestrate-assistant ; ADK `chat/run_client.py` (`create_run`) |
 | `GET /v1/orchestrate/runs/{run_id}` and status values (`pending`, `running`, `completed`, `failed`, `cancelled`, `requires_input`, `expired`, …) | https://developer.watson-orchestrate.ibm.com/apis/orchestrate-agent/get-orchestrate-assistant-run ; ADK `run_client.wait_for_run_completion` |
 | Final answer = last assistant message of the thread, text from `content[]` items with `response_type: "text"` | ADK CLI `cli/commands/chat/chat_controller.py` (`orchestrate chat ask` flow: create_run → wait_for_run_completion → get_thread_messages) |
-| Native agent YAML (`spec_version: v1`, `kind: native`, `name`, `description`, `instructions`, `llm`, `style`, `tools`, `collaborators`, `hide_reasoning`); `style` values include `default`, `react`, `planner`, `react_core` | https://developer.watson-orchestrate.ibm.com/agents/build_agent ; ADK `agent_builder/agents/types.py`. All three YAML files load with ADK 2.18.1 `Agent.from_spec()` |
+| Native agent YAML (`spec_version: v1`, `kind: native`, `name`, `description`, `instructions`, `llm`, `style`, `tools`, `collaborators`, `hide_reasoning`); `style` values include `default`, `react`, `planner`, `react_core` | https://developer.watson-orchestrate.ibm.com/agents/build_agent ; ADK `agent_builder/agents/types.py`. All nine YAML files load with ADK 2.18.1 `Agent.from_spec()` (supervisor: 8 collaborators); this is a local schema check, not an import into an instance |
+| `collaborators:` is a list of agent **names** (strings); the collaborator's `description` is what the supervisor uses to route | https://developer.watson-orchestrate.ibm.com/agents/build_agent |
+| OpenAPI tools: `orchestrate tools import -k openapi -f <spec> -a <app_id>`; bearer connections via `orchestrate connections add/configure -k bearer/set-credentials --token` | https://developer.watson-orchestrate.ibm.com/connections/associate_connection_to_tool/openapi_connections , https://developer.watson-orchestrate.ibm.com/connections/build_connections |
 | CLI: `orchestrate env add -n -u --type --activate`, `env activate --api-key` | https://developer.watson-orchestrate.ibm.com/environment/initiate_environment ; `--help` of ADK 2.18.1 |
 | `orchestrate agents import -f <file>` (re-import updates an existing agent; `--safe` adds a confirmation) | https://developer.watson-orchestrate.ibm.com/agents/import_agent |
 | `orchestrate agents list [-v]`, `orchestrate models list` | `--help` of ADK 2.18.1 |
@@ -149,7 +181,11 @@ and the (redacted) IBM error body; API key and bearer token are never included.
    agents imported by the CLI into an IBM Cloud instance go to the global workspace by default. If `verify:ai` reports an
    agent as MISSING although `orchestrate agents list` shows it, set `WXO_AGENT_*` to the agent **id** instead of the name.
 5. **Latency.** A 24k-character prompt on a 70B model may approach the 60 s default; raise `WXO_TIMEOUT_MS` if runs time out.
-6. **API key type.** The TechZone "student" credential must be an IBM Cloud IAM API key for a user with access to the
+6. **Phase 1 agents.** The six new agents (classifier, notice drafter, relevance matcher, evaluation narrator, grade
+   reviewer, supervisor) and the supervisor's collaborator routing have been tested only against the local fake
+   Orchestrate server. Run `agents\import.ps1`, `npm run verify:ai` (it now also runs one supervisor turn) and
+   `npm run evals -- agents` on the instance; tune the instructions or the model from `agents/evals/agents/results.md`.
+7. **API key type.** The TechZone "student" credential must be an IBM Cloud IAM API key for a user with access to the
    instance. A non-IAM key fails at step 1 with the IAM error body shown by `verify:ai`.
 
 ## Evals
@@ -163,7 +199,20 @@ and the (redacted) IBM error body; API key and bearer token are never included.
   expected section; not-found questions pass only with `notFound: true`. It exits 0 whatever the pass rate (non-zero only
   if it cannot run). There are no pre-filled results in the repo: `results.md` exists only after a real run.
 
+- `agents/evals/agents/phase1-agents.json` — 12 cases (Arabic and English, fictitious data) for the six Phase 1 agents:
+  request classification (template/codes/urgency/budget), Kuwait Al-Youm and CAPT notices (numbers copied), vendor and
+  tender ranking (expected top candidate), the committee narrative (scores quoted exactly), the grade checklist (expected
+  status per item) and the supervisor (answers from the context; says "not found" for other bidders' prices).
+  `npm run evals -- agents` runs them through the production service (same prompts, validation and repair turn) and
+  writes `agents/evals/agents/results.md`. No results are pre-filled.
+
 ## Tests
 
-`npx tsx --test services/api/src/ai/*.test.ts` runs the unit tests against a **local fake HTTP server defined inside the
-test file** (IAM + agents + runs + threads). Fakes exist only in `*.test.ts` files (AGENTS.md rule 9).
+- `npx tsx --test services/api/src/ai/*.test.ts` — client/parse unit tests against a local fake HTTP server defined inside
+  the test file (IAM + agents + runs + threads).
+- `npm test -w services/api` includes `test/ai-agents.test.ts` (each new AiService method against the fake Orchestrate in
+  `test/fakes/orchestrate.ts`: valid output, repair turn on the same thread, invalid output rejected, numbers not in the
+  input rejected, not configured → `AI_NOT_CONFIGURED`, and the eval set above) and `test/assistant-routes.test.ts` (the
+  routes on the seeded demo data: role access rules, `ai_runs` kind/subject, 503 when not configured, chat context never
+  containing sealed or opened bid contents or other vendors' data, thread ownership, paid-document gating, narrative saved
+  to the content store). Fakes exist only under `test/` and in `*.test.ts` files (AGENTS.md rule 9).

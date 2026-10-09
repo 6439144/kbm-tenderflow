@@ -1,10 +1,12 @@
-# TenderFlow - import the three advisory agents into a watsonx Orchestrate (IBM Cloud) instance.
+# TenderFlow - import the nine watsonx Orchestrate agents into an Orchestrate (IBM Cloud) instance:
+# the eight specialist (collaborator) agents first, then the supervisor tenderflow_assistant, whose
+# `collaborators:` list refers to them by name.
 #
 # Usage (from the repo root, in Windows PowerShell 5.1+ or PowerShell 7):
 #   powershell -ExecutionPolicy Bypass -File agents\import.ps1
 #
 # Reads WXO_INSTANCE_URL and WXO_API_KEY from the repo .env (process environment wins).
-# Optional: WXO_LLM (model id from `orchestrate models list`) overrides the llm in all three YAML files;
+# Optional: WXO_LLM (model id from `orchestrate models list`) overrides the llm in all nine YAML files;
 #           WXO_ENV_NAME (default "techzone"); WXO_AUTH_TYPE (default "ibm_iam" for IBM Cloud instances).
 # Stops on the first failing step. The API key is never printed.
 
@@ -17,8 +19,9 @@ Set-StrictMode -Version Latest
 $AgentsDir = $PSScriptRoot
 $RepoRoot = Split-Path -Parent $AgentsDir
 $EnvFile = Join-Path $RepoRoot '.env'
-$AgentFiles = @('tenderflow_pack_checker.yaml', 'tenderflow_clarification_assistant.yaml', 'tenderflow_compliance_screener.yaml')
-$AgentNames = @('tenderflow_pack_checker', 'tenderflow_clarification_assistant', 'tenderflow_compliance_screener')
+# Order matters: collaborators first, supervisor (tenderflow_assistant) last.
+$AgentNames = @('tenderflow_pack_checker', 'tenderflow_clarification_assistant', 'tenderflow_compliance_screener', 'tenderflow_request_classifier', 'tenderflow_notice_drafter', 'tenderflow_relevance_matcher', 'tenderflow_evaluation_narrator', 'tenderflow_grade_reviewer', 'tenderflow_assistant')
+$AgentFiles = @($AgentNames | ForEach-Object { "$_.yaml" })
 
 # ---- load .env (KEY=VALUE, comments, optional quotes) -----------------------------------------------
 $DotEnv = @{}
@@ -104,12 +107,12 @@ foreach ($f in $AgentFiles) {
 
 Invoke-Step "orchestrate agents list" { orchestrate agents list }
 
-# Verify all three agents are really there (some CLI paths log an error without a non-zero exit).
+# Verify all nine agents are really there (some CLI paths log an error without a non-zero exit).
 $listing = (orchestrate agents list -v | Out-String)
 if ($LASTEXITCODE -ne 0) { throw "FAILED: orchestrate agents list -v (exit code $LASTEXITCODE)" }
 $missing = @($AgentNames | Where-Object { $listing -notmatch [regex]::Escape($_) })
 if ($missing.Count -gt 0) { throw "FAILED: agents not found after import: $($missing -join ', ')" }
 
 Write-Host ""
-Write-Host "OK: imported $($AgentNames -join ', ')"
+Write-Host "OK: imported $($AgentNames.Count) agents: $($AgentNames -join ', ')"
 Write-Host "Next: npm run build ; npm run verify:ai"

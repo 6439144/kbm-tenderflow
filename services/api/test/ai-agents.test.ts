@@ -262,3 +262,53 @@ describe('configuration', () => {
     assert.match(missing.detail, /my_supervisor=MISSING/);
   });
 });
+
+describe('Phase 1 agent eval set (agents/evals/agents)', () => {
+  test('every case validates, runs through the production service and is scored', async () => {
+    const { readFileSync, readdirSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const { validateAgentEvalFile, runAgentCase, scoreAgentCase } = await import('../src/ai/tools/agent-evals.js');
+    const dir = join(process.cwd(), '..', '..', 'agents', 'evals', 'agents');
+    const files = readdirSync(dir).filter((f: string) => f.endsWith('.json'));
+    assert.ok(files.length >= 1);
+    const ai = svc();
+    let n = 0;
+    const langs = new Set<string>(); const agents = new Set<string>();
+    for (const f of files) {
+      const set = validateAgentEvalFile(JSON.parse(readFileSync(join(dir, f), 'utf8')), f);
+      for (const c of set.cases) {
+        n++; langs.add(c.language); agents.add(c.agent);
+        // An "ideal" reply derived from the expectations: proves the case input is accepted by the prompt builder and
+        // validator, and that the scorer passes a correct answer (live quality is measured by `npm run evals`).
+        fake.reply = (call) => {
+          const m = [...call.prompt.matchAll(/\[DOC ([^|\]]+?) \| [^|\]]*? \| ([^\]]+?)\]/g)].map((x) => ({ documentId: x[1].trim(), section: x[2].trim() }));
+          const e = c.expect; const inp = c.input as any;
+          switch (c.agent) {
+            case 'requestClassifier': return J({ tenderType: e.tenderType?.[0] ?? inp.templates[0].code, activityCodes: e.activityCodesInclude ?? [], urgency: e.urgency ?? 'MEDIUM',
+              estimatedBudget: e.estimatedBudget ?? null, summaryEn: 'Summary.', summaryAr: 'ملخص.', citations: m.slice(0, 1) });
+            case 'noticeDrafter': return J({ noticeAr: `إعلان ${(e.arContains ?? []).join(' ')}`, noticeEn: `Notice ${(e.enContains ?? []).join(' ')}`, citations: m.slice(0, 1) });
+            case 'relevanceMatcher': return J({ ranked: inp.candidates.map((x: any) => ({ id: x.id, score: x.id === e.topId ? 90 : 40, reasonsEn: 'r', reasonsAr: 'س' })) });
+            case 'evaluationNarrator': return J({ narrativeEn: `Narrative ${(e.enContains ?? []).join(' ')}`, narrativeAr: `سرد ${(e.arContains ?? []).join(' ')}` });
+            case 'gradeReviewer': return J({ items: inp.criteria.map((k: any) => {
+              const st = e.status?.[k.key] ?? 'MISSING';
+              return { requirement: k.key, status: st, evidence: 'e', citation: st === 'PRESENT' ? m[0] : null };
+            }) });
+            case 'assistant': return J({ answer: e.notFound ? 'Not in the context.' : (e.contains ?? []).map((k) => k.split('|')[0]).join(' '), notFound: e.notFound ?? false, citations: e.notFound ? [] : m.slice(0, 1) });
+          }
+        };
+        const res = await runAgentCase(ai, c);
+        const score = scoreAgentCase(c, res.output);
+        assert.ok(score.pass, `${c.id}: ${JSON.stringify(score.checks.filter((x) => !x.ok))}`);
+      }
+    }
+    assert.ok(n >= 12);
+    assert.deepEqual([...agents].sort(), ['assistant', 'evaluationNarrator', 'gradeReviewer', 'noticeDrafter', 'relevanceMatcher', 'requestClassifier']);
+    assert.ok(langs.has('ar') && langs.has('en'));
+  });
+
+  test('the scorer fails a wrong answer', async () => {
+    const { scoreAgentCase } = await import('../src/ai/tools/agent-evals.js');
+    const c = { id: 'x', agent: 'relevanceMatcher' as const, language: 'en', input: {}, expect: { topId: 'a' } };
+    assert.equal(scoreAgentCase(c, { ranked: [{ id: 'b' }, { id: 'a' }] }).pass, false);
+  });
+});

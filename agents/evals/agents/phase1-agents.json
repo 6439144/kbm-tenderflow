@@ -1,0 +1,741 @@
+{
+ "kind": "agent-evals",
+ "description": "Phase 1 Orchestrate agents (fictitious data, Arabic + English). Run with: npm run evals -- agents",
+ "cases": [
+  {
+   "id": "CLS-EN-1",
+   "agent": "requestClassifier",
+   "language": "en",
+   "input": {
+    "request": {
+     "requestNumber": "KEA-REQ-2026-0001",
+     "department": "Distribution Operations Department",
+     "subject": "Smart meter data management platform",
+     "source": "LETTER",
+     "sourceReference": null
+    },
+    "documents": [
+     {
+      "documentId": "eval-letter-1",
+      "title": "GM letter — smart meters (fictitious)",
+      "sections": [
+       {
+        "section": "1. Need",
+        "text": "The Distribution Operations Department requests the procurement of a meter data management platform for 120,000 smart electricity meters, including head-end integration, billing interface and an outage dashboard."
+       },
+       {
+        "section": "2. Budget and timing",
+        "text": "Estimated budget KWD 650,000 from the 2026/2027 capital budget. Required in service within 12 months."
+       }
+      ]
+     }
+    ],
+    "activityCodes": [
+     {
+      "code": "IT-01",
+      "nameEn": "Software and systems integration",
+      "nameAr": "البرمجيات وتكامل الأنظمة"
+     },
+     {
+      "code": "IT-02",
+      "nameEn": "Networks and telecommunications",
+      "nameAr": "الشبكات والاتصالات"
+     },
+     {
+      "code": "ENG-03",
+      "nameEn": "Electrical works",
+      "nameAr": "الأعمال الكهربائية"
+     },
+     {
+      "code": "CONS-01",
+      "nameEn": "IT consulting",
+      "nameAr": "استشارات تقنية المعلومات"
+     }
+    ],
+    "templates": [
+     {
+      "code": "PUBLIC_TENDER",
+      "nameEn": "Public tender (one envelope)",
+      "nameAr": "مناقصة عامة (مظروف واحد)"
+     },
+     {
+      "code": "RFP_TWO_ENVELOPE",
+      "nameEn": "RFP (two envelopes)",
+      "nameAr": "طلب عروض (مظروفان)"
+     },
+     {
+      "code": "DIRECT_PURCHASE",
+      "nameEn": "Direct purchase",
+      "nameAr": "شراء مباشر"
+     }
+    ]
+   },
+   "expect": {
+    "tenderType": [
+     "PUBLIC_TENDER",
+     "RFP_TWO_ENVELOPE"
+    ],
+    "activityCodesInclude": [
+     "IT-01"
+    ],
+    "estimatedBudget": 650000
+   }
+  },
+  {
+   "id": "CLS-AR-1",
+   "agent": "requestClassifier",
+   "language": "ar",
+   "input": {
+    "request": {
+     "requestNumber": "KEA-REQ-2026-0002",
+     "department": "إدارة الصيانة الكهربائية",
+     "subject": "صيانة طارئة للمحولات",
+     "source": "LETTER",
+     "sourceReference": null
+    },
+    "documents": [
+     {
+      "documentId": "eval-letter-2",
+      "title": "كتاب مدير عام — صيانة المحولات (وهمي)",
+      "sections": [
+       {
+        "section": "الحاجة",
+        "text": "تطلب إدارة الصيانة الكهربائية بشكل عاجل التعاقد على أعمال صيانة طارئة لعدد 14 محولًا كهربائيًا في محطتي الشمال والجنوب قبل موسم الصيف."
+       },
+       {
+        "section": "الميزانية",
+        "text": "لم تُحدد الميزانية بعد، وستُحدد بعد المعاينة الفنية."
+       }
+      ]
+     }
+    ],
+    "activityCodes": [
+     {
+      "code": "IT-01",
+      "nameEn": "Software and systems integration",
+      "nameAr": "البرمجيات وتكامل الأنظمة"
+     },
+     {
+      "code": "IT-02",
+      "nameEn": "Networks and telecommunications",
+      "nameAr": "الشبكات والاتصالات"
+     },
+     {
+      "code": "ENG-03",
+      "nameEn": "Electrical works",
+      "nameAr": "الأعمال الكهربائية"
+     },
+     {
+      "code": "CONS-01",
+      "nameEn": "IT consulting",
+      "nameAr": "استشارات تقنية المعلومات"
+     }
+    ],
+    "templates": [
+     {
+      "code": "PUBLIC_TENDER",
+      "nameEn": "Public tender (one envelope)",
+      "nameAr": "مناقصة عامة (مظروف واحد)"
+     },
+     {
+      "code": "RFP_TWO_ENVELOPE",
+      "nameEn": "RFP (two envelopes)",
+      "nameAr": "طلب عروض (مظروفان)"
+     },
+     {
+      "code": "DIRECT_PURCHASE",
+      "nameEn": "Direct purchase",
+      "nameAr": "شراء مباشر"
+     }
+    ]
+   },
+   "expect": {
+    "activityCodesInclude": [
+     "ENG-03"
+    ],
+    "urgency": "HIGH",
+    "estimatedBudget": null
+   }
+  },
+  {
+   "id": "NTC-KA-1",
+   "agent": "noticeDrafter",
+   "language": "ar+en",
+   "input": {
+    "channel": "KUWAIT_ALYOUM",
+    "facts": [
+     {
+      "label": "Entity (English)",
+      "value": "Kuwait Energy Authority (fictitious)"
+     },
+     {
+      "label": "Entity (Arabic)",
+      "value": "هيئة الكويت للطاقة (وهمية)"
+     },
+     {
+      "label": "Tender number",
+      "value": "KEA-2026-102"
+     },
+     {
+      "label": "Title (English)",
+      "value": "Document Management System"
+     },
+     {
+      "label": "Title (Arabic)",
+      "value": "نظام إدارة الوثائق"
+     },
+     {
+      "label": "Submission deadline (Kuwait time)",
+      "value": "2026-11-05 13:00"
+     },
+     {
+      "label": "Tender documents",
+      "value": "Available free of charge through the TenderFlow portal"
+     },
+     {
+      "label": "Eligible activity codes",
+      "value": "IT-01 Software and systems integration / البرمجيات وتكامل الأنظمة"
+     }
+    ],
+    "documents": [
+     {
+      "documentId": "eval-pack-1",
+      "title": "DMS RFP pack (fictitious)",
+      "sections": [
+       {
+        "section": "1. Scope",
+        "text": "Supply and implementation of an enterprise document management system with Arabic OCR for 1,200 users, deployed on premises in the Authority data centre."
+       },
+       {
+        "section": "4. Submission",
+        "text": "Bids are submitted electronically through the TenderFlow portal no later than 2026-11-05 13:00 Kuwait time. A bid bond of 2% of the bid value, valid 120 days, is required."
+       }
+      ]
+     }
+    ]
+   },
+   "expect": {
+    "arContains": [
+     "KEA-2026-102",
+     "2026-11-05"
+    ],
+    "enContains": [
+     "KEA-2026-102",
+     "13:00"
+    ]
+   }
+  },
+  {
+   "id": "NTC-CAPT-1",
+   "agent": "noticeDrafter",
+   "language": "ar+en",
+   "input": {
+    "channel": "CAPT",
+    "facts": [
+     {
+      "label": "Entity (English)",
+      "value": "Kuwait Energy Authority (fictitious)"
+     },
+     {
+      "label": "Entity (Arabic)",
+      "value": "هيئة الكويت للطاقة (وهمية)"
+     },
+     {
+      "label": "Tender number",
+      "value": "KEA-2026-102"
+     },
+     {
+      "label": "Title (English)",
+      "value": "Document Management System"
+     },
+     {
+      "label": "Title (Arabic)",
+      "value": "نظام إدارة الوثائق"
+     },
+     {
+      "label": "Submission deadline (Kuwait time)",
+      "value": "2026-11-05 13:00"
+     },
+     {
+      "label": "Tender documents",
+      "value": "Available free of charge through the TenderFlow portal"
+     },
+     {
+      "label": "Eligible activity codes",
+      "value": "IT-01 Software and systems integration / البرمجيات وتكامل الأنظمة"
+     }
+    ],
+    "documents": [
+     {
+      "documentId": "eval-pack-1",
+      "title": "DMS RFP pack (fictitious)",
+      "sections": [
+       {
+        "section": "1. Scope",
+        "text": "Supply and implementation of an enterprise document management system with Arabic OCR for 1,200 users, deployed on premises in the Authority data centre."
+       },
+       {
+        "section": "4. Submission",
+        "text": "Bids are submitted electronically through the TenderFlow portal no later than 2026-11-05 13:00 Kuwait time. A bid bond of 2% of the bid value, valid 120 days, is required."
+       }
+      ]
+     }
+    ]
+   },
+   "expect": {
+    "arContains": [
+     "KEA-2026-102"
+    ],
+    "enContains": [
+     "Document Management System"
+    ]
+   }
+  },
+  {
+   "id": "REL-V-1",
+   "agent": "relevanceMatcher",
+   "language": "en",
+   "input": {
+    "mode": "VENDORS_FOR_TENDER",
+    "subject": {
+     "id": "t-102",
+     "label": "KEA-2026-102 Document Management System",
+     "profile": {
+      "category": "IT",
+      "activityCodes": [
+       "IT-01"
+      ],
+      "descriptionEn": "Enterprise document management system with Arabic OCR"
+     }
+    },
+    "candidates": [
+     {
+      "id": "v-archive",
+      "label": "Archive Systems Co (fictitious)",
+      "profile": {
+       "activityCodes": [
+        {
+         "code": "IT-01",
+         "name": "Software and systems integration",
+         "grade": "First"
+        }
+       ],
+       "pastBidsCount": 6,
+       "awardsWonCount": 2,
+       "companyDocuments": [
+        "Document management and OCR references"
+       ]
+      }
+     },
+     {
+      "id": "v-network",
+      "label": "Cable Net Co (fictitious)",
+      "profile": {
+       "activityCodes": [
+        {
+         "code": "IT-01",
+         "name": "Software and systems integration",
+         "grade": "Third"
+        },
+        {
+         "code": "IT-02",
+         "name": "Networks",
+         "grade": "First"
+        }
+       ],
+       "pastBidsCount": 1,
+       "awardsWonCount": 0,
+       "companyDocuments": [
+        "Structured cabling references"
+       ]
+      }
+     }
+    ]
+   },
+   "expect": {
+    "topId": "v-archive"
+   }
+  },
+  {
+   "id": "REL-T-1",
+   "agent": "relevanceMatcher",
+   "language": "en",
+   "input": {
+    "mode": "TENDERS_FOR_VENDOR",
+    "subject": {
+     "id": "v-1",
+     "label": "Sadu Logic Solutions (fictitious)",
+     "profile": {
+      "activityCodes": [
+       {
+        "code": "CONS-01",
+        "name": "IT consulting",
+        "grade": "First"
+       },
+       {
+        "code": "IT-01",
+        "name": "Software",
+        "grade": "Third"
+       }
+      ],
+      "companyDocuments": [
+       "IT strategy and consulting references"
+      ]
+     }
+    },
+    "candidates": [
+     {
+      "id": "t-a",
+      "label": "KEA-2026-110 IT strategy consultancy",
+      "profile": {
+       "category": "IT",
+       "activityCodes": [
+        "CONS-01"
+       ],
+       "descriptionEn": "Consultancy to prepare the Authority's IT strategy 2027-2030"
+      }
+     },
+     {
+      "id": "t-b",
+      "label": "KEA-2026-111 Data centre cooling",
+      "profile": {
+       "category": "IT",
+       "activityCodes": [
+        "IT-01"
+       ],
+       "descriptionEn": "Supply of precision cooling units"
+      }
+     }
+    ]
+   },
+   "expect": {
+    "topId": "t-a"
+   }
+  },
+  {
+   "id": "NAR-1",
+   "agent": "evaluationNarrator",
+   "language": "ar+en",
+   "input": {
+    "tender": {
+     "tenderNumber": "KEA-2026-088",
+     "titleEn": "IT Service Desk Platform",
+     "titleAr": "منصة مكتب خدمة تقنية المعلومات",
+     "envelopes": "ONE",
+     "technicalPassMark": null
+    },
+    "criteria": [
+     {
+      "key": "technical",
+      "nameEn": "Technical solution",
+      "nameAr": "الحل الفني",
+      "weight": 50
+     },
+     {
+      "key": "experience",
+      "nameEn": "Experience & team",
+      "nameAr": "الخبرة وفريق العمل",
+      "weight": 20
+     },
+     {
+      "key": "price",
+      "nameEn": "Price",
+      "nameAr": "السعر",
+      "weight": 30
+     }
+    ],
+    "bids": [
+     {
+      "bidRef": "BID-1",
+      "vendorNameEn": "Qamar Arcwave Systems (fictitious)",
+      "vendorNameAr": "قمر آركويف للأنظمة (وهمية)",
+      "technicalResult": null,
+      "averageWeightedTotal": 82.5,
+      "rankByAverage": 1,
+      "compliance": [
+       {
+        "requirement": "CR",
+        "status": "PRESENT"
+       },
+       {
+        "requirement": "BID_BOND",
+        "status": "PRESENT"
+       }
+      ],
+      "evaluations": [
+       {
+        "evaluator": "Evaluator One",
+        "weightedTotal": 82.5,
+        "scores": [
+         {
+          "criterion": "technical",
+          "score": 90,
+          "comment": "Strong on-premises design"
+         },
+         {
+          "criterion": "experience",
+          "score": 75,
+          "comment": ""
+         },
+         {
+          "criterion": "price",
+          "score": 72.5,
+          "comment": "Second lowest price"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "bidRef": "BID-2",
+      "vendorNameEn": "Nakheel Bitforge Technologies (fictitious)",
+      "vendorNameAr": "نخيل بت فورج للتقنية (وهمية)",
+      "technicalResult": null,
+      "averageWeightedTotal": 74,
+      "rankByAverage": 2,
+      "compliance": [
+       {
+        "requirement": "CR",
+        "status": "PRESENT"
+       },
+       {
+        "requirement": "BID_BOND",
+        "status": "UNCLEAR"
+       }
+      ],
+      "evaluations": [
+       {
+        "evaluator": "Evaluator One",
+        "weightedTotal": 74,
+        "scores": [
+         {
+          "criterion": "technical",
+          "score": 65,
+          "comment": "Cloud option only partly on premises"
+         },
+         {
+          "criterion": "experience",
+          "score": 70,
+          "comment": ""
+         },
+         {
+          "criterion": "price",
+          "score": 91.67,
+          "comment": "Lowest price"
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "recommendedBidRef": "BID-1",
+    "recommendationJustification": "Highest average weighted total; technical design meets the on-premises requirement."
+   },
+   "expect": {
+    "enContains": [
+     "BID-1",
+     "82.5"
+    ],
+    "arContains": [
+     "BID-1"
+    ]
+   }
+  },
+  {
+   "id": "GRD-EN-1",
+   "agent": "gradeReviewer",
+   "language": "en",
+   "input": {
+    "vendor": {
+     "nameEn": "Qamar Arcwave Systems (fictitious)",
+     "nameAr": "قمر آركويف للأنظمة (وهمية)",
+     "crNumber": "CR-100001"
+    },
+    "grade": 2,
+    "criteria": [
+     {
+      "key": "COMMERCIAL_REGISTRATION",
+      "nameEn": "Valid commercial registration",
+      "nameAr": "سجل تجاري ساري المفعول"
+     },
+     {
+      "key": "CHAMBER_CERTIFICATE",
+      "nameEn": "Chamber of commerce membership certificate",
+      "nameAr": "شهادة عضوية غرفة التجارة"
+     },
+     {
+      "key": "FINANCIAL_STATEMENTS",
+      "nameEn": "Audited financial statements for the latest year",
+      "nameAr": "بيانات مالية مدققة لآخر سنة"
+     },
+     {
+      "key": "SIMILAR_PROJECTS",
+      "nameEn": "List of completed similar projects with values",
+      "nameAr": "قائمة بالمشاريع المماثلة المنفذة مع قيمها"
+     }
+    ],
+    "documents": [
+     {
+      "documentId": "eval-vendor-1",
+      "title": "Company file (fictitious)",
+      "sections": [
+       {
+        "section": "Commercial registration",
+        "text": "Commercial registration No. CR-100001, valid until 31 March 2028."
+       },
+       {
+        "section": "Financial statements",
+        "text": "Audited financial statements for the year 2025 signed by a licensed auditor are attached."
+       },
+       {
+        "section": "Projects",
+        "text": "Completed projects: service desk for a ministry (KWD 210,000, 2024); document archive for a bank (KWD 95,000, 2023)."
+       }
+      ]
+     }
+    ]
+   },
+   "expect": {
+    "status": {
+     "COMMERCIAL_REGISTRATION": "PRESENT",
+     "CHAMBER_CERTIFICATE": "MISSING",
+     "FINANCIAL_STATEMENTS": "PRESENT",
+     "SIMILAR_PROJECTS": "PRESENT"
+    }
+   }
+  },
+  {
+   "id": "AST-EN-1",
+   "agent": "assistant",
+   "language": "en",
+   "input": {
+    "message": "What is waiting for me?",
+    "context": [
+     {
+      "documentId": "tenderflow-context",
+      "title": "TenderFlow context for this user",
+      "sections": [
+       {
+        "section": "Signed-in user / المستخدم",
+        "text": "Name: Officer (demo)\nRole(s): PROCUREMENT_OFFICER / موظف مشتريات\nEntity: Kuwait Energy Authority (fictitious)"
+       },
+       {
+        "section": "Pending tasks (computed by TenderFlow) / المهام المعلقة",
+        "text": "Number of pending tasks: 2.\n1. Answer 1 open clarification question(s) on KEA-2026-102 / الرد على 1 من أسئلة الاستيضاح المفتوحة في KEA-2026-102\n2. Draft the Kuwait Al-Youm notice for KEA-2026-102 / إعداد إعلان الكويت اليوم للمناقصة KEA-2026-102"
+       },
+       {
+        "section": "Procurement rules / قواعد المشتريات",
+        "text": "- Sealed bids are encrypted when submitted and nobody can read them before the committee chair opens them after the submission deadline.\n- Publication approval chain: level 1: Director / مدير (DIRECTOR)"
+       }
+      ]
+     }
+    ]
+   },
+   "expect": {
+    "notFound": false,
+    "contains": [
+     "KEA-2026-102"
+    ]
+   }
+  },
+  {
+   "id": "AST-AR-1",
+   "agent": "assistant",
+   "language": "ar",
+   "input": {
+    "message": "ما المطلوب مني اليوم؟",
+    "context": [
+     {
+      "documentId": "tenderflow-context",
+      "title": "TenderFlow context for this user",
+      "sections": [
+       {
+        "section": "Signed-in user / المستخدم",
+        "text": "Name: Officer (demo)\nRole(s): PROCUREMENT_OFFICER / موظف مشتريات\nEntity: Kuwait Energy Authority (fictitious)"
+       },
+       {
+        "section": "Pending tasks (computed by TenderFlow) / المهام المعلقة",
+        "text": "Number of pending tasks: 2.\n1. Answer 1 open clarification question(s) on KEA-2026-102 / الرد على 1 من أسئلة الاستيضاح المفتوحة في KEA-2026-102\n2. Draft the Kuwait Al-Youm notice for KEA-2026-102 / إعداد إعلان الكويت اليوم للمناقصة KEA-2026-102"
+       },
+       {
+        "section": "Procurement rules / قواعد المشتريات",
+        "text": "- Sealed bids are encrypted when submitted and nobody can read them before the committee chair opens them after the submission deadline.\n- Publication approval chain: level 1: Director / مدير (DIRECTOR)"
+       }
+      ]
+     }
+    ]
+   },
+   "expect": {
+    "notFound": false,
+    "contains": [
+     "KEA-2026-102"
+    ]
+   }
+  },
+  {
+   "id": "AST-EN-2",
+   "agent": "assistant",
+   "language": "en",
+   "input": {
+    "message": "What price did the other bidders offer on KEA-2026-088?",
+    "context": [
+     {
+      "documentId": "tenderflow-context",
+      "title": "TenderFlow context for this user",
+      "sections": [
+       {
+        "section": "Signed-in user / المستخدم",
+        "text": "Name: Officer (demo)\nRole(s): PROCUREMENT_OFFICER / موظف مشتريات\nEntity: Kuwait Energy Authority (fictitious)"
+       },
+       {
+        "section": "Pending tasks (computed by TenderFlow) / المهام المعلقة",
+        "text": "Number of pending tasks: 2.\n1. Answer 1 open clarification question(s) on KEA-2026-102 / الرد على 1 من أسئلة الاستيضاح المفتوحة في KEA-2026-102\n2. Draft the Kuwait Al-Youm notice for KEA-2026-102 / إعداد إعلان الكويت اليوم للمناقصة KEA-2026-102"
+       },
+       {
+        "section": "Procurement rules / قواعد المشتريات",
+        "text": "- Sealed bids are encrypted when submitted and nobody can read them before the committee chair opens them after the submission deadline.\n- Publication approval chain: level 1: Director / مدير (DIRECTOR)"
+       }
+      ]
+     }
+    ]
+   },
+   "expect": {
+    "notFound": true
+   }
+  },
+  {
+   "id": "AST-AR-2",
+   "agent": "assistant",
+   "language": "ar",
+   "input": {
+    "message": "هل يمكن لأحد قراءة عطاء مختوم قبل جلسة الفتح؟",
+    "context": [
+     {
+      "documentId": "tenderflow-context",
+      "title": "TenderFlow context for this user",
+      "sections": [
+       {
+        "section": "Signed-in user / المستخدم",
+        "text": "Name: Officer (demo)\nRole(s): PROCUREMENT_OFFICER / موظف مشتريات\nEntity: Kuwait Energy Authority (fictitious)"
+       },
+       {
+        "section": "Pending tasks (computed by TenderFlow) / المهام المعلقة",
+        "text": "Number of pending tasks: 2.\n1. Answer 1 open clarification question(s) on KEA-2026-102 / الرد على 1 من أسئلة الاستيضاح المفتوحة في KEA-2026-102\n2. Draft the Kuwait Al-Youm notice for KEA-2026-102 / إعداد إعلان الكويت اليوم للمناقصة KEA-2026-102"
+       },
+       {
+        "section": "Procurement rules / قواعد المشتريات",
+        "text": "- Sealed bids are encrypted when submitted and nobody can read them before the committee chair opens them after the submission deadline.\n- Publication approval chain: level 1: Director / مدير (DIRECTOR)"
+       }
+      ]
+     }
+    ]
+   },
+   "expect": {
+    "notFound": false,
+    "contains": [
+     "رئيس اللجنة|chair"
+    ]
+   }
+  }
+ ]
+}
