@@ -3,6 +3,7 @@ import express, { type NextFunction, type Request, type Response, type RequestHa
 import multer from 'multer';
 import rateLimit from 'express-rate-limit';
 import type { Ctx } from './ctx.js';
+import { assertRole } from './ctx.js';
 import { STAFF_ROLES } from './ctx.js';
 import type { Actor } from './auth/tokens.js';
 import { unauthorized } from './auth/tokens.js';
@@ -141,9 +142,11 @@ export function apiRouter(ctx: Ctx): express.Router {
   r.get('/admin/users', requireRoles('TENANT_ADMIN'), h((req) => identity.listUsers(ctx, actor(req))));
   r.post('/admin/users', requireRoles('TENANT_ADMIN'), h(async (req, res) => { res.status(201); return identity.adminCreateUser(ctx, actor(req), req.body); }));
   const auditReaders = requireRoles('AUDITOR', 'TENANT_ADMIN', 'DIRECTOR');
-  r.get('/audit', auditReaders, h(async (req) => {
+  // Full log: auditors, admins, directors. Other staff may read the timeline of one resource (e.g. a tender).
+  r.get('/audit', requireRoles(...STAFF_ROLES), h(async (req) => {
     const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 1000);
     const resourceId = typeof req.query.resourceId === 'string' && req.query.resourceId ? req.query.resourceId : null;
+    if (!resourceId) assertRole(actor(req), 'AUDITOR', 'TENANT_ADMIN', 'DIRECTOR');
     const rows = await ctx.db.query(
       `SELECT seq::text AS seq, id, actor_id, actor_roles, action, resource_type, resource_id, prev_state, new_state, reason, details, at, hmac
          FROM audit_events WHERE tenant_id=$1 AND ($2::text IS NULL OR resource_id=$2) ORDER BY audit_events.seq DESC LIMIT $3`,

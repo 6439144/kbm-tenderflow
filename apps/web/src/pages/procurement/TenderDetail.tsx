@@ -45,7 +45,7 @@ export default function TenderDetailPage() {
   const { id = '' } = useParams();
   const { hasRole } = useSession();
   const tender = useAsync(() => api.tender(id), [id]);
-  const canAudit = hasRole('AUDITOR', 'TENANT_ADMIN', 'DIRECTOR');
+  const canAudit = true; // all staff may read a tender's own timeline (server enforces)
   const audit = useAsync(() => (canAudit ? api.audit({ resourceId: id, limit: 200 }) : Promise.resolve<AuditEvent[]>([])), [id, canAudit]);
   const status = tender.data?.status;
   const needBids = Boolean(status && ['PUBLISHED', 'CLOSED', ...POST_OPEN].includes(status));
