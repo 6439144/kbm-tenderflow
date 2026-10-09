@@ -6,11 +6,13 @@ import {
   ContentStore,
   DocumentMetadata,
   DocumentRecord,
-  DocumentStream
+  DocumentStream,
+  AccessControlEntry
 } from './types.js';
 
 export class FileSystemContentStore implements ContentStore {
   private baseDir: string;
+  private permissions: Map<string, AccessControlEntry[]> = new Map();
 
   constructor(baseDir?: string) {
     this.baseDir = baseDir || process.env.CONTENT_STORE_FS_PATH || path.resolve(process.cwd(), 'data/content-store');
@@ -27,7 +29,7 @@ export class FileSystemContentStore implements ContentStore {
     return dir;
   }
 
-  async uploadDocument(
+  async put(
     tenantId: string,
     metadata: DocumentMetadata,
     contentStream: Readable
@@ -68,11 +70,14 @@ export class FileSystemContentStore implements ContentStore {
 
     await fs.promises.writeFile(metaPath, JSON.stringify(record, null, 2), 'utf-8');
 
+    // Default ACL: service-only
+    this.permissions.set(docId, [{ grantee: 'TenderFlow_Service', accessLevel: 'FULL_CONTROL' }]);
+
     return record;
   }
 
-  async getDocument(tenantId: string, documentId: string): Promise<DocumentStream> {
-    const record = await this.getDocumentMetadata(tenantId, documentId);
+  async get(tenantId: string, documentId: string): Promise<DocumentStream> {
+    const record = await this.getMetadata(tenantId, documentId);
     const tenantDir = this.getTenantDir(tenantId);
     const filePath = path.join(tenantDir, `${documentId}.bin`);
 
@@ -84,7 +89,7 @@ export class FileSystemContentStore implements ContentStore {
     return { record, stream };
   }
 
-  async getDocumentMetadata(tenantId: string, documentId: string): Promise<DocumentRecord> {
+  async getMetadata(tenantId: string, documentId: string): Promise<DocumentRecord> {
     const tenantDir = this.getTenantDir(tenantId);
     const metaPath = path.join(tenantDir, `${documentId}.json`);
 
@@ -94,6 +99,34 @@ export class FileSystemContentStore implements ContentStore {
 
     const raw = await fs.promises.readFile(metaPath, 'utf-8');
     return JSON.parse(raw) as DocumentRecord;
+  }
+
+  async search(tenantId: string, query: { tenderId?: string; vendorId?: string; docType?: string }): Promise<DocumentRecord[]> {
+    const tenantDir = this.getTenantDir(tenantId);
+    const files = await fs.promises.readdir(tenantDir);
+    const results: DocumentRecord[] = [];
+
+    for (const file of files) {
+      if (file.endsWith('.json')) {
+        const raw = await fs.promises.readFile(path.join(tenantDir, file), 'utf-8');
+        const doc = JSON.parse(raw) as DocumentRecord;
+        if (query.tenderId && doc.tenderId !== query.tenderId) continue;
+        if (query.vendorId && doc.vendorId !== query.vendorId) continue;
+        if (query.docType && doc.docType !== query.docType) continue;
+        results.push(doc);
+      }
+    }
+    return results;
+  }
+
+  async setPermissions(tenantId: string, documentId: string, acl: AccessControlEntry[]): Promise<boolean> {
+    this.permissions.set(documentId, acl);
+    return true;
+  }
+
+  async listVersions(tenantId: string, documentId: string): Promise<DocumentRecord[]> {
+    const current = await this.getMetadata(tenantId, documentId);
+    return [current];
   }
 
   async deleteDocument(tenantId: string, documentId: string): Promise<boolean> {
@@ -120,5 +153,16 @@ export class FileSystemContentStore implements ContentStore {
       backend: 'filesystem',
       details: `Directory ready: ${this.baseDir}`
     };
+  }
+
+  // Aliases for compatibility
+  uploadDocument(tenantId: string, metadata: DocumentMetadata, stream: Readable) {
+    return this.put(tenantId, metadata, stream);
+  }
+  getDocument(tenantId: string, documentId: string) {
+    return this.get(tenantId, documentId);
+  }
+  getDocumentMetadata(tenantId: string, documentId: string) {
+    return this.getMetadata(tenantId, documentId);
   }
 }

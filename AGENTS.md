@@ -64,6 +64,16 @@
   - **T15 (Tue 13 Oct)**: Sealed bid submission with cryptographic receipt, opening session, evaluation and scoring, award, control panel (users, roles, tender types, templates, labels, branding), audit log viewer, basic KPIs.
 - **Constraints**: Tenant branding comes from tenant config, never hard-coded. WCAG 2.1 AA accessibility basics. Zero business rules in the UI; the API decides.
 
+### A4 — Content Agent
+- **Role**: IBM FileNet Content Manager integration via Content Services GraphQL API, FileSystemStore fallback, ContentStore interface implementation, TechZone provisioning scripts, and document lifecycle ACL management.
+- **Owned Folders**: `services/content-adapter/`.
+- **Assigned Tasks**:
+  - **T04 (Sun 11 Oct)**: `provision/` — idempotent provisioning script (folders, classes, properties, groups); `ContentStore` interface (`put`, `get`, `getMetadata`, `search`, `setPermissions`, `listVersions`, streaming) with `FileNetStore` and `FileSystemStore`.
+  - **T10 (Mon 12 Oct)**: Every document class wired through API, permissions per role, addenda as new versions, vendor documents via API only.
+  - **T16 (Tue 13 Oct)**: Opening record and reports stored; at opening event, bid ACL switches from service-only to committee group; test-proven.
+  - **T21 (Wed 14 Oct)**: Rerun `provision/` against fresh TechZone object store and time execution.
+- **Constraints**: Environment variables only (`FILENET_GRAPHQL_URL`, `FILENET_OBJECT_STORE`, `FILENET_SERVICE_USER`, etc.). Never hard-code credentials.
+
 ---
 
-*(Additional agents A4 through A6 will be appended as their briefs are introduced)*
+*(Additional agents A5 through A6 will be appended as their briefs are introduced)*
