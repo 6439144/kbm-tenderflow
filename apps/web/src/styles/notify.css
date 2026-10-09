@@ -305,6 +305,7 @@
   text-decoration: underline;
 }
 .notify-subj-cell {
+  min-inline-size: 14rem;
   max-inline-size: 26rem;
   overflow-wrap: anywhere;
 }
@@ -398,4 +399,7 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
   overflow-wrap: anywhere;
+}
+.table .notify-code {
+  white-space: nowrap;
 }

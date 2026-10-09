@@ -61,8 +61,8 @@ export const DEFAULT_TEMPLATES: DefaultTemplate[] = [
     placeholders: ['vendorName', 'action', 'reason', 'until'],
     subjectEn: 'Supplier account {action}: {vendorName}',
     subjectAr: 'تم {action} حساب المورد: {vendorName}',
-    bodyEn: 'Dear {vendorName}, your supplier account with {entityName} has been {action}. Reason: {reason}. Until: {until}. Contact the procurement department for details.',
-    bodyAr: 'السادة {vendorName}، تم {action} حسابكم كمورد لدى {entityName}. السبب: {reason}. حتى: {until}. يرجى التواصل مع إدارة المشتريات للتفاصيل.',
+    bodyEn: 'Dear {vendorName}, your supplier account with {entityName} has been {action}.\nReason: {reason}\nUntil: {until}\nContact the procurement department for details.',
+    bodyAr: 'السادة {vendorName}، تم {action} حسابكم كمورد لدى {entityName}.\nالسبب: {reason}\nحتى: {until}\nيرجى التواصل مع إدارة المشتريات للتفاصيل.',
   },
 
   // ------------------------------------------------------------------ TenderFlow events
@@ -147,8 +147,8 @@ export const DEFAULT_TEMPLATES: DefaultTemplate[] = [
     placeholders: ['tenderNumber', 'tenderTitle', 'level', 'reason'],
     subjectEn: 'Tender rejected: {tenderNumber}',
     subjectAr: 'تم رفض المناقصة: {tenderNumber}',
-    bodyEn: '{tenderNumber} — {tenderTitle} was rejected at approval level {level} and is cancelled. Reason: {reason}. {link}',
-    bodyAr: 'تم رفض {tenderNumber} — {tenderTitle} في مستوى الاعتماد {level} وإلغاؤها. السبب: {reason}. {link}',
+    bodyEn: '{tenderNumber} — {tenderTitle} was rejected at approval level {level} and is cancelled.\nReason: {reason}\n{link}',
+    bodyAr: 'تم رفض {tenderNumber} — {tenderTitle} في مستوى الاعتماد {level} وإلغاؤها.\nالسبب: {reason}\n{link}',
   },
 ];
 

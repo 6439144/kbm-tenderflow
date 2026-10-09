@@ -16,6 +16,8 @@ export const en = {
   'notify.chstatus.label': 'Channel status on this server',
   'notify.chstatus.on': 'configured',
   'notify.chstatus.off': 'not configured — logged as skipped, never sent',
+  'notify.chstatus.inApp': 'The bell in TenderFlow',
+  'notify.chstatus.needs': 'Set {vars} on the server to enable it',
 
   'notify.ds.QUEUED': 'Queued',
   'notify.ds.SENT': 'Sent',
@@ -203,6 +205,8 @@ export const ar: Record<keyof typeof en, string> = {
   'notify.chstatus.label': 'حالة القنوات على هذا الخادم',
   'notify.chstatus.on': 'مُعدّة',
   'notify.chstatus.off': 'غير مُعدّة — تُسجَّل كمتجاوزة ولا تُرسل',
+  'notify.chstatus.inApp': 'جرس الإشعارات في TenderFlow',
+  'notify.chstatus.needs': 'اضبط ‎{vars}‎ على الخادم لتفعيلها',
 
   'notify.ds.QUEUED': 'بانتظار الإرسال',
   'notify.ds.SENT': 'أُرسلت',

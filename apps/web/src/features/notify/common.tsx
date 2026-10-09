@@ -53,8 +53,14 @@ export function ChannelStatusRow({ channels }: { channels: ChannelStatus }) {
             <span>
               <strong>{te('notify.ch.', c)}</strong>{' '}
               <span className="small">{s?.configured ? t('notify.chstatus.on') : t('notify.chstatus.off')}</span>
-              <span className="muted small notify-chstatus-detail" dir="ltr">
-                {s?.detail}
+              <span className="muted small notify-chstatus-detail">
+                {c === 'IN_APP' ? (
+                  t('notify.chstatus.inApp')
+                ) : s?.configured ? (
+                  <span dir="ltr">{s.detail}</span>
+                ) : (
+                  t('notify.chstatus.needs', { vars: c === 'EMAIL' ? 'SMTP_HOST, SMTP_FROM' : 'SMS_HTTP_URL' })
+                )}
               </span>
             </span>
           </li>
