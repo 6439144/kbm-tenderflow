@@ -96,7 +96,7 @@ export function EvidencePackPage() {
             <div className="stack">
               <div className="row wrap">
                 <strong dir="ltr">{result.tenderNumber ?? t('insight.evidence.rangePack')}</strong>
-                <Badge tone={result.auditChain?.valid ? 'success' : 'danger'} label={result.auditChain?.valid ? t('insight.auditor.valid') : t('insight.auditor.broken', { seq: result.auditChain?.brokenAt ?? '?' })} />
+                <Badge tone={result.auditChain?.valid ? 'success' : 'danger'} label={`${t('insight.auditor.chain')}: ${result.auditChain?.valid ? t('insight.auditor.valid') : t('insight.auditor.broken', { seq: result.auditChain?.brokenAt ?? '?' })}`} />
               </div>
               {result.summary && (
                 <dl className="kv">
