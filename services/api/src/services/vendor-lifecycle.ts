@@ -345,8 +345,10 @@ export async function paySubscription(ctx: Ctx, actor: Actor, b: any) {
     if (s.status !== 'PENDING_PAYMENT') throw conflict('ALREADY_PAID', 'This subscription link has already been used');
     const free = Number(s.amount) === 0;
     const gw = free ? 'EXEMPT' : gateway;
-    if (gw === 'KNET' && !process.env.KNET_MERCHANT_ID)
-      throw new ApiError(503, 'KNET_NOT_CONFIGURED', 'KNET is not configured for this entity (KNET_MERCHANT_ID). Use the TEST gateway in the demo.');
+    // No KNET integration exists yet (needs the merchant account and specification, DEP-004): always refused,
+    // never recorded as paid.
+    if (gw === 'KNET')
+      throw new ApiError(503, 'KNET_NOT_CONFIGURED', 'KNET is not configured for this entity (needs the KNET merchant and specification, DEP-004). Use the TEST gateway in the demo.');
     const paidAt = now();
     // BR-009: the year runs from the payment date (or the approval date, per policy). A renewal paid before the
     // current period ends starts when it ends, so no paid days are lost.
