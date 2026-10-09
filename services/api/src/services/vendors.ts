@@ -6,6 +6,7 @@ import { badRequest, camel, conflict, forbidden, isUuid, notFound, now, reqStr, 
 import { insertUser, publicUser, validatePassword } from './identity.js';
 import { insertDocument, publicDoc, putDocument, validateUpload, type DocumentRow, type UploadFile } from './documents.js';
 import { emitDocumentEvent } from './document-events.js';
+import { notifyApplicationReceived } from './vendor-lifecycle.js';
 
 export interface VendorRow {
   id: string; tenant_id: string; legal_name_en: string; legal_name_ar: string; cr_number: string; email: string;
@@ -38,6 +39,7 @@ export async function registerVendor(ctx: Ctx, body: any) {
     });
     await auditTx(ctx, q, { tenantId, actor: { id: user.id, roles: ['VENDOR'] }, action: 'VENDOR_REGISTERED', resourceType: 'VENDOR',
       resourceId: v.id, newState: 'PENDING_REVIEW', details: { crNumber: v.crNumber, categories } });
+    await notifyApplicationReceived(q, tenantId, v.id, v.legalNameEn, v.legalNameAr); // NOT-002
     return { vendor: camel(rows[0]), user: publicUser(user) };
   });
 }

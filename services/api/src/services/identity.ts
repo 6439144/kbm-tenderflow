@@ -8,6 +8,7 @@ import { SYSTEM_ACTOR } from './audit.js';
 import { ApiError, badRequest, camel, conflict, now, reqStr, uuid } from '../util.js';
 import type { Queryable } from '../db.js';
 import { installDefaultDocumentTypes } from './doc-catalogue.js';
+import { assertLoginAllowed } from './vendor-lifecycle.js';
 
 export interface UserRow {
   id: string; tenant_id: string; username: string; password_hash: string; display_name: string;
@@ -88,6 +89,7 @@ export async function login(ctx: Ctx, body: any) {
     if (u) await ctx.db.tx((q) => auditTx(ctx, q, { tenantId, actor: { id: u.id, roles: u.roles }, action: 'LOGIN_FAILED', resourceType: 'USER', resourceId: u.id }));
     throw new ApiError(401, 'INVALID_CREDENTIALS', 'Invalid tenant, username or password');
   }
+  await assertLoginAllowed(ctx.db, u); // blocked vendor (FR-013): only after the password is verified, so nothing leaks
   const token = await ctx.tokens.issue(u);
   await ctx.db.tx((q) => auditTx(ctx, q, { tenantId, actor: { id: u.id, roles: u.roles }, action: 'LOGIN', resourceType: 'USER', resourceId: u.id }));
   return { token, user: publicUser(u) };

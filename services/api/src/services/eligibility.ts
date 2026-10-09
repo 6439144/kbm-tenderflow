@@ -8,6 +8,8 @@ import type { Queryable } from '../db.js';
 import { ApiError, badRequest, camel, conflict, forbidden, isUuid, notFound, now, reqStr, str, uuid } from '../util.js';
 import { applyPattern, configOf, getProfile } from './templates.js';
 import type { TenderRow } from './tenders.js';
+import { policiesOf } from './entity-policies.js';
+import { assertVendorMayTransact, feeExemption } from './vendor-lifecycle.js';
 
 export const GRADE_NAMES: Record<number, { en: string; ar: string }> = {
   1: { en: 'First grade', ar: 'الدرجة الأولى' },
@@ -70,7 +72,7 @@ export async function setClassification(ctx: Ctx, actor: Actor, vendorId: string
 
 // ---------------- Eligibility ----------------
 export interface EligibilityRule { activityCodes: string[]; minGrade: number | null }
-export interface EligibilityResult { eligible: boolean; rule: EligibilityRule; reasons: { code: string; en: string; ar: string }[] }
+export interface EligibilityResult { eligible: boolean; rule: EligibilityRule; reasons: { code: string; en: string; ar: string }[]; semantics?: { gradeMatch: string; gradeScope: string } }
 
 /** The rule of a tender: per-tender override if set, else the template's. */
 export function ruleOf(t: TenderRow): EligibilityRule {
@@ -82,10 +84,18 @@ export function ruleOf(t: TenderRow): EligibilityRule {
   };
 }
 
+/**
+ * BR-007: eligible when ≥1 vendor activity overlaps ≥1 tender activity AND the vendor grade satisfies the tender grade.
+ * Entity policies decide the open semantics: gradeMatch EXACT ("that grade only") or AT_LEAST ("that grade and above",
+ * 1 = First is the highest), and gradeScope PER_ACTIVITY (grade of an overlapping activity) or COMPANY (one grade for
+ * the company, `vendors.company_grade`; falls back to the best valid activity grade when none is recorded).
+ */
 export async function checkEligibility(db: Queryable, t: TenderRow, vendorId: string): Promise<EligibilityResult> {
   const rule = ruleOf(t);
   const reasons: EligibilityResult['reasons'] = [];
-  if (!rule.activityCodes.length && rule.minGrade === null) return { eligible: true, rule, reasons };
+  const pol = await policiesOf(db, t.tenant_id);
+  const semantics = { gradeMatch: pol.gradeMatch, gradeScope: pol.gradeScope };
+  if (!rule.activityCodes.length && rule.minGrade === null) return { eligible: true, rule, reasons, semantics };
   const cls = await db.query<{ activity_code: string; grade: number; valid_until: string | Date | null }>(
     'SELECT activity_code, grade, valid_until FROM vendor_classifications WHERE vendor_id=$1 AND tenant_id=$2', [vendorId, t.tenant_id]);
   const today = now().toISOString().slice(0, 10);
@@ -94,14 +104,23 @@ export async function checkEligibility(db: Queryable, t: TenderRow, vendorId: st
   if (rule.activityCodes.length && !relevant.length)
     reasons.push({ code: 'ACTIVITY_CODE', en: `Requires one of the activity codes ${rule.activityCodes.join(', ')}`, ar: `يتطلب أحد رموز النشاط ${rule.activityCodes.join('، ')}` });
   if (rule.minGrade !== null) {
-    const best = relevant.length ? Math.min(...relevant.map((c) => Number(c.grade))) : null;
-    if (best === null || best > rule.minGrade) {
+    let held: number[];
+    if (pol.gradeScope === 'COMPANY') {
+      const v = (await db.query<{ company_grade: number | null }>('SELECT company_grade FROM vendors WHERE id=$1 AND tenant_id=$2', [vendorId, t.tenant_id]))[0];
+      const company = v?.company_grade ?? (valid.length ? Math.min(...valid.map((c) => Number(c.grade))) : null);
+      held = company === null || company === undefined ? [] : [Number(company)];
+    } else held = relevant.map((c) => Number(c.grade));
+    const ok = pol.gradeMatch === 'EXACT' ? held.includes(rule.minGrade) : held.some((g) => g <= rule.minGrade!);
+    if (!ok) {
       const g = GRADE_NAMES[rule.minGrade];
-      reasons.push({ code: 'GRADE', en: `Requires ${g.en} or better${best ? ` (vendor holds ${GRADE_NAMES[best].en})` : ''}`,
-        ar: `يتطلب ${g.ar} أو أعلى${best ? ` (تصنيف المورد ${GRADE_NAMES[best].ar})` : ''}` });
+      const best = held.length ? Math.min(...held) : null;
+      const holds = best ? { en: ` (vendor holds ${held.map((x) => GRADE_NAMES[x].en).join(', ')})`, ar: ` (تصنيف المورد ${held.map((x) => GRADE_NAMES[x].ar).join('، ')})` } : { en: '', ar: '' };
+      reasons.push(pol.gradeMatch === 'EXACT'
+        ? { code: 'GRADE', en: `Requires exactly ${g.en}${holds.en}`, ar: `يتطلب ${g.ar} تحديداً${holds.ar}` }
+        : { code: 'GRADE', en: `Requires ${g.en} or better${holds.en}`, ar: `يتطلب ${g.ar} أو أعلى${holds.ar}` });
     }
   }
-  return { eligible: reasons.length === 0, rule, reasons };
+  return { eligible: reasons.length === 0, rule, reasons, semantics };
 }
 
 /** Throws 403 NOT_ELIGIBLE with the reasons. */
@@ -122,8 +141,11 @@ export async function assertPurchased(db: Queryable, t: TenderRow, vendorId: str
     throw new ApiError(402, 'PURCHASE_REQUIRED', 'Tender documents must be purchased before bidding');
 }
 
-async function nextReceipt(q: Queryable, tenantId: string, pattern: string | undefined): Promise<string> {
-  const n = Number((await q.query<{ n: string }>('SELECT count(*)::text AS n FROM tender_purchases WHERE tenant_id=$1', [tenantId]))[0].n) + 1;
+/** One receipt number series per entity, shared by document purchases and subscription payments (FR-022). */
+export async function nextReceipt(q: Queryable, tenantId: string, pattern: string | undefined): Promise<string> {
+  const n = Number((await q.query<{ n: string }>(
+    `SELECT ((SELECT count(*) FROM tender_purchases WHERE tenant_id=$1) + (SELECT count(*) FROM vendor_subscriptions WHERE tenant_id=$1 AND receipt_number IS NOT NULL))::text AS n`,
+    [tenantId]))[0].n) + 1;
   return applyPattern(pattern || `${tenantId.toUpperCase()}-R-{YYYY}-{SEQ5}`, n);
 }
 
@@ -137,10 +159,26 @@ export async function purchaseDocuments(ctx: Ctx, actor: Actor, t: TenderRow, b:
   if (!cfg.stages.documentPurchase) throw conflict('NOT_REQUIRED', 'This tender does not require a document purchase');
   if (t.status !== 'PUBLISHED' || now() >= new Date(t.submission_deadline)) throw conflict('INVALID_STATE', 'Documents can be purchased only while the tender is open');
   await assertEligible(ctx.db, t, actor.vendorId);
+  // Vendor lifecycle: blocked vendors and (when the entity requires it) vendors without an active subscription cannot buy.
+  await assertVendorMayTransact(ctx.db, actor.tenantId, actor.vendorId);
+  if (await purchaseOf(ctx.db, t.id, actor.vendorId)) throw conflict('ALREADY_PURCHASED', 'Documents already purchased');
+  // FR-018: an exempt vendor (per vendor or by vendor category, per entity policy) receives the documents without paying.
+  const exemption = await feeExemption(ctx.db, actor.tenantId, actor.vendorId);
+  if (exemption) {
+    const pattern = (await getProfile(ctx, actor.tenantId)).receiptPattern;
+    return ctx.db.tx(async (q) => {
+      const receipt = await nextReceipt(q, actor.tenantId, pattern);
+      const rows = await q.query(
+        `INSERT INTO tender_purchases (id, tenant_id, tender_id, vendor_id, amount, currency, gateway, receipt_number, status, paid_by, paid_at)
+         VALUES ($1,$2,$3,$4,0,$5,'EXEMPT',$6,'EXEMPTED',$7,$8) RETURNING *`, [uuid(), actor.tenantId, t.id, actor.vendorId, cfg.fees.currency, receipt, actor.id, now()]);
+      await auditTx(ctx, q, { tenantId: actor.tenantId, actor, action: 'TENDER_FEE_EXEMPTED', resourceType: 'TENDER', resourceId: t.id,
+        reason: exemption.reason, details: { vendorId: actor.vendorId, receipt, basis: exemption.basis, category: exemption.category ?? null } });
+      return camel(rows[0]);
+    });
+  }
   const gateway = b?.gateway === 'KNET' ? 'KNET' : 'TEST';
   if (gateway === 'KNET' && !process.env.KNET_MERCHANT_ID)
     throw new ApiError(503, 'KNET_NOT_CONFIGURED', 'KNET is not configured for this entity (KNET_MERCHANT_ID). Use the TEST gateway in the demo.');
-  if (await purchaseOf(ctx.db, t.id, actor.vendorId)) throw conflict('ALREADY_PURCHASED', 'Documents already purchased');
   const pattern = (await getProfile(ctx, actor.tenantId)).receiptPattern;
   return ctx.db.tx(async (q) => {
     const receipt = await nextReceipt(q, actor.tenantId, pattern);

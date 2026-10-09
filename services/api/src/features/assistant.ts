@@ -39,6 +39,6 @@ export function registerAssistantRoutes(r: express.Router, ctx: Ctx): void {
   r.get('/tenders/:id/narratives', requireRoles(...STAFF_ROLES), h((req) => agents.listNarratives(ctx, actor(req), req.params.id)));
 
   // Vendor grading → document checklist review
-  r.post('/vendors/:id/ai/grade-review', requireRoles(OFFICER, 'TENANT_ADMIN'), h(async (req, res) => { res.status(201); return agents.gradeReview(ctx, actor(req), req.params.id, req.body); }));
-  r.get('/vendors/:id/ai/grade-review', requireRoles(OFFICER, 'TENANT_ADMIN'), h((req) => agents.gradeReviews(ctx, actor(req), req.params.id)));
+  r.post('/vendors/:id/ai/grade-review', requireRoles(OFFICER, 'TENANT_ADMIN', 'GRADING_AUTHORITY'), h(async (req, res) => { res.status(201); return agents.gradeReview(ctx, actor(req), req.params.id, req.body); }));
+  r.get('/vendors/:id/ai/grade-review', requireRoles(OFFICER, 'TENANT_ADMIN', 'GRADING_AUTHORITY'), h((req) => agents.gradeReviews(ctx, actor(req), req.params.id)));
 }

@@ -9,7 +9,7 @@ import { loadTender, type TenderRow } from './tenders.js';
 import { getVendorRow } from './vendors.js';
 import { openingRecordHtml, type OpeningBidSummary } from './reports.js';
 import { assertEligible, assertPurchased } from './eligibility.js';
-import { configOf } from './templates.js';
+import { assertStageInScope, configOf } from './templates.js';
 import { escapeHtml } from '../util.js';
 import { emitDocumentEvent } from './document-events.js';
 
@@ -35,6 +35,7 @@ export async function submitBid(ctx: Ctx, actor: Actor, tenderId: string, files:
   const vendor = await getVendorRow(ctx, actor.tenantId, actor.vendorId);
   if (vendor.status !== 'APPROVED') throw forbidden('Vendor is not approved');
   const t = await loadTender(ctx, actor, tenderId); // auto-closes at deadline
+  assertStageInScope(t, 'SEALED_BIDS');
   if (t.status !== 'PUBLISHED' || now() >= new Date(t.submission_deadline))
     throw conflict('SUBMISSION_CLOSED', 'Bids are accepted only while the tender is PUBLISHED and before the deadline');
   await assertEligible(ctx.db, t, vendor.id);
@@ -155,6 +156,7 @@ export async function downloadBidDocument(ctx: Ctx, actor: Actor, bidId: string,
 
 export async function openTender(ctx: Ctx, actor: Actor, tenderId: string, b: any) {
   const t = await loadTender(ctx, actor, tenderId);
+  assertStageInScope(t, 'OPENING');
   if (t.status !== 'CLOSED' || now() < new Date(t.submission_deadline))
     throw conflict('INVALID_STATE', `Opening requires a CLOSED tender after its deadline (tender is ${t.status})`);
   const attendees = Array.isArray(b?.attendees) ? b.attendees.filter((a: unknown) => typeof a === 'string' && a.trim()).map((a: string) => a.trim().slice(0, 200)) : [];
@@ -210,6 +212,7 @@ export async function openTender(ctx: Ctx, actor: Actor, tenderId: string, b: an
  */
 export async function openFinancial(ctx: Ctx, actor: Actor, tenderId: string, b: any) {
   const t = await loadTender(ctx, actor, tenderId);
+  assertStageInScope(t, 'OPENING');
   const cfg = configOf(t);
   if (cfg.envelopes !== 'TWO') throw conflict('NOT_TWO_ENVELOPE', 'This tender uses a single envelope');
   if (!['OPENED', 'EVALUATION'].includes(t.status)) throw conflict('INVALID_STATE', `Financial opening requires OPENED or EVALUATION (tender is ${t.status})`);
