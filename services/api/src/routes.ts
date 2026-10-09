@@ -18,6 +18,7 @@ import { downloadDocument, MAX_UPLOAD_BYTES, type DocumentRow, type UploadFile }
 import { verifyAudit } from './services/audit.js';
 import { registerPlatformRoutes } from './routes-platform.js';
 import { registerFeatureRoutes } from './features/index.js';
+import { registerSecurityPublicRoutes, securityGate } from './features/security.js';
 
 declare module 'express-serve-static-core' {
   interface Request { actor?: Actor }
@@ -34,10 +35,7 @@ export function authenticate(ctx: Ctx): RequestHandler {
     if (!hdr || !/^Bearer\s+\S+$/i.test(hdr)) return next(unauthorized());
     ctx.tokens.verify(hdr.replace(/^Bearer\s+/i, '').trim())
       .then(async (a) => {
-        if (a.issuer === 'local') {
-          const u = await ctx.db.query<{ active: boolean }>('SELECT active FROM users WHERE id=$1 AND tenant_id=$2', [a.id, a.tenantId]);
-          if (!u[0]?.active) throw unauthorized('User is inactive or unknown');
-        }
+        await securityGate(ctx, req, a); // SEC: account enabled, roles current, staff network allowlist
         req.actor = a;
         next();
       })
@@ -72,7 +70,8 @@ export function apiRouter(ctx: Ctx): express.Router {
   // ---- public ----
   const loginLimiter = rateLimit({ windowMs: 60_000, limit: ctx.config.loginRateLimit, standardHeaders: 'draft-7', legacyHeaders: false,
     handler: (_req, res) => { res.status(429).json({ code: 'RATE_LIMITED', message: 'Too many login attempts, try again later' }); } });
-  r.post('/auth/login', loginLimiter, h((req) => identity.login(ctx, req.body)));
+  r.post('/auth/login', loginLimiter, h((req) => identity.login(ctx, req.body, req)));
+  registerSecurityPublicRoutes(r, ctx); // SEC: MFA second step, staff SSO
   r.get('/public/tenants', h(() => identity.publicTenants(ctx)));
   r.post('/public/vendors/register', loginLimiter, h(async (req, res) => { res.status(201); return vendors.registerVendor(ctx, req.body); }));
 

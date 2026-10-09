@@ -7,6 +7,9 @@ import type { Config } from '../config.js';
 import { ApiError } from '../util.js';
 
 export const AUDIENCE = 'tenderflow';
+/** Audience of the short-lived second-factor token: never accepted as a session (verify() requires AUDIENCE). */
+export const MFA_AUDIENCE = 'tenderflow-mfa-pending';
+export const MFA_PENDING_TTL_SECONDS = 300;
 export const ROLES = ['VENDOR', 'PROCUREMENT_OFFICER', 'DIRECTOR', 'UNDERSECRETARY', 'COMMITTEE_CHAIR', 'EVALUATOR', 'TENANT_ADMIN', 'AUDITOR'] as const;
 export type Role = (typeof ROLES)[number];
 
@@ -66,6 +69,30 @@ export class TokenService {
       .setIssuedAt()
       .setExpirationTime('8h')
       .sign(this.privateKey);
+  }
+
+  /** Short-lived token proving the password step succeeded; purpose 'verify' (enrolled) or 'enrol' (must enrol first). */
+  async issueMfaPending(u: { id: string; tenant_id: string }, purpose: 'verify' | 'enrol'): Promise<string> {
+    return new SignJWT({ tenant_id: u.tenant_id, purpose, jti: crypto.randomUUID() })
+      .setProtectedHeader({ alg: 'RS256', kid: this.publicJwk.kid!, typ: 'JWT' })
+      .setSubject(u.id)
+      .setIssuer(this.config.publicBaseUrl)
+      .setAudience(MFA_AUDIENCE)
+      .setIssuedAt()
+      .setExpirationTime(`${MFA_PENDING_TTL_SECONDS}s`)
+      .sign(this.privateKey);
+  }
+
+  async verifyMfaPending(token: unknown): Promise<{ userId: string; tenantId: string; purpose: 'verify' | 'enrol'; iat: number }> {
+    if (typeof token !== 'string' || !token) throw new ApiError(401, 'MFA_TOKEN_INVALID', 'Sign-in step expired; enter your password again');
+    try {
+      const { payload } = await jwtVerify(token, this.publicKey, { algorithms: ['RS256'], issuer: this.config.publicBaseUrl, audience: MFA_AUDIENCE });
+      if (typeof payload.sub !== 'string' || typeof payload.tenant_id !== 'string' || (payload.purpose !== 'verify' && payload.purpose !== 'enrol'))
+        throw new Error('bad claims');
+      return { userId: payload.sub, tenantId: payload.tenant_id, purpose: payload.purpose, iat: payload.iat ?? 0 };
+    } catch {
+      throw new ApiError(401, 'MFA_TOKEN_INVALID', 'Sign-in step expired; enter your password again');
+    }
   }
 
   async verify(token: string): Promise<Actor> {
