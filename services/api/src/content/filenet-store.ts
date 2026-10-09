@@ -10,7 +10,7 @@
 // Rules: no silent fallbacks, no fake success. Every failure throws (ping() reports ok:false with the reason).
 // Writes are confined to FILENET_ROOT_FOLDER (default /TenderFlow) in the shared object store.
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import { ContentStore, ContentStoreUnavailableError, StoredObject } from './types.js';
+import { ContentStore, ContentStoreUnavailableError, FolderNode, RepositoryDescription, StoredObject } from './types.js';
 
 /** Protocol details. Items marked ASSUMED are not stated by the published schema/docs. */
 export const FILENET_PROTOCOL = {
@@ -49,6 +49,11 @@ export class FileNetConfigError extends Error {
   constructor(message: string) { super(message); this.name = 'FileNetConfigError'; }
 }
 
+export type FileNetRecordsMode = 'none' | 'property' | 'retention';
+export const RECORDS_MODES: FileNetRecordsMode[] = ['none', 'property', 'retention'];
+/** Record-declaration properties (property mode; created in ACCE, see docs/filenet/ACCE-RUNBOOK.md §1b). */
+export const TF_RECORD_PROPERTY_NAMES = ['TF_RecordDeclared', 'TF_RecordDeclaredAt'] as const;
+
 export interface FileNetConfig {
   graphqlUrl: string;
   objectStore: string;
@@ -58,6 +63,12 @@ export interface FileNetConfig {
   rootFolder: string;
   setCustomProperties: boolean;
   timeoutMs: number;
+  /** FILENET_VERSIONING: check addenda in as the next major version of the superseded document. */
+  versioning: boolean;
+  /** FILENET_RECORDS_MODE: how declareRecord() marks a document in the repository. */
+  recordsMode: FileNetRecordsMode;
+  /** FILENET_RETENTION_DAYS (retention mode): CmRetentionDate = now + days. */
+  retentionDays: number | null;
 }
 
 export interface FileNetDocumentInfo {
@@ -72,6 +83,10 @@ export interface FileNetDocumentInfo {
 }
 
 interface GraphQLResponse { data?: Record<string, any> | null; errors?: any[] }
+
+/** Fields selected on a created / checked-in document (all on the Document interface of the published schema). */
+interface CreatedDocument { id: string; name: string | null; className: string; majorVersionNumber?: number | null; minorVersionNumber?: number | null; versionSeries?: { id: string } | null }
+const CREATED_SELECTION = 'id name className majorVersionNumber minorVersionNumber versionSeries { id }';
 
 const REQUIRED_ENV = ['FILENET_GRAPHQL_URL', 'FILENET_OBJECT_STORE', 'FILENET_SERVICE_USER', 'FILENET_SERVICE_PASSWORD'] as const;
 
@@ -94,12 +109,21 @@ export function loadFileNetConfig(env: NodeJS.ProcessEnv = process.env): FileNet
   }
   const rootFolder = normalizeAbsolutePath(env.FILENET_ROOT_FOLDER?.trim() || '/TenderFlow', 'FILENET_ROOT_FOLDER');
   if (rootFolder === '/') throw new FileNetConfigError('FILENET_ROOT_FOLDER must not be "/" (the object store is shared)');
-  const spRaw = (env.FILENET_SET_CUSTOM_PROPERTIES ?? 'false').trim().toLowerCase();
-  if (!['true', 'false', '1', '0', 'yes', 'no', ''].includes(spRaw)) {
-    throw new FileNetConfigError(`FILENET_SET_CUSTOM_PROPERTIES must be true or false (got "${env.FILENET_SET_CUSTOM_PROPERTIES}")`);
-  }
+  const setCustomProperties = parseBool(env, 'FILENET_SET_CUSTOM_PROPERTIES');
+  const versioning = parseBool(env, 'FILENET_VERSIONING');
   const timeoutMs = env.FILENET_TIMEOUT_MS ? Number(env.FILENET_TIMEOUT_MS) : 120_000;
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new FileNetConfigError('FILENET_TIMEOUT_MS must be a positive number');
+  const recordsMode = (env.FILENET_RECORDS_MODE?.trim().toLowerCase() || 'none') as FileNetRecordsMode;
+  if (!RECORDS_MODES.includes(recordsMode)) {
+    throw new FileNetConfigError(`FILENET_RECORDS_MODE must be one of ${RECORDS_MODES.join(', ')} (got "${env.FILENET_RECORDS_MODE}")`);
+  }
+  let retentionDays: number | null = null;
+  if (recordsMode === 'retention') {
+    retentionDays = Number(env.FILENET_RETENTION_DAYS);
+    if (!env.FILENET_RETENTION_DAYS?.trim() || !Number.isInteger(retentionDays) || retentionDays <= 0 || retentionDays > 36500) {
+      throw new FileNetConfigError(`FILENET_RECORDS_MODE=retention requires FILENET_RETENTION_DAYS (whole number of days, 1-36500; got "${env.FILENET_RETENTION_DAYS ?? ''}")`);
+    }
+  }
   return {
     graphqlUrl,
     objectStore: String(env.FILENET_OBJECT_STORE).trim(),
@@ -107,9 +131,20 @@ export function loadFileNetConfig(env: NodeJS.ProcessEnv = process.env): FileNet
     password: String(env.FILENET_SERVICE_PASSWORD),
     docClass: env.FILENET_DOC_CLASS?.trim() || 'Document',
     rootFolder,
-    setCustomProperties: ['true', '1', 'yes'].includes(spRaw),
+    setCustomProperties,
     timeoutMs,
+    versioning,
+    recordsMode,
+    retentionDays,
   };
+}
+
+function parseBool(env: NodeJS.ProcessEnv, name: string): boolean {
+  const raw = (env[name] ?? 'false').trim().toLowerCase();
+  if (!['true', 'false', '1', '0', 'yes', 'no', ''].includes(raw)) {
+    throw new FileNetConfigError(`${name} must be true or false (got "${env[name]}")`);
+  }
+  return ['true', '1', 'yes'].includes(raw);
 }
 
 function normalizeAbsolutePath(p: string, label: string): string {
@@ -137,6 +172,7 @@ export class FileNetStore implements ContentStore {
   private readonly cookieJar = new Map<string, string>();
   private readonly knownFolders = new Set<string>();
   private readonly folderInFlight = new Map<string, Promise<void>>();
+  private objectStoreGuid: string | null = null;
 
   constructor(env: NodeJS.ProcessEnv = process.env) {
     this.config = loadFileNetConfig(env);
@@ -255,21 +291,35 @@ export class FileNetStore implements ContentStore {
       );
       const os = data.objectStore;
       if (!os) return { ok: false, detail: `FileNet object store ${this.config.objectStore} not returned by ${this.endpointLabel()}` };
+      this.objectStoreGuid = os.id ?? null;
       return { ok: true, detail: `FileNet object store ${os.symbolicName ?? this.config.objectStore} ("${os.displayName ?? ''}", id ${os.id}) at ${this.endpointLabel()}` };
     } catch (e: any) {
       return { ok: false, detail: e?.message ?? String(e) };
     }
   }
 
-  async put(input: { tenantId: string; folderPath: string; fileName: string; mimeType: string; bytes: Buffer; properties: Record<string, string> }): Promise<StoredObject> {
+  async put(input: { tenantId: string; folderPath: string; fileName: string; mimeType: string; bytes: Buffer; properties: Record<string, string>; supersedesRef?: string }): Promise<StoredObject> {
     if (!Buffer.isBuffer(input.bytes)) throw new FileNetError('FileNet put: bytes must be a Buffer');
     const folder = this.resolveFolder(input.folderPath);
     const sha256 = createHash('sha256').update(input.bytes).digest('hex');
     const props = this.config.setCustomProperties ? this.buildCustomProperties(input.tenantId, input.properties ?? {}, sha256) : null;
-    await this.ensureFolder(folder);
-
     const name = sanitizeDocumentName(input.fileName);
-    let created: { id: string };
+
+    // Versioning: the new content becomes the next MAJOR version of the superseded document. No fallback:
+    // when versioning is enabled and the check-in fails, the upload fails with the server's error text.
+    if (input.supersedesRef && this.config.versioning) {
+      const prev = this.parseStoreRef(input.supersedesRef);
+      const v = await this.checkInNewVersion(prev.id, name, input, props);
+      return {
+        storeRef: `filenet:${this.config.objectStore}:${v.id}`, storeType: 'filenet', byteSize: input.bytes.length,
+        // A checked-in version stays filed where its version series is filed (not in input.folderPath), so the
+        // folder is not recorded here; the evidence view reads the real folders from the repository (describe()).
+        meta: this.metaOf(v, null, v.name ?? name, { repositoryVersioning: true, supersedesObjectId: prev.id }),
+      };
+    }
+
+    await this.ensureFolder(folder);
+    let created: CreatedDocument;
     try {
       created = await this.createDocument(folder, name, input, props);
     } catch (e: any) {
@@ -278,7 +328,19 @@ export class FileNetStore implements ContentStore {
       if (!(e instanceof FileNetError) || !FILENET_PROTOCOL.notUniquePattern.test(e.message)) throw e;
       created = await this.createDocument(folder, uniquifyName(name), input, props);
     }
-    return { storeRef: `filenet:${this.config.objectStore}:${created.id}`, storeType: 'filenet', byteSize: input.bytes.length };
+    return {
+      storeRef: `filenet:${this.config.objectStore}:${created.id}`, storeType: 'filenet', byteSize: input.bytes.length,
+      meta: this.metaOf(created, folder, created.name ?? name, { repositoryVersioning: false }),
+    };
+  }
+
+  /** store_meta for a created / checked-in document (no secrets, no content). */
+  private metaOf(d: CreatedDocument, folder: string | null, name: string, extra: Record<string, unknown>): Record<string, unknown> {
+    const label = typeof d.majorVersionNumber === 'number' ? `${d.majorVersionNumber}.${d.minorVersionNumber ?? 0}` : null;
+    return {
+      objectStore: this.config.objectStore, objectId: d.id, className: d.className ?? this.config.docClass,
+      folderPath: folder, name, versionLabel: label, versionSeriesId: d.versionSeries?.id ?? null, ...extra,
+    };
   }
 
   async get(storeRef: string): Promise<Buffer> {
@@ -388,13 +450,11 @@ export class FileNetStore implements ContentStore {
     name: string,
     input: { fileName: string; mimeType: string; bytes: Buffer },
     props: Record<TfPropertyName, string> | null,
-  ): Promise<{ id: string }> {
+  ): Promise<CreatedDocument> {
     const cv = FILENET_PROTOCOL.contentVariable;
     // PropertyIdentifierAndScalarValue is a custom scalar written as {SymbolicName: value} (IBM samples);
     // inlined as literals exactly like IBM's samples, values escaped as GraphQL strings.
-    const propsLiteral = props
-      ? `properties: [${Object.entries(props).map(([k, v]) => `{${k}: ${gqlString(v)}}`).join(' ')}]`
-      : '';
+    const propsLiteral = this.propsLiteral(props);
     const query = `mutation TfCreateDocument($os: String!, $cls: String!, $folder: String!, $name: String!, $mime: String!, $${cv}: String) {
       createDocument(
         repositoryIdentifier: $os
@@ -406,16 +466,214 @@ export class FileNetStore implements ContentStore {
           ${propsLiteral}
           contentElements: { replace: [{ type: CONTENT_TRANSFER, contentType: $mime, subContentTransfer: { content: $${cv}, retrievalName: $name } }] }
         }
-      ) { id name className }
+      ) { ${CREATED_SELECTION} }
     }`;
-    const data = await this.graphql<{ createDocument: { id: string; name: string | null; className: string } | null }>(
+    const data = await this.graphql<{ createDocument: CreatedDocument | null }>(
       query,
       { os: this.config.objectStore, cls: this.config.docClass, folder, name, mime: input.mimeType || 'application/octet-stream' },
       { bytes: input.bytes, fileName: name, mimeType: input.mimeType },
     );
     if (!data.createDocument?.id) throw new FileNetError('FileNet createDocument: server returned no document id');
-    return { id: data.createDocument.id };
+    return data.createDocument;
   }
+
+  /** documentProperties.properties literal: custom scalar written as {SymbolicName: value}, as in IBM's samples. */
+  private propsLiteral(props: Record<string, string> | null): string {
+    return props ? `properties: [${Object.entries(props).map(([k, v]) => `{${k}: ${gqlString(v)}}`).join(' ')}]` : '';
+  }
+
+  /**
+   * Check-in of new content as the next major version of `sourceId`. Published schema: checkoutDocument returns
+   * the source document with its `reservation`; checkinDocument(identifier: <reservation>, checkinAction:
+   * { checkinMinorVersion: false }, documentProperties: { contentElements … }) with the content streamed as a
+   * multipart part, exactly like createDocument. On a failed check-in the reservation is cancelled (best effort)
+   * and the error is thrown with the server's text — never a silent fallback to a new document.
+   */
+  private async checkInNewVersion(sourceId: string, name: string, input: { mimeType: string; bytes: Buffer }, props: Record<string, string> | null): Promise<CreatedDocument> {
+    let reservationId: string;
+    try {
+      const out = await this.graphql<{ checkoutDocument: { id: string; reservation: { id: string } | null } | null }>(
+        `mutation TfCheckout($os: String!, $id: String!) {
+          checkoutDocument(repositoryIdentifier: $os, identifier: $id) { id reservation { id } }
+        }`,
+        { os: this.config.objectStore, id: sourceId },
+      );
+      const rid = out.checkoutDocument?.reservation?.id;
+      if (!rid) throw new FileNetError(`checkoutDocument returned no reservation for ${sourceId}`);
+      reservationId = rid;
+    } catch (e: any) {
+      throw new FileNetError(`FileNet versioning (FILENET_VERSIONING=true): checkout of ${sourceId} failed — ${e?.message ?? e}`, e?.graphqlErrors, e?.httpStatus);
+    }
+    const cv = FILENET_PROTOCOL.contentVariable;
+    const query = `mutation TfCheckin($os: String!, $id: String!, $name: String!, $mime: String!, $${cv}: String) {
+      checkinDocument(
+        repositoryIdentifier: $os
+        identifier: $id
+        checkinAction: { checkinMinorVersion: false }
+        documentProperties: {
+          name: $name
+          ${this.propsLiteral(props)}
+          contentElements: { replace: [{ type: CONTENT_TRANSFER, contentType: $mime, subContentTransfer: { content: $${cv}, retrievalName: $name } }] }
+        }
+      ) { ${CREATED_SELECTION} }
+    }`;
+    try {
+      const data = await this.graphql<{ checkinDocument: CreatedDocument | null }>(
+        query,
+        { os: this.config.objectStore, id: reservationId, name, mime: input.mimeType || 'application/octet-stream' },
+        { bytes: input.bytes, fileName: name, mimeType: input.mimeType },
+      );
+      const d = data.checkinDocument;
+      if (!d?.id) throw new FileNetError('checkinDocument returned no document');
+      if (typeof d.minorVersionNumber === 'number' && d.minorVersionNumber !== 0) {
+        throw new FileNetError(`checkinDocument: expected a major version, server reports ${d.majorVersionNumber}.${d.minorVersionNumber}`);
+      }
+      return d;
+    } catch (e: any) {
+      let cancel = 'reservation cancelled';
+      try {
+        await this.graphql(
+          `mutation TfCancelCheckout($os: String!, $id: String!) { cancelDocumentCheckout(repositoryIdentifier: $os, identifier: $id) { id } }`,
+          { os: this.config.objectStore, id: reservationId },
+        );
+      } catch (c: any) { cancel = `cancelling the reservation also failed: ${c?.message ?? c}`; }
+      throw new FileNetError(`FileNet versioning (FILENET_VERSIONING=true): check-in of a new major version of ${sourceId} failed — ${e?.message ?? e} (${cancel})`, e?.graphqlErrors, e?.httpStatus);
+    }
+  }
+
+  // ---------------------------------------------------------------- describe / records / folder tree (showcase)
+
+  /** GUID of the object store (used for Navigator links); cached after the first ping/describe. */
+  async objectStoreId(): Promise<string | null> {
+    if (this.objectStoreGuid) return this.objectStoreGuid;
+    const data = await this.graphql<{ objectStore: { id: string } | null }>(
+      `query TfObjectStoreId($os: String!) { objectStore(identifier: $os) { id } }`, { os: this.config.objectStore });
+    this.objectStoreGuid = data.objectStore?.id ?? null;
+    return this.objectStoreGuid;
+  }
+
+  /** Property names TenderFlow asks for: only names the ACCE runbook defines, and only when that feature is enabled. */
+  describePropertyNames(): string[] {
+    const names: string[] = ['DocumentTitle'];
+    if (this.config.setCustomProperties) names.push(...TF_PROPERTY_NAMES);
+    if (this.config.recordsMode === 'property') names.push(...TF_RECORD_PROPERTY_NAMES);
+    return names;
+  }
+
+  /** Repository view of one document: class, id, version, version series, folders, content elements, properties. */
+  async describe(storeRef: string): Promise<RepositoryDescription> {
+    const { id } = this.parseStoreRef(storeRef);
+    const retention = this.config.recordsMode === 'retention' ? 'cmRetentionDate' : '';
+    const data = await this.graphql<{ document: any }>(
+      `query TfDescribeFull($os: String!, $id: String!, $props: [String!]) {
+        document(repositoryIdentifier: $os, identifier: $id) {
+          id name className majorVersionNumber minorVersionNumber isCurrentVersion versionStatus isReserved
+          dateCreated dateCheckedIn creator mimeType ${retention}
+          versionSeries { id }
+          foldersFiledIn { folders { pathName } }
+          contentElements { contentType elementSequenceNumber ... on ContentTransfer { contentSize retrievalName } }
+          properties(includes: $props) { id value }
+          versions { documents { id majorVersionNumber minorVersionNumber isCurrentVersion dateCheckedIn } }
+        }
+      }`,
+      { os: this.config.objectStore, id, props: this.describePropertyNames() },
+    );
+    const d = data.document;
+    if (!d) throw new FileNetError(`FileNet describe: ${id} not found in ${this.config.objectStore}`);
+    const properties: Record<string, unknown> = {};
+    for (const p of d.properties ?? []) properties[p.id] = p.value;
+    let osId: string | null = null;
+    try { osId = await this.objectStoreId(); } catch { /* reported as null; the document description stands */ }
+    const num = (v: unknown) => (typeof v === 'number' ? v : null);
+    return {
+      type: 'filenet', objectStore: this.config.objectStore, objectStoreId: osId,
+      id: d.id, name: d.name ?? null, className: d.className,
+      majorVersionNumber: num(d.majorVersionNumber), minorVersionNumber: num(d.minorVersionNumber),
+      isCurrentVersion: d.isCurrentVersion ?? null, versionStatus: d.versionStatus ?? null, isReserved: d.isReserved ?? null,
+      versionSeriesId: d.versionSeries?.id ?? null,
+      dateCreated: d.dateCreated ?? null, dateCheckedIn: d.dateCheckedIn ?? null, creator: d.creator ?? null, mimeType: d.mimeType ?? null,
+      ...(retention ? { cmRetentionDate: d.cmRetentionDate ?? null } : {}),
+      byteSize: num((d.contentElements ?? []).find((c: any) => c.elementSequenceNumber === 0)?.contentSize),
+      folders: (d.foldersFiledIn?.folders ?? []).map((f: any) => f.pathName).filter(Boolean),
+      contentElements: (d.contentElements ?? []).map((c: any) => ({
+        contentType: c.contentType ?? null, elementSequenceNumber: c.elementSequenceNumber ?? null, contentSize: c.contentSize ?? null, retrievalName: c.retrievalName ?? null,
+      })),
+      properties,
+      versions: (d.versions?.documents ?? [])
+        .map((v: any) => ({ id: v.id, majorVersionNumber: num(v.majorVersionNumber), minorVersionNumber: num(v.minorVersionNumber), isCurrentVersion: v.isCurrentVersion ?? null, dateCheckedIn: v.dateCheckedIn ?? null }))
+        .sort((a: any, b: any) => (a.majorVersionNumber ?? 0) - (b.majorVersionNumber ?? 0) || (a.minorVersionNumber ?? 0) - (b.minorVersionNumber ?? 0)),
+    };
+  }
+
+  /**
+   * Declares a document a record in the repository according to FILENET_RECORDS_MODE. The outcome is read back
+   * from the server; anything else throws (callers report the document as not declared in the repository).
+   */
+  async declareRecord(storeRef: string, _info: { reason: string }): Promise<{ ok: boolean; detail: string }> {
+    const mode = this.config.recordsMode;
+    if (mode === 'none') return { ok: false, detail: 'records declaration not configured (FILENET_RECORDS_MODE=none)' };
+    const { id } = this.parseStoreRef(storeRef);
+    const at = new Date();
+    if (mode === 'property') {
+      const data = await this.graphql<{ updateDocument: { id: string; properties: { id: string; value: unknown }[] } | null }>(
+        `mutation TfDeclareRecord($os: String!, $id: String!) {
+          updateDocument(
+            repositoryIdentifier: $os
+            identifier: $id
+            documentProperties: { properties: [{TF_RecordDeclared: true} {TF_RecordDeclaredAt: ${gqlString(at.toISOString())}}] }
+          ) { id properties(includes: ["TF_RecordDeclared", "TF_RecordDeclaredAt"]) { id value } }
+        }`,
+        { os: this.config.objectStore, id },
+      );
+      const back = Object.fromEntries((data.updateDocument?.properties ?? []).map((p) => [p.id, p.value]));
+      if (back.TF_RecordDeclared !== true && String(back.TF_RecordDeclared).toLowerCase() !== 'true') {
+        throw new FileNetError(`FileNet declareRecord: TF_RecordDeclared on ${id} reads back as ${JSON.stringify(back.TF_RecordDeclared ?? null)}`);
+      }
+      return { ok: true, detail: `marked TF_RecordDeclared=true (${at.toISOString()}) on ${id} — immutability requires IBM Enterprise Records or a retention policy` };
+    }
+    // retention (ASSUMED: CmRetentionDate is settable through documentProperties.cmRetentionDate; not verified live)
+    const until = new Date(at.getTime() + (this.config.retentionDays ?? 0) * 86_400_000).toISOString();
+    const data = await this.graphql<{ updateDocument: { id: string; cmRetentionDate: string | null } | null }>(
+      `mutation TfRetain($os: String!, $id: String!, $until: DateTime!) {
+        updateDocument(repositoryIdentifier: $os, identifier: $id, documentProperties: { cmRetentionDate: $until }) { id cmRetentionDate }
+      }`,
+      { os: this.config.objectStore, id, until },
+    );
+    const got = data.updateDocument?.cmRetentionDate;
+    if (!got) throw new FileNetError(`FileNet declareRecord: CmRetentionDate on ${id} reads back empty after the update`);
+    return { ok: true, detail: `CmRetentionDate set to ${got} on ${id} (${this.config.retentionDays} days) — the Content Engine refuses deletion before that date` };
+  }
+
+  /** Folder tree under a TenderFlow-relative folder (0–2 levels below it), with per-folder document counts. */
+  async folderTree(folderPath: string, depth: number): Promise<FolderNode | null> {
+    const abs = this.resolveFolder(folderPath);
+    const levels = Math.max(0, Math.min(depth, 2));
+    const docs = 'containedDocuments { documents { id } pageInfo { token } }';
+    let sub = '';
+    for (let i = 0; i < levels; i++) sub = `subFolders { folders { name pathName ${docs} ${sub} } pageInfo { token } }`;
+    let data: { folder: any };
+    try {
+      data = await this.graphql<{ folder: any }>(
+        `query TfFolderTree($os: String!, $root: String!) { folder(repositoryIdentifier: $os, identifier: $root) { name pathName ${docs} ${sub} } }`,
+        { os: this.config.objectStore, root: abs },
+      );
+    } catch (e: any) {
+      if (e instanceof FileNetError && e.graphqlErrors && FILENET_PROTOCOL.notFoundPattern.test(e.message)) return null;
+      throw e;
+    }
+    if (!data.folder) return null;
+    const toNode = (f: any, left: number): FolderNode => ({
+      name: f.name ?? String(f.pathName ?? '').split('/').pop() ?? '',
+      path: f.pathName ?? '',
+      documentCount: Array.isArray(f.containedDocuments?.documents) ? f.containedDocuments.documents.length : null,
+      more: f.containedDocuments?.pageInfo?.token ? true : undefined,
+      children: left > 0
+        ? (f.subFolders?.folders ?? []).map((c: any) => toNode(c, left - 1)).sort((a: FolderNode, b: FolderNode) => a.name.localeCompare(b.name))
+        : [],
+    });
+    return toNode(data.folder, levels);
+  }
+
 
   private buildCustomProperties(tenantId: string, p: Record<string, string>, sha256: string): Record<TfPropertyName, string> {
     const pick = (...keys: string[]) => keys.map((k) => p[k]).find((v) => v !== undefined && v !== null && String(v) !== '');

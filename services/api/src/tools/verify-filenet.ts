@@ -9,6 +9,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { FileNetStore, FileNetError, TF_PROPERTY_NAMES } from '../content/filenet-store.js';
+import { navigatorConfig, navigatorUrl } from '../content/navigator.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -71,6 +72,9 @@ async function main() {
       FILENET_DOC_CLASS: process.env.FILENET_DOC_CLASS || 'Document',
       FILENET_ROOT_FOLDER: process.env.FILENET_ROOT_FOLDER || '/TenderFlow',
       FILENET_SET_CUSTOM_PROPERTIES: process.env.FILENET_SET_CUSTOM_PROPERTIES || 'false',
+      FILENET_VERSIONING: process.env.FILENET_VERSIONING || 'false',
+      FILENET_RECORDS_MODE: process.env.FILENET_RECORDS_MODE || 'none',
+      FILENET_RETENTION_DAYS: process.env.FILENET_RETENTION_DAYS || null,
     },
     steps,
   };
@@ -198,11 +202,72 @@ async function main() {
     return { count: out.length };
   });
 
+  // 8. versioning: v1 created, v2 checked in as the next MAJOR version (checkout + checkin), both read back.
+  // Runs regardless of FILENET_VERSIONING so the flag can be enabled only after this passes live.
+  if (/^(1|true|yes)$/i.test(process.env.VERIFY_SKIP_VERSIONING ?? '')) {
+    console.log('- 8 versioning check skipped (VERIFY_SKIP_VERSIONING=true)');
+  } else {
+    const vstore = new FileNetStore({ ...process.env, FILENET_VERSIONING: 'true' });
+    const vName = `verify-version-${stamp}.txt`;
+    const v1Bytes = Buffer.from(`TenderFlow versioning check — v1 — ${startedAt.toISOString()}\nالإصدار الأول\n`, 'utf8');
+    const v2Bytes = Buffer.from(`TenderFlow versioning check — v2 (addendum) — ${startedAt.toISOString()}\nالإصدار الثاني — ملحق\n`, 'utf8');
+    const props = { tenderId: 'VERIFY', vendorId: 'VERIFY', docType: 'VERIFY' };
+    const v1 = await run(8, 'versioning: create v1', async () => {
+      const out = await vstore.put({ tenantId: '_verify', folderPath: '/_verify', fileName: vName, mimeType: 'text/plain; charset=utf-8', bytes: v1Bytes, properties: props });
+      return { storeRef: out.storeRef, id: vstore.parseStoreRef(out.storeRef).id, sha256: sha256(v1Bytes), byteSize: v1Bytes.length, meta: out.meta };
+    }, (r) => `${r.id} (version ${r.meta?.versionLabel ?? '?'})`);
+    const v2 = await run(8, 'versioning: check in v2 as the next major version (checkout + checkin)', async () => {
+      const out = await vstore.put({ tenantId: '_verify', folderPath: '/_verify', fileName: vName, mimeType: 'text/plain; charset=utf-8', bytes: v2Bytes, properties: props, supersedesRef: v1.storeRef });
+      return { storeRef: out.storeRef, id: vstore.parseStoreRef(out.storeRef).id, sha256: sha256(v2Bytes), byteSize: v2Bytes.length, meta: out.meta };
+    }, (r) => `${r.id} (version ${r.meta?.versionLabel ?? '?'})`);
+    await run(8, 'versioning: read v1 and v2 back and compare SHA-256', async () => {
+      const a = await roundTrip(v1);
+      const b = await roundTrip(v2);
+      if (a.sha256 === b.sha256) throw new Error('v1 and v2 returned the same content');
+      return { v1: a.sha256, v2: b.sha256 };
+    }, () => 'both versions match what was uploaded');
+    const vInfo = await run(8, 'versioning: describe both versions (same version series, v2 current)', async () => {
+      const d1 = await vstore.describe(v1.storeRef);
+      const d2 = await vstore.describe(v2.storeRef);
+      const problems: string[] = [];
+      if (v1.id === v2.id) problems.push('v2 has the same object id as v1');
+      if (!d1.versionSeriesId || d1.versionSeriesId !== d2.versionSeriesId) problems.push(`version series differ (v1 ${d1.versionSeriesId}, v2 ${d2.versionSeriesId})`);
+      if ((d2.majorVersionNumber ?? 0) <= (d1.majorVersionNumber ?? 0)) problems.push(`v2 major version ${d2.majorVersionNumber} is not above v1 major version ${d1.majorVersionNumber}`);
+      if (d2.isCurrentVersion !== true) problems.push(`v2 isCurrentVersion = ${d2.isCurrentVersion}`);
+      if (d1.isCurrentVersion !== false) problems.push(`v1 isCurrentVersion = ${d1.isCurrentVersion}`);
+      if (problems.length) throw new Error(`versioning not as expected:\n  ${problems.join('\n  ')}`);
+      return { versionSeriesId: d2.versionSeriesId, v1Version: `${d1.majorVersionNumber}.${d1.minorVersionNumber}`, v2Version: `${d2.majorVersionNumber}.${d2.minorVersionNumber}`, versions: d2.versions, className: d2.className, folders: d2.folders, navigatorUrl: navigatorUrl(navigatorConfig(), d2) };
+    }, (r) => `series ${r.versionSeriesId}: ${r.v1Version} → ${r.v2Version}`);
+    report.versioning = { v1: { id: v1.id, sha256: v1.sha256 }, v2: { id: v2.id, sha256: v2.sha256 }, ...vInfo };
+  }
+
+  // 9. records declaration (only when FILENET_RECORDS_MODE is property or retention)
+  if (cfg.recordsMode === 'none') {
+    console.log('- 9 records declaration check skipped (FILENET_RECORDS_MODE=none)');
+  } else {
+    await run(9, `records declaration (FILENET_RECORDS_MODE=${cfg.recordsMode})`, async () => {
+      const r = await store.declareRecord(textDoc.storeRef, { reason: 'verify-filenet' });
+      if (!r.ok) throw new Error(r.detail);
+      const d = await store.describe(textDoc.storeRef);
+      if (cfg.recordsMode === 'property' && String(d.properties?.TF_RecordDeclared).toLowerCase() !== 'true') {
+        throw new Error(`TF_RecordDeclared reads back as ${JSON.stringify(d.properties?.TF_RecordDeclared ?? null)}`);
+      }
+      if (cfg.recordsMode === 'retention' && !d.cmRetentionDate) throw new Error('CmRetentionDate reads back empty');
+      return { detail: r.detail, properties: d.properties, cmRetentionDate: d.cmRetentionDate ?? null };
+    }, (r) => r.detail);
+  }
+
   console.log('\nDocuments (open in IBM Content Navigator / ACCE to screenshot):');
   for (const d of (report.documents as any[])) {
     console.log(`  ${d.label.padEnd(7)} id ${d.id}`);
     console.log(`          class ${d.className}, version ${d.version}, ${d.byteSize} bytes, sha256 ${d.sha256}`);
     console.log(`          Navigator path: ${cfg.objectStore} > ${(d.filedIn[0] ?? verifyFolder).split('/').filter(Boolean).join(' > ')} > ${d.name}`);
+  }
+  const vr = report.versioning as { v1: { id: string }; v2: { id: string }; navigatorUrl?: string | null } | undefined;
+  if (vr) {
+    console.log(`  version  v1 id ${vr.v1.id}`);
+    console.log(`           v2 id ${vr.v2.id} (open the document in Navigator → Versions to see both)`);
+    if (vr.navigatorUrl) console.log(`           Navigator link (format ASSUMED — open it to confirm): ${vr.navigatorUrl}`);
   }
   console.log(`\n${OK} FileNet verification passed (${cfg.objectStore} at ${new URL(cfg.graphqlUrl).origin}).`);
   writeReport(true);

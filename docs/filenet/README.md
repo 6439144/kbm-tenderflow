@@ -153,7 +153,12 @@ npx -y -p typescript@5.6 tsc --outDir services/api/dist --rootDir services/api/s
 4. Download it and compare SHA-256.
 5. Do the same round trip with a 2 MB binary.
 6. Check the class and the `TF_*` properties (only when they are configured).
-7. Print document ids and Navigator paths.
+7. Read back document metadata for the evidence report.
+8. Versioning: create v1, check in v2 as the next major version (checkout + checkin), read both back, compare
+   SHA-256, and confirm both share one version series with v2 current. Runs whatever `FILENET_VERSIONING` is,
+   so the flag can be turned on only after it passes (skip with `VERIFY_SKIP_VERSIONING=true`).
+9. Records declaration (only when `FILENET_RECORDS_MODE` is `property` or `retention`).
+Then it prints document ids and Navigator paths (and a Navigator link when `FILENET_NAVIGATOR_URL` is set).
 
 It writes `docs/evidence/filenet-verify-<timestamp>.json` with no secrets. It stops at the first failure with the
 full server error.
@@ -175,8 +180,11 @@ delete them there by hand. The tool never deletes anything.
 ## Tests
 
 ```bash
-npx tsx --test services/api/src/content/filenet-store.test.ts
+npm test                      # all API tests, including the FileNet ones below
+cd services/api && node --import tsx --test test/filenet-store.test.ts test/filenet-showcase-store.test.ts test/filenet-showcase-api.test.ts
 ```
+
+The fake server lives in `services/api/test/fakes/fake-filenet.ts`.
 
 The test starts a local fake Content Services GraphQL server. The fake checks the following:
 
@@ -190,3 +198,10 @@ The test starts a local fake Content Services GraphQL server. The fake checks th
 - GraphQL and HTTP errors surface as exceptions.
 - Nothing is written outside the root.
 - The verify and introspect CLIs pass end-to-end.
+- Checkout + major check-in for versioning, the reservation is cancelled when check-in fails, and nothing falls
+  back silently (`test/filenet-showcase-store.test.ts`).
+- `describe()`, `declareRecord()` (none / property / retention), the folder tree and the telemetry ring buffer.
+- The evidence and health routes and their access rules (`test/filenet-showcase-api.test.ts`).
+
+What the FileNet showcase adds (evidence panel, health page, versioning, records) is described in
+[SHOWCASE.md](SHOWCASE.md).

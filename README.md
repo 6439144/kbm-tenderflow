@@ -71,4 +71,4 @@ Data (database + files) lives in `.\data`. Delete that folder to start again wit
 - Audit events are append-only (database trigger) and HMAC-chained; `GET /api/v1/audit/verify` detects tampering.
 
 ## Development
-`npm test` (API: 14 integration tests incl. the full cycle) · `npx tsx --test services/api/src/ai/*.test.ts services/api/src/content/filenet-store.test.ts` (57 unit tests) · `npm run dev` (API with reload) · `npm run dev -w apps/web` (UI on :5173, proxied to :4000).
+`npm test` (API integration tests incl. the full cycle, plus the FileNet store and showcase tests in `services/api/test/`) · `npx tsx --test services/api/src/ai/*.test.ts` (AI unit tests) · `npm run dev` (API with reload) · `npm run dev -w apps/web` (UI on :5173, proxied to :4000).

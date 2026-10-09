@@ -1,175 +1,17 @@
-// Tests for FileNetStore against a local fake Content Services GraphQL server.
+// Tests for FileNetStore against a local fake Content Services GraphQL server (test/fakes/fake-filenet.ts).
 // The fake checks the request shapes (auth, XSRF header + cookie, multipart layout, folder order, download path)
 // and answers with responses shaped like the published CS GraphQL schema.
 import { test, describe, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import http from 'node:http';
-import { AddressInfo } from 'node:net';
 import { createHash, randomBytes } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { mkdtempSync, readdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { FileNetStore, FileNetError, FileNetConfigError, sanitizeDocumentName } from './filenet-store.js';
+import { FileNetStore, FileNetError, FileNetConfigError, sanitizeDocumentName } from '../src/content/filenet-store.js';
 
-const USER = 'svc_tf';
-const PASSWORD = 's3cr3t-P@ss';
-const CTX = '/content-services-graphql';
-
-interface FakeDoc { id: string; name: string; folder: string; cls: string; mime: string; bytes: Buffer; props: Record<string, string>; retrievalName: string }
-interface Logged { kind: 'graphql' | 'download'; op: string; variables?: any; query?: string; multipart?: { partOrder: string[]; fileField?: string; fileName?: string; fileType?: string }; path: string; cookie: string; xsrfHeader: string }
-
-class FakeFileNet {
-  server = http.createServer((req, res) => { this.handle(req, res).catch((e) => { res.statusCode = 500; res.end(String(e?.stack ?? e)); }); });
-  folders = new Set<string>(['/']);
-  docs = new Map<string, FakeDoc>();
-  log: Logged[] = [];
-  classes = new Set<string>(['Document']);
-  /** When set, the next createDocument returns this GraphQL error. */
-  failCreateDocument: string | null = null;
-  omitDownloadUrl = false;
-  downloadUrlWithoutContext = false;
-  folderCreateDelayMs = 0;
-  http500Once = false;
-  url = '';
-  private seq = 0;
-
-  async start() {
-    await new Promise<void>((r) => this.server.listen(0, '127.0.0.1', () => r()));
-    const { port } = this.server.address() as AddressInfo;
-    this.url = `http://127.0.0.1:${port}${CTX}/graphql`;
-  }
-  async stop() { await new Promise<void>((r) => this.server.close(() => r())); }
-  reset() {
-    this.folders = new Set(['/']); this.docs.clear(); this.log = []; this.classes = new Set(['Document']);
-    this.failCreateDocument = null; this.omitDownloadUrl = false; this.downloadUrlWithoutContext = false; this.folderCreateDelayMs = 0; this.http500Once = false;
-  }
-  graphqlOps(op?: string) { return this.log.filter((l) => l.kind === 'graphql' && (!op || l.op === op)); }
-
-  private json(res: http.ServerResponse, status: number, body: unknown) {
-    res.statusCode = status;
-    res.setHeader('Content-Type', 'application/json');
-    res.end(JSON.stringify(body));
-  }
-
-  private async handle(req: http.IncomingMessage, res: http.ServerResponse) {
-    const chunks: Buffer[] = [];
-    for await (const c of req) chunks.push(c as Buffer);
-    const raw = Buffer.concat(chunks);
-    const cookie = String(req.headers.cookie ?? '');
-    const xsrfHeader = String(req.headers['ecm-cs-xsrf-token'] ?? '');
-
-    // Auth: Basic only.
-    const expected = 'Basic ' + Buffer.from(`${USER}:${PASSWORD}`).toString('base64');
-    if (req.headers.authorization !== expected) { res.statusCode = 401; res.setHeader('WWW-Authenticate', 'Basic realm="fn"'); res.end('Unauthorized'); return; }
-    // XSRF: header must be present and equal to the cookie of the same name.
-    const cookieXsrf = /(?:^|;\s*)ECM-CS-XSRF-Token=([^;]+)/.exec(cookie)?.[1];
-    if (!xsrfHeader || cookieXsrf !== xsrfHeader) { this.json(res, 403, { errors: [{ message: 'XSRF token missing or mismatched' }] }); return; }
-    // Session cookie handed out on first request; must be echoed afterwards.
-    if (!/LtpaToken2=fake-ltpa/.test(cookie)) res.setHeader('Set-Cookie', ['LtpaToken2=fake-ltpa; Path=/; HttpOnly']);
-
-    const url = new URL(req.url ?? '/', 'http://x');
-    if (req.method === 'GET' && url.pathname === `${CTX}/content`) {
-      this.log.push({ kind: 'download', op: 'content', path: req.url ?? '', cookie, xsrfHeader });
-      if (url.searchParams.get('repositoryIdentifier') !== 'OS1') { res.statusCode = 404; res.end('bad repo'); return; }
-      const doc = this.docs.get(url.searchParams.get('documentId') ?? '');
-      if (!doc || url.searchParams.get('elementSequenceNumber') !== '0') { res.statusCode = 404; res.end('no such content'); return; }
-      res.statusCode = 200; res.setHeader('Content-Type', doc.mime); res.end(doc.bytes); return;
-    }
-    if (req.method !== 'POST' || url.pathname !== `${CTX}/graphql`) { res.statusCode = 404; res.end('not found'); return; }
-    if (this.http500Once) { this.http500Once = false; res.statusCode = 500; res.end('<html>Internal Server Error: SRVE0255E</html>'); return; }
-
-    const ct = String(req.headers['content-type'] ?? '');
-    let body: { query: string; variables: any };
-    let file: File | null = null;
-    let multipart: Logged['multipart'];
-    if (ct.startsWith('multipart/form-data')) {
-      // Order of parts as they appear on the wire.
-      const partOrder = [...raw.toString('latin1').matchAll(/Content-Disposition: form-data; name="([^"]+)"/g)].map((m) => m[1]);
-      const fd = await new Request('http://x', { method: 'POST', headers: { 'content-type': ct }, body: raw }).formData();
-      body = JSON.parse(String(fd.get('graphql')));
-      const fileField = partOrder[1];
-      const f = fd.get(fileField);
-      file = f instanceof File ? f : null;
-      multipart = { partOrder, fileField, fileName: file?.name, fileType: file?.type };
-    } else if (ct.startsWith('application/json')) {
-      body = JSON.parse(raw.toString('utf8'));
-    } else { this.json(res, 400, { errors: [{ message: `unsupported content type ${ct}` }] }); return; }
-
-    const op = /^\s*(?:query|mutation)\s+(\w+)/.exec(body.query)?.[1] ?? 'anonymous';
-    this.log.push({ kind: 'graphql', op, variables: body.variables, query: body.query, multipart, path: req.url ?? '', cookie, xsrfHeader });
-    const v = body.variables ?? {};
-    const q = body.query;
-
-    if (q.includes('objectStore(identifier: $os)')) {
-      if (v.os !== 'OS1') return this.json(res, 200, { data: { objectStore: null }, errors: [{ message: `FNRCE0051E: E_OBJECT_NOT_FOUND: Requested item not found. Object store ${v.os}` }] });
-      return this.json(res, 200, { data: { objectStore: { id: '{0E3A1C2B-0000-0000-0000-000000000001}', displayName: 'Focus Corp', symbolicName: 'OS1' } } });
-    }
-    if (q.includes('folder(repositoryIdentifier: $os, identifier: $path)')) {
-      if (!this.folders.has(v.path)) return this.json(res, 200, { data: { folder: null }, errors: [{ message: `FNRCE0051E: E_OBJECT_NOT_FOUND: Requested item not found. Path ${v.path}`, path: ['folder'], extensions: { classification: 'DataFetchingException' } }] });
-      return this.json(res, 200, { data: { folder: { id: `{F-${v.path}}`, pathName: v.path } } });
-    }
-    if (q.includes('createFolder(')) {
-      assert.match(q, /folderProperties: \{ name: \$name, parent: \{ identifier: \$parent \} \}/);
-      if (this.folderCreateDelayMs) await new Promise((r) => setTimeout(r, this.folderCreateDelayMs));
-      if (!this.folders.has(v.parent)) return this.json(res, 200, { data: { createFolder: null }, errors: [{ message: `FNRCE0051E: E_OBJECT_NOT_FOUND: parent ${v.parent}` }] });
-      const full = (v.parent === '/' ? '' : v.parent) + '/' + v.name;
-      if (this.folders.has(full)) return this.json(res, 200, { data: { createFolder: null }, errors: [{ message: 'FNRCE0022E: E_NOT_UNIQUE: A uniqueness requirement has been violated.' }] });
-      this.folders.add(full);
-      return this.json(res, 200, { data: { createFolder: { id: `{F-${full}}`, pathName: full } } });
-    }
-    if (q.includes('createDocument(')) {
-      if (!multipart || !file) return this.json(res, 200, { errors: [{ message: 'createDocument without multipart content' }] });
-      if (multipart.partOrder[0] !== 'graphql') return this.json(res, 200, { errors: [{ message: 'skipped stream: graphql part must be first' }] });
-      const contentVar = /subContentTransfer: \{ content: \$(\w+)/.exec(q)?.[1];
-      if (!contentVar || contentVar !== multipart.fileField || !(contentVar in v) || v[contentVar] !== null) {
-        return this.json(res, 200, { errors: [{ message: `content variable ${contentVar} does not match a form part (${multipart.partOrder.join(',')})` }] });
-      }
-      if (!/type: CONTENT_TRANSFER/.test(q) || !/fileInFolderIdentifier: \$folder/.test(q) || !/checkinAction: \{\}/.test(q)) {
-        return this.json(res, 200, { errors: [{ message: 'unexpected createDocument shape' }] });
-      }
-      if (this.failCreateDocument) { const m = this.failCreateDocument; this.failCreateDocument = null; return this.json(res, 200, { data: { createDocument: null }, errors: [{ message: m, path: ['createDocument'] }] }); }
-      if (!this.classes.has(v.cls)) return this.json(res, 200, { data: { createDocument: null }, errors: [{ message: `FNRCE0051E: E_OBJECT_NOT_FOUND: class ${v.cls} not found` }] });
-      if (!this.folders.has(v.folder)) return this.json(res, 200, { data: { createDocument: null }, errors: [{ message: `FNRCE0051E: folder ${v.folder} not found` }] });
-      for (const d of this.docs.values()) if (d.folder === v.folder && d.name === v.name) {
-        return this.json(res, 200, { data: { createDocument: null }, errors: [{ message: 'FNRCE0022E: E_NOT_UNIQUE: A uniqueness requirement has been violated. ContainmentName' }] });
-      }
-      const props: Record<string, string> = {};
-      const propsBlock = /properties: \[([^\]]*)\]/.exec(q)?.[1];
-      if (propsBlock) for (const m of propsBlock.matchAll(/\{(\w+): ("(?:[^"\\]|\\.)*")\}/g)) props[m[1]] = JSON.parse(m[2]);
-      const id = `{DOC-${String(++this.seq).padStart(4, '0')}-0000-0000-0000-000000000000}`;
-      this.docs.set(id, { id, name: v.name, folder: v.folder, cls: v.cls, mime: v.mime, bytes: Buffer.from(await file.arrayBuffer()), props, retrievalName: v.name });
-      return this.json(res, 200, { data: { createDocument: { id, name: v.name, className: v.cls } } });
-    }
-    if (q.includes('document(repositoryIdentifier: $os, identifier: $id)')) {
-      const d = this.docs.get(v.id);
-      if (!d) return this.json(res, 200, { data: { document: null }, errors: [{ message: `FNRCE0051E: E_OBJECT_NOT_FOUND: ${v.id}` }] });
-      const ctxPrefix = this.downloadUrlWithoutContext ? '' : CTX;
-      const downloadUrl = this.omitDownloadUrl ? null : `${ctxPrefix}/content?repositoryIdentifier=OS1&documentId=${encodeURIComponent(d.id)}&elementSequenceNumber=0`;
-      const el = { className: 'ContentTransfer', contentType: d.mime, elementSequenceNumber: 0, contentSize: d.bytes.length, retrievalName: d.retrievalName, downloadUrl };
-      const props = (v.props as string[] | undefined)?.map((p) => ({ id: p, value: p === 'DocumentTitle' ? d.name : d.props[p] ?? null })) ?? [];
-      return this.json(res, 200, { data: { document: { id: d.id, name: d.name, className: d.cls, majorVersionNumber: 1, minorVersionNumber: 0, foldersFiledIn: { folders: [{ pathName: d.folder }] }, contentElements: [el], properties: props } } });
-    }
-    if (q.includes('__type(name: $name)')) {
-      const S = (name: string) => ({ kind: 'SCALAR', name, ofType: null });
-      const NN = (t: any) => ({ kind: 'NON_NULL', name: null, ofType: t });
-      if (v.name === 'Query' || v.name === 'Mutation') {
-        const names = v.name === 'Query' ? ['objectStore', 'folder', 'document', 'classDescription', '_apiInfo', 'other'] : ['createDocument', 'createFolder', 'fileDocument'];
-        return this.json(res, 200, { data: { __type: { kind: 'OBJECT', name: v.name, description: null, inputFields: null, enumValues: null, possibleTypes: null, interfaces: [],
-          fields: names.map((n) => ({ name: n, args: [{ name: 'repositoryIdentifier', type: NN(S('String')) }], type: { kind: 'OBJECT', name: 'X', ofType: null } })) } } });
-      }
-      if (v.name === 'ContentTransferType') return this.json(res, 200, { data: { __type: null } });
-      return this.json(res, 200, { data: { __type: { kind: 'INPUT_OBJECT', name: v.name, description: 'd', inputFields: [{ name: 'name', type: S('String'), defaultValue: null }], fields: null, enumValues: null, possibleTypes: null, interfaces: null } } });
-    }
-    if (q.includes('_apiInfo(')) return this.json(res, 200, { data: { _apiInfo: { productVersion: '5.6.0', implementationVersion: 'fake', buildNumber: '1', buildDate: 'today' } } });
-    if (q.includes('classDescription(')) {
-      if (!this.classes.has(v.cls)) return this.json(res, 200, { data: { classDescription: null }, errors: [{ message: `FNRCE0051E: E_OBJECT_NOT_FOUND: class ${v.cls}` }] });
-      return this.json(res, 200, { data: { classDescription: { symbolicName: v.cls, displayName: v.cls } } });
-    }
-    return this.json(res, 200, { errors: [{ message: `fake server: unhandled operation ${op}` }] });
-  }
-}
+import { FakeFileNet, USER, PASSWORD } from './fakes/fake-filenet.js';
 
 const fake = new FakeFileNet();
 const env = (extra: Record<string, string> = {}): NodeJS.ProcessEnv => ({
@@ -389,7 +231,7 @@ describe('failure surfacing', () => {
 
 describe('CLI tools against the fake server', () => {
   const ext = import.meta.url.endsWith('.ts') ? 'ts' : 'js';
-  const toolPath = (name: string) => fileURLToPath(new URL(`../tools/${name}.${ext}`, import.meta.url));
+  const toolPath = (name: string) => fileURLToPath(new URL(`../src/tools/${name}.${ext}`, import.meta.url));
   const runTool = (name: string, extraEnv: Record<string, string>) => new Promise<{ code: number | null; stdout: string; stderr: string }>((resolveRun) => {
     const execArgv = process.execArgv.filter((a) => !a.startsWith('--test'));
     const child = spawn(process.execPath, [...execArgv, toolPath(name)], {
@@ -425,6 +267,34 @@ describe('CLI tools against the fake server', () => {
     assert.equal(report.ok, true);
     assert.equal(report.documents.length, 2);
     assert.ok(fake.folders.has('/TenderFlow/_verify'));
+    // Step 8: versioning proof (runs even with FILENET_VERSIONING=false so the flag can be enabled afterwards).
+    assert.match(r.stdout, /✓ 8 versioning: create v1 — \{DOC-\d+.*\(version 1\.0\)/);
+    assert.match(r.stdout, /✓ 8 versioning: check in v2 as the next major version \(checkout \+ checkin\) — \{RES-\d+.*\(version 2\.0\)/);
+    assert.match(r.stdout, /✓ 8 versioning: read v1 and v2 back and compare SHA-256/);
+    assert.match(r.stdout, /✓ 8 versioning: describe both versions \(same version series, v2 current\) — series \{VS-\d+.*: 1\.0 → 2\.0/);
+    assert.match(r.stdout, /- 9 records declaration check skipped \(FILENET_RECORDS_MODE=none\)/);
+    assert.equal(report.versioning.v1Version, '1.0');
+    assert.equal(report.versioning.v2Version, '2.0');
+    assert.equal(report.versioning.navigatorUrl, null, 'no Navigator URL unless FILENET_NAVIGATOR_URL is set');
+  });
+
+  test('verify-filenet proves records declaration (property mode) and prints a Navigator link when configured', async () => {
+    fake.classes.add('TF_Document');
+    fake.recordProperties = true;
+    const r = await runTool('verify-filenet', { ...baseEnv(), FILENET_DOC_CLASS: 'TF_Document', FILENET_SET_CUSTOM_PROPERTIES: 'true', FILENET_RECORDS_MODE: 'property',
+      FILENET_NAVIGATOR_URL: 'http://icn.example:9080/navigator' });
+    assert.equal(r.code, 0, r.stdout + r.stderr);
+    assert.match(r.stdout, /✓ 9 records declaration \(FILENET_RECORDS_MODE=property\) — marked TF_RecordDeclared=true/);
+    assert.match(r.stdout, /Navigator link \(format ASSUMED — open it to confirm\): http:\/\/icn\.example:9080\/navigator\/bookmark\.jsp\?desktop=ICN&repositoryId=OS1&repositoryType=p8&docid=TF_Document%2C%7B0E3A1C2B/);
+  });
+
+  test('verify-filenet stops at step 8 with the server error when check-in is refused', async () => {
+    fake.failCheckin = 'FNRCE0066E: E_ACCESS_DENIED: checkin not permitted';
+    const r = await runTool('verify-filenet', baseEnv());
+    assert.equal(r.code, 1);
+    assert.match(r.stdout, /✗ 8 versioning: check in v2/);
+    assert.match(r.stdout, /E_ACCESS_DENIED: checkin not permitted/);
+    assert.match(r.stdout, /reservation cancelled/);
   });
 
   test('verify-filenet with TF_Document + custom properties checks class and properties', async () => {
