@@ -1,0 +1,43 @@
+{
+  "tenantId": "min-b",
+  "legalName": {
+    "en": "Ministry B (Fictitious Public Entity)",
+    "ar": "الوزارة ب (جهة حكومية افتراضية)"
+  },
+  "branding": {
+    "primaryColor": "#2A9D8F",
+    "secondaryColor": "#E76F51",
+    "logoUrl": "/brand/min-b-logo.svg",
+    "faviconUrl": "/brand/min-b-favicon.ico",
+    "defaultDirection": "rtl",
+    "defaultLocale": "ar"
+  },
+  "currency": {
+    "code": "KWD",
+    "symbolAr": "د.ك",
+    "symbolEn": "KWD",
+    "decimalPlaces": 3
+  },
+  "categories": [
+    { "code": "HEALTH_TECH", "nameEn": "Healthcare Technology", "nameAr": "تكنولوجيا الرعاية الصحية" },
+    { "code": "SUPPLIES", "nameEn": "Medical & Hospital Supplies", "nameAr": "المستلزمات الطبية والمستشفيات" }
+  ],
+  "roles": [
+    {
+      "code": "PROCUREMENT_OFFICER",
+      "nameEn": "Contracts Officer",
+      "nameAr": "مسؤول عقود",
+      "permissions": ["tender:create", "tender:edit", "clarification:respond"]
+    },
+    {
+      "code": "DIRECTOR",
+      "nameEn": "Director General",
+      "nameAr": "المدير العام",
+      "permissions": ["tender:approve_publish", "tender:award", "vendor:approve"]
+    }
+  ],
+  "storage": {
+    "filenetObjectStore": "OS_MINISTRY_B",
+    "rootFolder": "/TenderFlow/MinistryB"
+  }
+}

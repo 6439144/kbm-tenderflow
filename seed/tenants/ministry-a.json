@@ -1,0 +1,56 @@
+{
+  "tenantId": "min-a",
+  "legalName": {
+    "en": "Ministry A (Fictitious Public Entity)",
+    "ar": "الوزارة أ (جهة حكومية افتراضية)"
+  },
+  "branding": {
+    "primaryColor": "#1D3557",
+    "secondaryColor": "#457B9D",
+    "logoUrl": "/brand/min-a-logo.svg",
+    "faviconUrl": "/brand/min-a-favicon.ico",
+    "defaultDirection": "rtl",
+    "defaultLocale": "ar"
+  },
+  "currency": {
+    "code": "KWD",
+    "symbolAr": "د.ك",
+    "symbolEn": "KWD",
+    "decimalPlaces": 3
+  },
+  "categories": [
+    { "code": "DIGITAL", "nameEn": "Digital Transformation & Systems", "nameAr": "التحول الرقمي والأنظمة" },
+    { "code": "INFRA", "nameEn": "Civil Infrastructure", "nameAr": "البنية التحتية المدنية" },
+    { "code": "CONSULT", "nameEn": "Strategy & Advisory", "nameAr": "الاستشارات الاستراتيجية" }
+  ],
+  "roles": [
+    {
+      "code": "PROCUREMENT_OFFICER",
+      "nameEn": "Procurement Specialist",
+      "nameAr": "أخصائي مشتريات",
+      "permissions": ["tender:create", "tender:edit", "clarification:respond"]
+    },
+    {
+      "code": "OPENING_COMMITTEE_CHAIR",
+      "nameEn": "Opening Committee Chair",
+      "nameAr": "رئيس لجنة الفتح",
+      "permissions": ["tender:open_bids"]
+    },
+    {
+      "code": "EVALUATOR",
+      "nameEn": "Technical Evaluator",
+      "nameAr": "مقيم فني",
+      "permissions": ["bid:evaluate"]
+    },
+    {
+      "code": "DIRECTOR",
+      "nameEn": "Undersecretary of Procurement",
+      "nameAr": "وكيل وزارة للمشتريات",
+      "permissions": ["tender:approve_publish", "tender:award", "vendor:approve"]
+    }
+  ],
+  "storage": {
+    "filenetObjectStore": "OS_MINISTRY_A",
+    "rootFolder": "/TenderFlow/MinistryA"
+  }
+}

@@ -1,0 +1,74 @@
+[
+  {
+    "id": "bid_mina_001_1",
+    "tenantId": "min-a",
+    "tenderId": "tnd_mina_001",
+    "vendorId": "vnd_101",
+    "vendorName": "Alpha Cybernetics Co.",
+    "status": "SEALED",
+    "submittedAt": "2026-10-12T09:30:00Z",
+    "hashDigest": "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8",
+    "technicalProposalDocId": "doc_tech_101",
+    "financialProposalDocId": "doc_fin_101"
+  },
+  {
+    "id": "bid_mina_001_2",
+    "tenantId": "min-a",
+    "tenderId": "tnd_mina_001",
+    "vendorId": "vnd_102",
+    "vendorName": "Beta Cloud Networks",
+    "status": "SEALED",
+    "submittedAt": "2026-10-12T10:15:00Z",
+    "hashDigest": "4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a",
+    "technicalProposalDocId": "doc_tech_102",
+    "financialProposalDocId": "doc_fin_102"
+  },
+  {
+    "id": "bid_mina_001_3",
+    "tenantId": "min-a",
+    "tenderId": "tnd_mina_001",
+    "vendorId": "vnd_106",
+    "vendorName": "Zeta Systems Integration",
+    "status": "SEALED",
+    "submittedAt": "2026-10-12T11:45:00Z",
+    "hashDigest": "ef2d127de37b942baad06145e54b0c619a1f22327b2ebbcfbec78f5564afe39d",
+    "technicalProposalDocId": "doc_tech_106",
+    "financialProposalDocId": "doc_fin_106"
+  },
+  {
+    "id": "bid_minb_001_1",
+    "tenantId": "min-b",
+    "tenderId": "tnd_minb_001",
+    "vendorId": "vnd_111",
+    "vendorName": "Lambda BioTech Instruments",
+    "status": "SEALED",
+    "submittedAt": "2026-10-12T08:00:00Z",
+    "hashDigest": "8f434346648f6b96df89dda901c5176b10e6d05c3a43d8e51899930dd307e590",
+    "technicalProposalDocId": "doc_tech_111",
+    "financialProposalDocId": "doc_fin_111"
+  },
+  {
+    "id": "bid_minb_001_2",
+    "tenantId": "min-b",
+    "tenderId": "tnd_minb_001",
+    "vendorId": "vnd_113",
+    "vendorName": "Nu Diagnostic Systems",
+    "status": "SEALED",
+    "submittedAt": "2026-10-12T09:20:00Z",
+    "hashDigest": "cd2eb0837c9b4c962c22d2ff8b5441b7b45805887f051d39bf133b5836acbe47",
+    "technicalProposalDocId": "doc_tech_113",
+    "financialProposalDocId": "doc_fin_113"
+  },
+  {
+    "id": "bid_minb_001_3",
+    "tenantId": "min-b",
+    "tenderId": "tnd_minb_001",
+    "vendorId": "vnd_117",
+    "vendorName": "Rho Medical Imaging",
+    "status": "SEALED",
+    "submittedAt": "2026-10-12T11:05:00Z",
+    "hashDigest": "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4",
+    "technicalProposalDocId": "doc_tech_117",
+    "financialProposalDocId": "doc_fin_117"
+  }
+]

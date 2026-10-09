@@ -1,0 +1,22 @@
+[
+  { "id": "vnd_101", "tenantId": "min-a", "legalNameEn": "Alpha Cybernetics Co.", "legalNameAr": "شركة ألفا للسيبرانية", "crNumber": "CR-1001", "status": "APPROVED", "contactEmail": "bid@alpha-cyber.example.com" },
+  { "id": "vnd_102", "tenantId": "min-a", "legalNameEn": "Beta Cloud Networks", "legalNameAr": "شبكات بيتا السحابية", "crNumber": "CR-1002", "status": "APPROVED", "contactEmail": "tenders@beta-cloud.example.com" },
+  { "id": "vnd_103", "tenantId": "min-a", "legalNameEn": "Gamma Telecom Solutions", "legalNameAr": "حلول غاما للاتصالات", "crNumber": "CR-1003", "status": "APPROVED", "contactEmail": "sales@gamma-tel.example.com" },
+  { "id": "vnd_104", "tenantId": "min-a", "legalNameEn": "Delta Infrastructure Partners", "legalNameAr": "شركاء دلتا للبنية التحتية", "crNumber": "CR-1004", "status": "APPROVED", "contactEmail": "info@delta-infra.example.com" },
+  { "id": "vnd_105", "tenantId": "min-a", "legalNameEn": "Epsilon General Contracting", "legalNameAr": "إبسيلون للمقاولات العامة", "crNumber": "CR-1005", "status": "APPROVED", "contactEmail": "ops@epsilon-contracting.example.com" },
+  { "id": "vnd_106", "tenantId": "min-a", "legalNameEn": "Zeta Systems Integration", "legalNameAr": "زيتا لتكامل النظم", "crNumber": "CR-1006", "status": "APPROVED", "contactEmail": "support@zeta-systems.example.com" },
+  { "id": "vnd_107", "tenantId": "min-a", "legalNameEn": "Eta Data Analytics Ltd", "legalNameAr": "إيتا لتحليلات البيانات", "crNumber": "CR-1007", "status": "APPROVED", "contactEmail": "gov@eta-data.example.com" },
+  { "id": "vnd_108", "tenantId": "min-a", "legalNameEn": "Theta Consulting Group", "legalNameAr": "مجموعة ثيتا الاستشارية", "crNumber": "CR-1008", "status": "APPROVED", "contactEmail": "proposals@theta-consult.example.com" },
+  { "id": "vnd_109", "tenantId": "min-a", "legalNameEn": "Iota Logistics & Storage", "legalNameAr": "إيوتا للخدمات اللوجستية", "crNumber": "CR-1009", "status": "APPROVED", "contactEmail": "bids@iota-logistics.example.com" },
+  { "id": "vnd_110", "tenantId": "min-a", "legalNameEn": "Kappa Enterprise Software", "legalNameAr": "كابا لبرمجيات المؤسسات", "crNumber": "CR-1010", "status": "APPROVED", "contactEmail": "contracts@kappa-soft.example.com" },
+  { "id": "vnd_111", "tenantId": "min-b", "legalNameEn": "Lambda BioTech Instruments", "legalNameAr": "لامبدا للأجهزة الحيوية", "crNumber": "CR-2001", "status": "APPROVED", "contactEmail": "tenders@lambda-bio.example.com" },
+  { "id": "vnd_112", "tenantId": "min-b", "legalNameEn": "Mu Medical Supplies Corp", "legalNameAr": "مؤسسة مو للتجهيزات الطبية", "crNumber": "CR-2002", "status": "APPROVED", "contactEmail": "sales@mu-med.example.com" },
+  { "id": "vnd_113", "tenantId": "min-b", "legalNameEn": "Nu Diagnostic Systems", "legalNameAr": "أنظمة نو للتشخيص", "crNumber": "CR-2003", "status": "APPROVED", "contactEmail": "bids@nu-diag.example.com" },
+  { "id": "vnd_114", "tenantId": "min-b", "legalNameEn": "Xi Healthcare Facilities", "legalNameAr": "كزاي لمنشآت الرعاية الصحية", "crNumber": "CR-2004", "status": "APPROVED", "contactEmail": "info@xi-health.example.com" },
+  { "id": "vnd_115", "tenantId": "min-b", "legalNameEn": "Omicron Laboratory Services", "legalNameAr": "أوميكرون لخدمات المختبرات", "crNumber": "CR-2005", "status": "APPROVED", "contactEmail": "proposals@omicron-lab.example.com" },
+  { "id": "vnd_116", "tenantId": "min-b", "legalNameEn": "Pi Pharmaceutical Distribution", "legalNameAr": "باي لتوزيع الأدوية", "crNumber": "CR-2006", "status": "APPROVED", "contactEmail": "tenders@pi-pharma.example.com" },
+  { "id": "vnd_117", "tenantId": "min-b", "legalNameEn": "Rho Medical Imaging", "legalNameAr": "رو للتصوير الطبي", "crNumber": "CR-2007", "status": "APPROVED", "contactEmail": "bids@rho-imaging.example.com" },
+  { "id": "vnd_118", "tenantId": "min-a", "legalNameEn": "Sigma Security Operations", "legalNameAr": "سيغما للعمليات الأمنية", "crNumber": "CR-1011", "status": "APPROVED", "contactEmail": "contracts@sigma-sec.example.com" },
+  { "id": "vnd_119", "tenantId": "min-a", "legalNameEn": "Tau Facility Management", "legalNameAr": "تاو لإدارة المرافق", "crNumber": "CR-1012", "status": "PENDING_REVIEW", "contactEmail": "admin@tau-fm.example.com" },
+  { "id": "vnd_120", "tenantId": "min-b", "legalNameEn": "Upsilon Biomedical Engineering", "legalNameAr": "أبسيلون للهندسة الطبية", "crNumber": "CR-2008", "status": "PENDING_REVIEW", "contactEmail": "bids@upsilon-bio.example.com" }
+]

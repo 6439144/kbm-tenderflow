@@ -1,0 +1,97 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TenantConfigPackage",
+  "description": "Configuration package schema to provision a new customer tenant in TenderFlow under 1 hour (Task T02)",
+  "type": "object",
+  "required": ["tenantId", "legalName", "branding", "categories", "roles", "currency"],
+  "properties": {
+    "tenantId": {
+      "type": "string",
+      "pattern": "^[a-z0-9_-]{3,20}$",
+      "description": "Unique tenant slug for isolation"
+    },
+    "legalName": {
+      "type": "object",
+      "required": ["en", "ar"],
+      "properties": {
+        "en": { "type": "string" },
+        "ar": { "type": "string" }
+      }
+    },
+    "branding": {
+      "type": "object",
+      "required": ["primaryColor", "defaultDirection"],
+      "properties": {
+        "primaryColor": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+        "secondaryColor": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+        "logoUrl": { "type": "string" },
+        "faviconUrl": { "type": "string" },
+        "defaultDirection": { "type": "string", "enum": ["rtl", "ltr"] },
+        "defaultLocale": { "type": "string", "enum": ["ar", "en"] }
+      }
+    },
+    "currency": {
+      "type": "object",
+      "required": ["code", "symbolAr", "symbolEn"],
+      "properties": {
+        "code": { "type": "string", "example": "KWD" },
+        "symbolAr": { "type": "string", "example": "د.ك" },
+        "symbolEn": { "type": "string", "example": "KWD" },
+        "decimalPlaces": { "type": "integer", "default": 3 }
+      }
+    },
+    "categories": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["code", "nameEn", "nameAr"],
+        "properties": {
+          "code": { "type": "string" },
+          "nameEn": { "type": "string" },
+          "nameAr": { "type": "string" }
+        }
+      }
+    },
+    "roles": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["code", "nameEn", "nameAr", "permissions"],
+        "properties": {
+          "code": { "type": "string" },
+          "nameEn": { "type": "string" },
+          "nameAr": { "type": "string" },
+          "permissions": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    },
+    "templates": {
+      "type": "object",
+      "properties": {
+        "tenderNotice": { "type": "string" },
+        "awardNotice": { "type": "string" },
+        "rejectionNotice": { "type": "string" }
+      }
+    },
+    "labels": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "en": { "type": "string" },
+          "ar": { "type": "string" }
+        }
+      }
+    },
+    "storage": {
+      "type": "object",
+      "properties": {
+        "filenetObjectStore": { "type": "string" },
+        "rootFolder": { "type": "string" }
+      }
+    }
+  }
+}

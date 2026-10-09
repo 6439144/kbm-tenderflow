@@ -18,7 +18,8 @@
     "dev:content": "npm run dev --workspace=services/content-adapter",
     "dev:vendor": "npm run dev --workspace=apps/vendor-portal",
     "dev:procurement": "npm run dev --workspace=apps/procurement-app",
-    "dev:control": "npm run dev --workspace=apps/control-panel"
+    "dev:control": "npm run dev --workspace=apps/control-panel",
+    "seed": "node seed/seed.js"
   },
   "keywords": [
     "tendering",

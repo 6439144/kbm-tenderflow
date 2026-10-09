@@ -1,0 +1,41 @@
+[
+  {
+    "id": "tnd_mina_001",
+    "tenantId": "min-a",
+    "tenderNumber": "MINA-TND-2026-001",
+    "titleEn": "Enterprise Cloud Infrastructure & Hybrid Security Suite",
+    "titleAr": "البنية التحتية السحابية المؤسسية وحزمة الأمان الهجين",
+    "category": "DIGITAL",
+    "status": "PUBLISHED",
+    "estimatedBudget": 180000,
+    "currency": "KWD",
+    "submissionDeadline": "2026-10-14T12:00:00Z",
+    "documentIds": ["doc_mina_spec_001", "doc_mina_terms_001"]
+  },
+  {
+    "id": "tnd_mina_002",
+    "tenantId": "min-a",
+    "tenderNumber": "MINA-TND-2026-002",
+    "titleEn": "Citizen Smart Services Portal & Omnichannel Interface",
+    "titleAr": "بوابة الخدمات الذكية للمواطنين والواجهة الموحدة",
+    "category": "DIGITAL",
+    "status": "APPROVED_FOR_PUBLICATION",
+    "estimatedBudget": 95000,
+    "currency": "KWD",
+    "submissionDeadline": "2026-10-18T12:00:00Z",
+    "documentIds": ["doc_mina_spec_002"]
+  },
+  {
+    "id": "tnd_minb_001",
+    "tenantId": "min-b",
+    "tenderNumber": "MINB-TND-2026-001",
+    "titleEn": "Advanced Hospital Diagnostic Imaging & Radiology Network",
+    "titleAr": "أنظمة التصوير التشخيصي الطبي المتقدم وشبكة الأشعة للمستشفيات",
+    "category": "HEALTH_TECH",
+    "status": "PUBLISHED",
+    "estimatedBudget": 320000,
+    "currency": "KWD",
+    "submissionDeadline": "2026-10-14T14:00:00Z",
+    "documentIds": ["doc_minb_spec_001", "doc_minb_rfp_001"]
+  }
+]
