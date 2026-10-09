@@ -73,4 +73,4 @@ mock data presented as real, no canned AI output, no buttons that do nothing.
 
 To run the app for a browser check: build the web app, then from `services/api`:
 `BID_MASTER_KEY=$(node -e "console.log(require('crypto').randomBytes(32).toString('base64'))") AUDIT_SIGNING_KEY=dev-audit-key-0123456789 SEED_DEMO=true DEMO_PASSWORD=Demo-Passw0rd! DATA_DIR=/tmp/<you>-data PORT=<unique port> npx tsx src/server.ts`
-Chromium for Playwright: `/opt/pw-browsers/chromium-1194/chrome-linux/chrome` (playwright is installed in the root node_modules).
+Browser checks: Playwright is installed at `/tmp/e2e/node_modules/playwright` (write your script under `/tmp/<you>-e2e/` and `import { chromium } from "/tmp/e2e/node_modules/playwright/index.mjs"`), launch with `executablePath: "/opt/pw-browsers/chromium-1194/chrome-linux/chrome"`.
