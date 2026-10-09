@@ -1,4 +1,4 @@
-import { VendorCyclePanel } from '../../features/cycle';
+import { VendorCyclePanel, vendorBidBlock } from '../../features/cycle';
 import { useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api, type Bid, type BidReceipt } from '../../api';
@@ -75,6 +75,7 @@ export default function VendorTender() {
           const approved = me.data?.status === 'APPROVED';
           const packDocs = (td.documents ?? []).filter((d) => !d.ownerType || d.ownerType === 'TENDER_PACK' || d.ownerType === 'ADDENDUM');
           const clar = td.clarifications ?? [];
+          const cycleBlock = vendorBidBlock(td);
           return (
             <>
               <header className="page-head">
@@ -191,6 +192,16 @@ export default function VendorTender() {
                       <p className="muted">{t('vendor.biddingClosed')}</p>
                     ) : me.data && !approved ? (
                       <div className="alert alert-info">{t('vendor.notApprovedBid')}</div>
+                    ) : cycleBlock ? (
+                      <div className={`alert ${cycleBlock === 'NOT_ELIGIBLE' ? 'alert-danger' : 'alert-warn'}`} role="status">
+                        <div>
+                          <strong>{t(cycleBlock === 'NOT_ELIGIBLE' ? 'cycle.v.blockNotEligible' : 'cycle.v.blockPurchase')}</strong>
+                          <div className="small">
+                            {t(cycleBlock === 'NOT_ELIGIBLE' ? 'cycle.v.blockNotEligibleHint' : 'cycle.v.blockPurchaseHint')}{' '}
+                            <a href={cycleBlock === 'NOT_ELIGIBLE' ? '#sec-eligibility' : '#sec-purchase'}>{t('cycle.v.blockLink')}</a>
+                          </div>
+                        </div>
+                      </div>
                     ) : (
                       <form onSubmit={submitBid} className="inline-form">
                         {bErr ? <ErrorBox error={bErr} /> : null}

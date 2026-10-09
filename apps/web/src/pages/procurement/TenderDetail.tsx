@@ -1,4 +1,4 @@
-import { TenderCyclePanel } from '../../features/cycle';
+import { ChainView, TenderCyclePanel, waitingStep, type CycleBid, type Step } from '../../features/cycle';
 import { TenderAiExtras } from '../../features/assistant';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
@@ -17,6 +17,7 @@ import {
   type ComplianceResult,
   type DocumentMeta,
   type Evaluation,
+  type Role,
   type TenderDetail,
 } from '../../api';
 import { useI18n } from '../../i18n';
@@ -52,7 +53,7 @@ export default function TenderDetailPage() {
   const status = tender.data?.status;
   const needBids = Boolean(status && ['PUBLISHED', 'CLOSED', ...POST_OPEN].includes(status));
   const bids = useAsync(() => (needBids ? api.bids(id) : Promise.resolve<Bid[]>([])), [id, needBids, status]);
-  const needEvals = Boolean(status && POST_OPEN.includes(status) && hasRole('COMMITTEE_CHAIR', 'DIRECTOR', 'EVALUATOR'));
+  const needEvals = Boolean(status && POST_OPEN.includes(status) && hasRole('COMMITTEE_CHAIR', 'DIRECTOR', 'UNDERSECRETARY', 'EVALUATOR'));
   const evals = useAsync(() => (needEvals ? api.evaluations(id) : Promise.resolve<Evaluation[]>([])), [id, needEvals, status]);
 
   const refresh = () => {
@@ -104,6 +105,20 @@ function Detail({
   const isDirector = hasRole('DIRECTOR');
   const isChair = hasRole('COMMITTEE_CHAIR');
   const isEvaluator = hasRole('EVALUATOR');
+  // Configured cycle: approval chains (N levels), two envelopes.
+  const chain = (td.approvalChain ?? []) as Step[];
+  const waiting = waitingStep(chain);
+  const inApproval = td.status === 'DRAFT' || td.status === 'PENDING_APPROVAL';
+  const canApproveLevel = inApproval && (waiting ? hasRole(waiting.role as Role) : isDirector);
+  const chainRoles = (chain.length ? chain.map((s) => s.role) : td.cycle?.approvals.publish.map((l) => l.role) ?? []) as Role[];
+  const canReturn = ['DRAFT', 'PENDING_APPROVAL', 'APPROVED'].includes(td.status) && hasRole('DIRECTOR', ...chainRoles);
+  const iApprovedEarlier = Boolean(user && chain.some((s) => s.approverId === user.id));
+  const awardChain = (td.awardChain ?? null) as Step[] | null;
+  const awardWaiting = waitingStep(awardChain);
+  const two = td.cycle?.envelopes === 'TWO';
+  const finKeys = useMemo(() => new Set(two ? td.cycle?.evaluation.financialCriteria ?? [] : []), [two, td.cycle]);
+  const finOpen = Boolean(td.financialOpenedAt);
+  const seesBids = hasRole('COMMITTEE_CHAIR', 'EVALUATOR', 'DIRECTOR', 'UNDERSECRETARY');
   const [dialog, setDialog] = useState<null | 'approve' | 'return' | 'cancel' | 'approveAward'>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [actionErr, setActionErr] = useState<unknown>(null);
@@ -142,6 +157,10 @@ function Detail({
 
   const creatorIsMe = Boolean(user && td.createdBy && td.createdBy === user.id);
   const recommenderIsMe = Boolean(user && award?.recommendedBy && award.recommendedBy === user.id);
+  const iApprovedAwardEarlier = Boolean(user && awardChain?.some((s) => s.approverId === user.id));
+  const canApproveAward = awardPending && (awardWaiting ? hasRole(awardWaiting.role as Role) : isDirector);
+  const approveBlock = creatorIsMe ? t('td.creatorCannotApprove') : iApprovedEarlier ? t('cycle.td.alreadyApproved') : undefined;
+  const awardBlock = recommenderIsMe ? t('td.recommenderCannotApprove') : iApprovedAwardEarlier ? t('cycle.td.alreadyApproved') : undefined;
 
   // ---- next action buttons for the current state + role
   const actions: JSX.Element[] = [];
@@ -158,26 +177,26 @@ function Detail({
       {label}
     </Button>
   );
-  if (td.status === 'DRAFT') {
-    if (isOfficer)
-      actions.push(
-        jump('goDocs', 'sec-docs', t('td.goDocs'), 'secondary'),
-        jump('goPack', 'sec-pack', t('td.goPackCheck')),
-        <Link key="edit" className="btn btn-secondary" to={`/procurement/tenders/${td.id}/edit`}>
-          {t('td.edit')}
-        </Link>,
-      );
-    if (isDirector) {
-      actions.push(
-        <Button key="approve" onClick={() => setDialog('approve')} disabled={creatorIsMe} disabledReason={creatorIsMe ? t('td.creatorCannotApprove') : undefined}>
-          {t('td.approve')}
-        </Button>,
-        <Button key="return" variant="secondary" onClick={() => setDialog('return')}>
-          {t('td.return')}
-        </Button>,
-      );
-    }
-  }
+  if (td.status === 'DRAFT' && isOfficer)
+    actions.push(
+      jump('goDocs', 'sec-docs', t('td.goDocs'), 'secondary'),
+      jump('goPack', 'sec-pack', t('td.goPackCheck')),
+      <Link key="edit" className="btn btn-secondary" to={`/procurement/tenders/${td.id}/edit`}>
+        {t('td.edit')}
+      </Link>,
+    );
+  if (canApproveLevel)
+    actions.push(
+      <Button key="approve" onClick={() => setDialog('approve')} disabled={Boolean(approveBlock)} disabledReason={approveBlock}>
+        {waiting && chain.length > 1 ? t('cycle.td.approveLevel', { n: waiting.level, total: chain.length }) : t('td.approve')}
+      </Button>,
+    );
+  if (canReturn)
+    actions.push(
+      <Button key="return" variant="secondary" onClick={() => setDialog('return')}>
+        {t('td.return')}
+      </Button>,
+    );
   if (td.status === 'APPROVED' && isOfficer)
     actions.push(
       <Button key="publish" busy={busy === 'publish'} onClick={() => doAction('publish', () => api.publishTender(td.id), t('td.published'))}>
@@ -190,20 +209,18 @@ function Detail({
   if ((td.status === 'OPENED' || td.status === 'EVALUATION') && !awardPending) {
     if (isEvaluator) actions.push(jump('goScore', 'sec-scoring', t('td.goScore')));
     if (isChair || isEvaluator) actions.push(jump('goCmp', 'sec-compliance', t('td.goCompliance'), 'secondary'));
-    if (isChair) actions.push(jump('goRec', 'sec-summary', t('td.goRecommend')));
+    if (isChair && two && !finOpen) actions.push(jump('goFin', 'sec-envelopes', t('cycle.td.goEnvelopes')));
+    if (isChair && (!two || finOpen)) actions.push(jump('goRec', 'sec-summary', t('td.goRecommend')));
   }
-  if (awardPending && isDirector)
+  if (canApproveAward)
     actions.push(
-      <Button
-        key="approveAward"
-        onClick={() => setDialog('approveAward')}
-        disabled={recommenderIsMe}
-        disabledReason={recommenderIsMe ? t('td.recommenderCannotApprove') : undefined}
-      >
-        {t('td.approveAward')}
+      <Button key="approveAward" onClick={() => setDialog('approveAward')} disabled={Boolean(awardBlock)} disabledReason={awardBlock}>
+        {awardWaiting && awardChain && awardChain.length > 1
+          ? t('cycle.td.approveAwardLevel', { n: awardWaiting.level, total: awardChain.length })
+          : t('td.approveAward')}
       </Button>,
     );
-  if (['DRAFT', 'APPROVED', 'PUBLISHED'].includes(td.status) && isDirector)
+  if (['DRAFT', 'PENDING_APPROVAL', 'APPROVED', 'PUBLISHED'].includes(td.status) && isDirector)
     actions.push(
       <Button key="cancel" variant="danger" onClick={() => setDialog('cancel')}>
         {t('td.cancel')}
@@ -226,7 +243,12 @@ function Detail({
         <Badge value={td.status} label={te('st.', td.status)} />
       </header>
 
-      <Stepper status={td.status} awardPending={awardPending} />
+      <Stepper
+        status={td.status}
+        awardPending={awardPending}
+        awardSub={awardWaiting ? t('cycle.td.awardPendingRole', { role: pick(awardWaiting.labelEn, awardWaiting.labelAr) || te('role.', awardWaiting.role) }) : undefined}
+        approvalSub={td.status === 'PENDING_APPROVAL' && waiting ? t('cycle.levelOf', { n: waiting.level, total: chain.length }) : undefined}
+      />
 
       {td.status === 'CANCELLED' && (
         <div className="alert alert-danger" role="status">
@@ -250,11 +272,16 @@ function Detail({
       {awardPending && (
         <div className="alert alert-warn" role="status">
           <div>
-            <strong>{t('td.awardPending')}</strong>
+            <strong>{awardWaiting ? t('cycle.td.awardPendingRole', { role: pick(awardWaiting.labelEn, awardWaiting.labelAr) || te('role.', awardWaiting.role) }) : t('td.awardPending')}</strong>
             <div className="small">
               {t('td.recommendedBid')}: {vendorName(award?.bidId)}
               {award?.justification ? ` — ${award.justification}` : ''}
             </div>
+            {awardChain && awardChain.length > 0 && (
+              <div className="cyc-mt">
+                <ChainView steps={awardChain} label={t('cycle.td.awardChain')} />
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -365,17 +392,19 @@ function Detail({
 
           {POST_OPEN.includes(td.status) && (
             <>
-              <BidsTable bids={bids} canDownload={hasRole('COMMITTEE_CHAIR', 'EVALUATOR', 'DIRECTOR')} />
+              <BidsTable bids={bids} canDownload={seesBids} two={two} />
               <Compliance td={td} bids={bids.data ?? []} canRun={hasRole('COMMITTEE_CHAIR', 'EVALUATOR')} onChange={refresh} />
               {isEvaluator && td.status !== 'AWARDED' && (
-                <Scoring td={td} bids={bids.data ?? []} evals={evals.data ?? []} userId={user?.id} onSaved={refresh} />
+                <Scoring td={td} bids={bids.data ?? []} evals={evals.data ?? []} userId={user?.id} onSaved={refresh} two={two} finKeys={finKeys} finOpen={finOpen} />
               )}
-              {hasRole('COMMITTEE_CHAIR', 'DIRECTOR') && (
+              {hasRole('COMMITTEE_CHAIR', 'DIRECTOR', 'UNDERSECRETARY') && (
                 <EvaluationSummary
                   td={td}
                   evals={evals}
-                  bids={bids.data ?? []}
-                  canRecommend={isChair && td.status !== 'AWARDED' && !awardPending}
+                  bids={(bids.data ?? []).filter((b) => !two || (b as CycleBid).technicalResult === 'PASSED')}
+                  allBids={bids.data ?? []}
+                  blockedNote={isChair && two && !finOpen && td.status !== 'AWARDED' ? t('cycle.td.recommendAfterFin') : undefined}
+                  canRecommend={isChair && td.status !== 'AWARDED' && !awardPending && (!two || finOpen)}
                   onRecommended={(a) => {
                     setLocalAward(a);
                     refresh();
@@ -398,8 +427,9 @@ function Detail({
         confirmLabel={t('td.approve')}
         onClose={() => setDialog(null)}
         onConfirm={async (r) => {
-          await api.approveTender(td.id, r);
-          toast(t('td.approved'));
+          const x = await api.approveTender(td.id, r);
+          // N-level chain: an intermediate level leaves the tender PENDING_APPROVAL for the next approver.
+          toast(x && x.status !== 'APPROVED' ? t('cycle.td.levelRecorded') : t('td.approved'));
           refresh();
         }}
       />
@@ -435,10 +465,11 @@ function Detail({
         confirmLabel={t('td.approveAward')}
         onClose={() => setDialog(null)}
         onConfirm={async (r) => {
-          const a = await api.approveAward(td.id, r);
-          if (a) setLocalAward({ ...a, status: 'APPROVED' });
-          if (a?.reportDocument) setExtraDocs((xs) => [...xs, a.reportDocument!]);
-          toast(t('td.awarded'));
+          // The server answers { award, final, reportDocumentId? }: only the last level of the award chain awards.
+          const res = (await api.approveAward(td.id, r)) as unknown as { award?: Award; final?: boolean; reportDocument?: DocumentMeta } | null;
+          if (res?.award && res.final) setLocalAward({ ...res.award, status: 'APPROVED' });
+          if (res?.reportDocument) setExtraDocs((xs) => [...xs, res.reportDocument!]);
+          toast(res?.final === false ? t('cycle.td.levelRecorded') : t('td.awarded'));
           refresh();
         }}
       />
@@ -460,7 +491,7 @@ function bidVendor(b: Bid, pick: (e?: string | null, a?: string | null) => strin
 
 // ---------------------------------------------------------------- stepper
 
-function Stepper({ status, awardPending }: { status: string; awardPending: boolean }) {
+function Stepper({ status, awardPending, approvalSub, awardSub }: { status: string; awardPending: boolean; approvalSub?: string; awardSub?: string }) {
   const { t, te } = useI18n();
   const idx = LIFECYCLE.indexOf(status as (typeof LIFECYCLE)[number]);
   return (
@@ -474,7 +505,8 @@ function Stepper({ status, awardPending }: { status: string; awardPending: boole
                 {i < idx || (i === idx && s === 'AWARDED') ? '✓' : i + 1}
               </span>
               <span className="step-label">{te('st.', s)}</span>
-              {i === idx && s === 'EVALUATION' && awardPending && <span className="step-sub">{t('td.awardPending')}</span>}
+              {i === idx && s === 'EVALUATION' && awardPending && <span className="step-sub">{awardSub ?? t('td.awardPending')}</span>}
+              {i === idx && s === 'PENDING_APPROVAL' && approvalSub && <span className="step-sub">{approvalSub}</span>}
             </li>
           );
         })}
@@ -818,14 +850,16 @@ function OpeningSession({
 
 // ---------------------------------------------------------------- bids
 
-function BidsTable({ bids, canDownload }: { bids: Async<Bid[]>; canDownload: boolean }) {
+function BidsTable({ bids, canDownload, two }: { bids: Async<Bid[]>; canDownload: boolean; two: boolean }) {
   const { t, te, pick, fmtDate } = useI18n();
   return (
     <Card title={t('td.bids')}>
       <AsyncView state={bids} empty={t('td.noBids')}>
         {(list) => (
-          <Table head={[t('td.vendor'), t('td.receiptHash'), t('td.submittedAt'), t('common.status'), t('td.files')]}>
-            {list.map((b) => (
+          <Table
+            head={[t('td.vendor'), t('td.receiptHash'), t('td.submittedAt'), t('common.status'), ...(two ? [t('cycle.td.technical')] : []), t('td.files')]}
+          >
+            {(list as CycleBid[]).map((b) => (
               <tr key={b.id}>
                 <td>{bidVendor(b, pick)}</td>
                 <td>
@@ -835,9 +869,22 @@ function BidsTable({ bids, canDownload }: { bids: Async<Bid[]>; canDownload: boo
                 <td>
                   <Badge value={b.status} label={te('bst.', b.status)} />
                 </td>
+                {two && (
+                  <td>
+                    {b.technicalResult ? (
+                      <Badge
+                        tone={b.technicalResult === 'PASSED' ? 'success' : 'danger'}
+                        label={`${t(b.technicalResult === 'PASSED' ? 'cycle.passed' : 'cycle.failed')} · ${b.technicalScore ?? '—'}`}
+                      />
+                    ) : (
+                      <span className="muted small">—</span>
+                    )}
+                    {b.financialSealed && b.status === 'OPENED' && <div className="muted small">{t('cycle.td.finSealed')}</div>}
+                  </td>
+                )}
                 <td>
                   {canDownload && (b.documents?.length ?? 0) > 0 ? (
-                    <div className="row wrap">
+                    <div className="row wrap cyc-files">
                       {b.documents!.map((d) => (
                         <DocButton
                           key={d.id}
@@ -973,41 +1020,57 @@ function Scoring({
   evals,
   userId,
   onSaved,
+  two,
+  finKeys,
+  finOpen,
 }: {
   td: TenderDetail;
   bids: Bid[];
   evals: Evaluation[];
   userId?: string;
   onSaved: () => void;
+  two: boolean;
+  finKeys: Set<string>;
+  finOpen: boolean;
 }) {
   const { t, pick } = useI18n();
   if (bids.length === 0) return null;
+  // Two envelopes: technical criteria only until the financial opening; afterwards all criteria, PASSED bids only.
+  const criteria = (td.criteria ?? []).filter((c) => !two || finOpen || !finKeys.has(c.key));
   return (
     <Card id="sec-scoring" title={t('td.scoring')}>
+      {two && <div className="alert alert-info">{t(finOpen ? 'cycle.td.allCriteria' : 'cycle.td.techOnly')}</div>}
       <div className="stack">
-        {bids.map((b) => (
-          <ScoreForm
-            key={b.id}
-            td={td}
-            bid={b}
-            vendor={bidVendor(b, pick)}
-            existing={evals.find((e) => e.bidId === b.id && (!userId || e.evaluatorId === userId))}
-            onSaved={onSaved}
-          />
-        ))}
+        {(bids as CycleBid[]).map((b) =>
+          two && finOpen && b.technicalResult !== 'PASSED' ? (
+            <div key={b.id} className="score-form">
+              <h3>{bidVendor(b, pick)}</h3>
+              <p className="muted">{t('cycle.td.failedNoScore', { score: b.technicalScore ?? '—' })}</p>
+            </div>
+          ) : (
+            <ScoreForm
+              key={`${b.id}-${criteria.length}`}
+              criteria={criteria}
+              bid={b}
+              vendor={bidVendor(b, pick)}
+              existing={evals.find((e) => e.bidId === b.id && (!userId || e.evaluatorId === userId))}
+              onSaved={onSaved}
+            />
+          ),
+        )}
       </div>
     </Card>
   );
 }
 
 function ScoreForm({
-  td,
+  criteria,
   bid,
   vendor,
   existing,
   onSaved,
 }: {
-  td: TenderDetail;
+  criteria: NonNullable<TenderDetail['criteria']>;
   bid: Bid;
   vendor: string;
   existing?: Evaluation;
@@ -1015,7 +1078,6 @@ function ScoreForm({
 }) {
   const { t, pick } = useI18n();
   const toast = useToast();
-  const criteria = td.criteria ?? [];
   const init = () =>
     Object.fromEntries(
       criteria.map((c) => {
@@ -1035,7 +1097,9 @@ function ScoreForm({
     const n = Number(vals[c.key]?.score);
     return vals[c.key]?.score !== '' && n >= 0 && n <= 100;
   });
-  const total = criteria.reduce((s, c) => s + ((Number(vals[c.key]?.score) || 0) * Number(c.weight)) / 100, 0);
+  // Same formula as the server: weighted average over the criteria being scored.
+  const weightSum = criteria.reduce((s, c) => s + Number(c.weight), 0) || 1;
+  const total = criteria.reduce((s, c) => s + (Number(vals[c.key]?.score) || 0) * Number(c.weight), 0) / weightSum;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -1121,12 +1185,16 @@ function EvaluationSummary({
   td,
   evals,
   bids,
+  allBids,
+  blockedNote,
   canRecommend,
   onRecommended,
 }: {
   td: TenderDetail;
   evals: Async<Evaluation[]>;
   bids: Bid[];
+  allBids: Bid[];
+  blockedNote?: string;
   canRecommend: boolean;
   onRecommended: (a: Award) => void;
 }) {
@@ -1148,10 +1216,11 @@ function EvaluationSummary({
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<unknown>(null);
   useEffect(() => {
-    if (!bidId && ranked[0]) setBidId(ranked[0].bidId);
-  }, [ranked, bidId]);
+    const top = ranked.find((r) => bids.some((b) => b.id === r.bidId));
+    if (!bidId && top) setBidId(top.bidId);
+  }, [ranked, bidId, bids]);
   const nameOf = (id: string) => {
-    const b = bids.find((x) => x.id === id);
+    const b = allBids.find((x) => x.id === id);
     return b ? bidVendor(b, pick) : id;
   };
 
@@ -1188,6 +1257,7 @@ function EvaluationSummary({
           </Table>
         )}
       </AsyncView>
+      {blockedNote && <p className="muted small">{blockedNote}</p>}
       {canRecommend && ranked.length > 0 && (
         <form className="inline-form" onSubmit={recommend}>
           <h3>{t('td.recommendTitle')}</h3>

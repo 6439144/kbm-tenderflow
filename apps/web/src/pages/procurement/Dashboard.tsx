@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../../api';
 import { useI18n, type TKey } from '../../i18n';
 import { AsyncView, Button, Card, useAsync } from '../../components/ui';
+import { ApprovalsWaitingCard, DefaultCycleCard } from '../../features/cycle';
 
 const LABELS: Record<string, TKey> = {
   vendorsPending: 'vst.PENDING_REVIEW',
@@ -40,6 +41,10 @@ export default function Dashboard() {
           {t('common.refresh')}
         </Button>
       </header>
+      <div className="cyc-dash">
+        <ApprovalsWaitingCard />
+        <DefaultCycleCard />
+      </div>
       <AsyncView state={state} isEmpty={(d) => !d || Object.keys(d).length === 0} empty={t('dash.empty')}>
         {(d) => {
           const flat = Object.entries(d).filter(([, v]) => typeof v === 'number') as [string, number][];
