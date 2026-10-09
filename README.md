@@ -1,4 +1,4 @@
-# TenderFlow (KBM) — v1.0.0-rc2
+# TenderFlow (KBM) — v1.0.0-rc3
 
 TenderFlow is a generic, configurable public-tendering product for government entities and regulated enterprises.
 Each entity runs **its own tender cycle** from a versioned template (stages on/off, N-level approval chains, one or
@@ -13,22 +13,33 @@ approver ≠ creator, award approver ≠ recommender, append-only HMAC-chained a
   with nine collaborators — request classifier, pack checker, gazette/CAPT notice drafter, vendor relevance
   matcher, clarification assistant, grade reviewer, compliance screener, evaluation narrator and **document
   intelligence** (every upload classified and its key data extracted with citations; a person accepts or corrects).
-- Both are optional at start-up: without them the product runs on a local file store and every AI feature says
+- **Platform features for government entities:** an annual vendor subscription with renewal reminders, grade upgrades,
+  fee exemptions and vendor blocking with automatic reinstatement. Also two-step verification, staff single sign-on
+  through Active Directory (OIDC) and a staff network allowlist. Tender documents can be view-only or downloaded
+  as a watermarked copy. Editable bilingual notifications go out by in-app, e-mail and SMS, with a delivery log.
+  Approval service levels escalate automatically. Every role has a dashboard, there are procurement analytics, an
+  auditor evidence pack, and a public tender board across entities.
+- Both IBM services are optional at start-up: without them the product runs on a local file store and every AI feature says
   "not connected" — never fake output.
 
 Docs: [BUILD-SPEC](docs/BUILD-SPEC.md) · [Implemented user stories](docs/USER-STORIES.md) ·
-[What is verified (rc2)](docs/release-notes-v1.0.0-rc2.md) · FileNet: [README](docs/filenet/README.md), [showcase](docs/filenet/SHOWCASE.md) ·
+[What is verified (rc3)](docs/release-notes-v1.0.0-rc3.md) · [MOI reference configuration](docs/MOI-REFERENCE-CONFIGURATION.md) ·
+[Security](docs/SECURITY-FEATURES.md) · [Notifications & escalation](docs/NOTIFICATIONS-AND-ESCALATION.md) · [Analytics & evidence](docs/ANALYTICS-AND-EVIDENCE.md) · FileNet: [README](docs/filenet/README.md), [showcase](docs/filenet/SHOWCASE.md) ·
 AI agents: [agents/README.md](agents/README.md) · [Document intelligence](docs/DOCUMENT-INTELLIGENCE.md)
 
-## Two demo entities, two different cycles (all fictitious)
+## Three demo entities, three different cycles (all demo data is fictitious)
 
 | Entity | Default cycle | What it shows |
 |---|---|---|
 | `kea` — Kuwait Energy Authority | Public tender, one envelope | Request intake with a scanned GM letter, director approval, gazette notice, sealed bids, opening, evaluation, award, records lock |
 | `gcia` — Gulf Coast Infrastructure Authority | RFP, two envelopes | Director → undersecretary approvals, paid documents (TEST gateway), minimum Second grade (vendor3 is not eligible), technical then financial opening |
+| `moi` — Ministry of Interior, **reference configuration · demo data** | MOI Phase 1: request → approval → targeted tender → purchase | Configured from KBM's MOI BRD v0.1: Raslni + GM-letter intake, activity + grade targeting, annual subscription, MOI receipt numbers, grading, upgrades, blocking, exemptions, view-only content. Bidding and award are outside MOI's Phase 1 scope. Every open MOI decision is a setting on Admin → Entity policies ([traceability](docs/MOI-REFERENCE-CONFIGURATION.md)). |
 
-Users in both: `officer`, `director`, `undersecretary`, `chair`, `evaluator1`, `evaluator2`, `admin`, `auditor`,
-`vendor1`..`vendor4` — all with the password you set in `DEMO_PASSWORD`.
+Users in `kea` and `gcia`: `officer`, `director`, `undersecretary`, `chair`, `evaluator1`, `evaluator2`, `admin`, `auditor`,
+`vendor1`..`vendor4`. Users in `moi`: `tenderdept` (Tender Department), `officer` (tender creator), `grader` (grading
+authority), `director`, `undersecretary`, `admin`, `auditor`, `vendor1` (active, First grade), `vendor2` (subscription ends
+in 5 days), `vendor3` (application waiting for grading), `vendor4` (blocked until next week), `vendor5` (fee-exempt).
+All use the password you set in `DEMO_PASSWORD`.
 
 ## The cycle and who does what
 
@@ -53,7 +64,7 @@ Users in both: `officer`, `director`, `undersecretary`, `chair`, `evaluator1`, `
 ## Guided demo for presentations
 
 Set `DEMO_MODE=true` in `.env` (never in production). After login a **Guided demo** button opens the Demo Story:
-13 chapters for `kea` plus a "different cycle" track for `gcia`, each switching persona (real token, audited),
+13 chapters for `kea`, a "different cycle" track for `gcia` and an 8-chapter MOI reference track, each switching persona (real token, audited),
 opening the right screen, highlighting what to click and showing live FileNet / Orchestrate evidence.
 First-time users of every role also get a short tour of their screens. To start again from clean demo data:
 `npm run demo:reset` (dry run) then `npm run demo:reset -- --yes`.

@@ -413,7 +413,7 @@ function VendorPanel({ s, subscription }: { s: VendorSection; subscription: Reco
         <Tile value={s.purchases.length} label={t('insight.vendor.purchases')} />
         <Tile value={s.bids.length} label={t('insight.vendor.bids')} />
         <Tile value={s.expiring.length} label={t('insight.vendor.expiring')} tone={s.expiring.some((e) => e.expired) ? 'danger' : s.expiring.length ? 'warn' : 'ok'} />
-        {subStatus && <Tile value={subStatus} label={t('insight.vendor.subscription')} />}
+        {subStatus && <Tile value={te('moi.sub.st.', subStatus)} label={t('insight.vendor.subscription')} tone={subStatus === 'ACTIVE' || subStatus === 'EXEMPT' ? 'ok' : 'warn'} />}
       </div>
       <Card title={t('insight.vendor.openTenders')}>
         {s.eligibleOpenTenders.length === 0 ? <EmptyState message={s.vendorStatus === 'APPROVED' ? t('insight.vendor.noOpen') : t('insight.vendor.notApproved')} /> : (
@@ -421,7 +421,7 @@ function VendorPanel({ s, subscription }: { s: VendorSection; subscription: Reco
             {s.eligibleOpenTenders.map((x) => (
               <tr key={x.id}>
                 <td dir="ltr"><Link to={`/vendor/tenders/${x.id}`}>{x.tenderNumber}</Link></td>
-                <td>{pick(x.titleEn, x.titleAr)}</td>
+                <td><Link to={`/vendor/tenders/${x.id}`}>{pick(x.titleEn, x.titleAr)}</Link></td>
                 <td>{fmtDate(x.deadline)}</td>
                 <td>
                   {x.eligible ? <Badge tone="success" label={t('insight.vendor.eligible')} /> : (

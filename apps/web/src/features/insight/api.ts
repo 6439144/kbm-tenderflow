@@ -121,5 +121,9 @@ export const insight = {
   /** NOTIFY workstream's escalation list, when present. */
   overdueApprovals: () => optional<unknown[]>('/approvals/overdue'),
   /** MOI workstream's vendor subscription, when present. */
-  mySubscription: () => optional<Record<string, unknown>>('/vendor/me/subscription'),
+  // Vendor lifecycle (MOI workstream): the subscription part of GET /vendor/me/lifecycle; only shown when the entity requires one.
+  mySubscription: async () => {
+    const l = await optional<{ subscription?: Record<string, unknown> & { required?: boolean } }>('/vendor/me/lifecycle');
+    return l?.subscription && l.subscription.required ? l.subscription : null;
+  },
 };

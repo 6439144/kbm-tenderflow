@@ -1,9 +1,9 @@
-# TenderFlow v1.0.0-rc2 — implemented user stories
+# TenderFlow v1.0.0-rc3 — implemented user stories
 
-As of 9 Oct 2026. 79 user stories are implemented.
+As of 10 Oct 2026. 124 user stories are implemented: 79 in rc2 and 45 added in rc3 (sections 14–18).
 
 How each story was verified:
-- **Test**: covered by automated API, integration or unit tests. 155 tests pass: 119 API/integration and 36 AI unit tests.
+- **Test**: covered by automated API, integration or unit tests. 214 tests pass: 174 API/integration and 40 AI unit tests.
 - **Browser**: walked through in Chromium with a script, on freshly seeded demo data, in English and Arabic where noted. Four scripted walk-throughs pass with no console errors.
 - **Live IBM**: not yet run against the TechZone FileNet or watsonx Orchestrate instance. These were built and tested against local fake servers that follow IBM's published APIs, and must be verified on the Windows machine. The commands are in the README.
 
@@ -153,13 +153,88 @@ FileNet storage itself (upload, download, Arabic text, 2 MB files, SHA-256 match
 | 78 | As a tenant admin, publishing a new version of the default template keeps it the default; other templates become default only when asked. | Test |
 | 79 | As a user following a link straight to a tender, the first-login tour does not redirect me. | Browser |
 
-## Not yet built (roadmap, needs MOI access or after the IBM review)
+## 14. MOI reference configuration and entity policies (from KBM's MOI BRD v0.1)
 
-- Real KNET payments (needs a sandbox merchant).
-- AD/OIDC for staff and TOTP MFA for vendors.
-- Raslni integration (needs the interface spec).
-- Email and SMS notifications.
-- The internal/external zone deployment on OpenShift.
-- A watermarked view-only document viewer.
-- OCR for scanned images.
-- PDF reports.
+| # | User story | Verified |
+|---|---|---|
+| 80 | As a presenter, I can sign in to a third entity, "Ministry of Interior — reference configuration · demo data", configured from the MOI BRD. All its vendors, tenders and people are fictitious. | Test, Browser |
+| 81 | As an administrator, I see every entity policy with its BRD reference and a Confirmed / Proposed / Open badge, and can change it. Each change is audited with old and new values. | Test, Browser (EN/AR) |
+| 82 | As an administrator, I see each open item from BRD section 15 next to the setting that absorbs it, or a plain "Needs MOI input". | Browser |
+| 83 | As an administrator, I can set a cycle's scope to "publication and document sale" (MOI Phase 1). Bidding, opening and award then disappear from that cycle, and the API refuses them with STAGE_NOT_IN_SCOPE. | Test, Browser |
+| 84 | As an administrator, I can set a service level in hours for each approval step in the Cycle Designer. | Test, Browser |
+| 85 | As an administrator, I can choose whether a tender's grade level means "that grade only" or "that grade and above", and whether grades are company-wide or per activity (BR-007 open questions). | Test |
+| 86 | As a vendor, I see only tenders matching my activity and grade. Anything else is "not found" on the list, the tender page and every document download (FR-020, SEC-006). | Test, Browser |
+| 87 | As a vendor, I buy tender documents through the TEST gateway and print a receipt numbered in MOI's own series (`MOI-RCPT-…`) that shows the gateway transaction ID (FR-007, FR-022). | Test, Browser (EN/AR) |
+| 88 | As an administrator, I can import activity codes from a file, audited (activity code sourcing). | Test |
+
+## 15. Vendor lifecycle
+
+| # | User story | Verified |
+|---|---|---|
+| 89 | As the grading authority (new role), I review applications in a queue and assign grades per activity or company-wide. Approval issues the vendor's subscription payment link (FR-016, FR-017, NOT-004). | Test, Browser |
+| 90 | As a vendor, I pay my annual subscription (TEST gateway) and see its status, end date and receipts. Without a valid subscription I cannot view or buy tenders when the entity requires one (BR-008/009). | Test, Browser |
+| 91 | As an administrator, I decide whether vendors keep access to tenders already bought after their subscription expires (BR-010). | Test |
+| 92 | As the system, I send each renewal reminder once per threshold (default 30, 7 and 1 days before expiry) and expire subscriptions. This runs as a scheduled job (NOT-001). | Test |
+| 93 | As a vendor, I request a grade upgrade with documents. The grading authority approves or declines it (the requester can never decide their own), and I am notified (FR-010, NOT-003). | Test, Browser |
+| 94 | As an administrator, I block a vendor for a date range or permanently, with grounds. The vendor cannot sign in and sees "account suspended until …" in Arabic or English. Access returns automatically at the end date, audited (FR-013/014, BR-006, NOT-005). | Test, Browser |
+| 95 | As an administrator, I grant fee exemptions per vendor or by vendor category, and manage the categories (FR-018). | Test, Browser |
+| 96 | As MOI, I am notified of each new vendor application (NOT-002). | Test |
+| 97 | As a presenter, a blocked vendor cannot be used through the demo persona switch either. | Test |
+
+## 16. Identity, access and content protection
+
+| # | User story | Verified |
+|---|---|---|
+| 98 | As a vendor, I set up two-step verification (TOTP, QR code) and sign in with a code (SEC-005). | Test, Browser (EN/AR) |
+| 99 | As a vendor, I can use each of my one-time recovery codes once if I lose my phone. | Test, Browser |
+| 100 | As an administrator, I set two-step verification to off, optional or required, separately for vendors and staff. "Required" forces setup at next sign-in. Five wrong codes lock it for 5 minutes. | Test, Browser |
+| 101 | As an administrator, I can reset a user's two-step verification (audited). | Test, Browser |
+| 102 | As MOI staff, I sign in with Active Directory through OIDC (Entra ID or AD FS). Roles come from my directory groups, and accounts are either created by an administrator first or automatically from groups (INT-004). | Test (local fake provider); Live AD |
+| 103 | As an administrator, I configure single sign-on and the group-to-role mapping. The client secret is never shown or stored; only the name of its setting is. | Test, Browser |
+| 104 | As an administrator, I limit staff access to listed IP ranges and record whether they mean premises, VPN or both. Vendors are unaffected, and refusals are audited (SEC-003). | Test, Browser |
+| 105 | As an administrator, I am warned and must confirm before saving a network list that would lock me out. | Test, Browser |
+| 106 | As an administrator, I enable or disable any staff or vendor user, assign roles and see last sign-in. Disabling a user or changing their roles ends their sessions at once (FR-035/036). | Test, Browser |
+| 107 | As a vendor, I read tender documents in a protected viewer with my identity watermarked on every page, before and after purchase. Copying and printing are disabled and the page blurs when it loses focus. Every view is audited (SEC-001/002). The viewer says honestly that screenshots cannot be technically prevented. | Test, Browser |
+| 108 | As a vendor who has paid, I can download a PDF stamped on every page with my vendor ID, name, time and receipt. The original in FileNet is never changed (FR-023). | Test, Browser |
+| 109 | As staff, I always see the original documents. | Test |
+
+## 17. Notifications, service levels and escalation
+
+| # | User story | Verified |
+|---|---|---|
+| 110 | As an administrator, I edit each notification (including the BRD's NOT-001 to NOT-005) in English and Arabic with a live preview, choose its channels and switch it on or off (audited). | Test, Browser (EN/AR) |
+| 111 | As an administrator, I send a template test to myself. | Test, Browser |
+| 112 | As an operator, I point TenderFlow at an SMTP server and an HTTP SMS provider. A channel that is not configured is logged as "skipped — not configured", never as "sent". | Test (fake mail and SMS servers); Live provider |
+| 113 | As an administrator or auditor, I filter the delivery log and retry failed e-mails or SMS messages. Retries back off exponentially, up to 3 attempts. | Test, Browser |
+| 114 | As an administrator, I see the background jobs with their last run, result and errors, and can press "Run now". Only one run of a job happens at a time. | Test, Browser |
+| 115 | As an administrator, I set approval service levels: due hours, a reminder before due, and who to escalate to. | Test, Browser |
+| 116 | As an approver, I get a reminder before an approval is due. When it is overdue it is escalated once per level, shown as "overdue by …" on the approval chain and the dashboard, and audited. The decision stays with people. | Test, Browser |
+| 117 | As the approver of the waiting level, I can reject a tender with a reason. It is cancelled, its creator is notified and the rejection is audited. | Test, Browser |
+
+## 18. Dashboards, analytics, evidence and public board
+
+| # | User story | Verified |
+|---|---|---|
+| 118 | As any user (officer, director, undersecretary, chair, evaluator, auditor, administrator, vendor), I see a dashboard for my role with real numbers when I sign in (FR-031). | Test, Browser |
+| 119 | As a director, undersecretary, administrator or auditor, I see cycle time per stage (median and p90), tenders by status and category, vendor participation, approval turnaround, document sales (TEST payments shown separately), AI usage and stored documents for a date range. Each table can be exported as CSV. | Test, Browser |
+| 120 | As an auditor, I generate an evidence pack (ZIP) for a tender or date range. It holds a manifest with FileNet object IDs and SHA-256 hashes, the audit chain slice and its verification, approvals and the documents, with sealed bids excluded before opening. It is stored as a document (in FileNet) and audited. | Test, Browser (hashes checked with `sha256sum -c`); FileNet live |
+| 121 | As a member of the public, I browse published tenders across entities at `/tenders` without signing in, filter them, and subscribe by RSS or JSON. Drafts and entities that opted out (MOI by default) never appear, and no private field leaks. | Test, Browser |
+| 122 | As an administrator, I switch my entity's public board listing on or off. | Test, Browser |
+
+## 19. Integration fixes (rc3 merge)
+
+| # | User story | Verified |
+|---|---|---|
+| 123 | As an administrator or auditor, I land on my dashboard after sign-in. | Browser |
+| 124 | As a vendor or entity, a KNET payment is never recorded until a real KNET adapter exists (needs the merchant account and spec); the TEST gateway stays clearly labelled. | Test |
+
+## Not yet built (roadmap — needs MOI or third-party access, or after the IBM review)
+
+- KNET payments (needs MOI's merchant account and KNET's integration specification, BRD DEP-004)
+- Raslni integration (needs the interface spec from the third-party owner, DEP-002)
+- Internal/external zone deployment with push-only replication on OpenShift (SEC-008)
+- OCR for scanned images (IBM Datacap or a watsonx.ai vision model)
+- PDF reports
+- Refunds, contracts and guarantees
+- Multi-step upgrade approval (waits on MOI's DEP-003)
+- Custom roles defined by an entity
