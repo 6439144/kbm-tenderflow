@@ -3,6 +3,7 @@
 // request with documents (FR-010), exemption and suspension notices — and a compact summary card for the vendor home.
 import { useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { ApiError } from '../../api';
 import { useI18n, type TKey } from '../../i18n';
 import { AsyncView, Badge, Button, Card, ErrorBox, Field, Table, useAsync, useToast } from '../../components/ui';
 import { linkToken, moiApi, type Lifecycle, type Subscription } from './api';
@@ -95,7 +96,13 @@ function SubscriptionCard({ l, reminderDays, onChange }: { l: Lifecycle; reminde
 
   return (
     <Card title={t('moi.sub.title')} id="subscription">
-      {err ? <ErrorBox error={err} /> : null}
+      {err instanceof ApiError && err.code === 'KNET_NOT_CONFIGURED' ? (
+        <div className="alert alert-warn" role="status">
+          {t('moi.sub.knetNotConfigured')}
+        </div>
+      ) : err ? (
+        <ErrorBox error={err} />
+      ) : null}
       {!s.required && <p className="muted small">{t('moi.sub.notRequired')}</p>}
       <div className="moi-sub-head">
         <SubBadge status={s.status} />

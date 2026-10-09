@@ -364,7 +364,7 @@ function OpenDecisions({ cat }: { cat: Catalogue }) {
                   ))}
                 </ul>
               ) : (
-                <span className="small muted">{t('moi.open.notConfigurable')}</span>
+                <span className="small muted">{t(o.status === 'NEEDS_MOI_INPUT' ? 'moi.open.notConfigurable' : 'moi.open.builtIn')}</span>
               )}
             </td>
             <td className="small">{pick(o.noteEn, o.noteAr)}</td>
