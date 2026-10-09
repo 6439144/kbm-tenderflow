@@ -4,6 +4,7 @@ import * as demoL from './locales/demo';
 import * as filenetL from './locales/filenet';
 import * as assistantL from './locales/assistant';
 import * as docintelL from './locales/docintel';
+import * as moiL from './locales/moi';
 
 export type Lang = 'ar' | 'en';
 
@@ -125,6 +126,7 @@ const coreEn = {
   'role.TENANT_ADMIN': 'Administrator',
   'role.SYSTEM': 'System (automatic)',
   'role.AUDITOR': 'Auditor',
+  'role.GRADING_AUTHORITY': 'Grading authority',
 
   // tender status
   'st.DRAFT': 'Draft',
@@ -422,7 +424,7 @@ const coreEn = {
   'misc.days': '{d}d {h}h {m}m',
 } as const;
 
-const en = { ...coreEn, ...cycleL.en, ...demoL.en, ...filenetL.en, ...assistantL.en, ...docintelL.en };
+const en = { ...coreEn, ...cycleL.en, ...demoL.en, ...filenetL.en, ...assistantL.en, ...docintelL.en, ...moiL.en };
 export type TKey = keyof typeof en;
 
 const coreAr: Record<keyof typeof coreEn, string> = {
@@ -537,6 +539,7 @@ const coreAr: Record<keyof typeof coreEn, string> = {
   'role.TENANT_ADMIN': 'مسؤول النظام',
   'role.SYSTEM': 'النظام (تلقائي)',
   'role.AUDITOR': 'مدقق',
+  'role.GRADING_AUTHORITY': 'جهة التصنيف',
 
   'st.DRAFT': 'مسودة',
   'st.PENDING_APPROVAL': 'قيد الاعتماد',
@@ -822,7 +825,7 @@ const coreAr: Record<keyof typeof coreEn, string> = {
   'misc.days': '{d}ي {h}س {m}د',
 };
 
-const ar: Record<TKey, string> = { ...coreAr, ...cycleL.ar, ...demoL.ar, ...filenetL.ar, ...assistantL.ar, ...docintelL.ar };
+const ar: Record<TKey, string> = { ...coreAr, ...cycleL.ar, ...demoL.ar, ...filenetL.ar, ...assistantL.ar, ...docintelL.ar, ...moiL.ar };
 
 const dict: Record<Lang, Record<TKey, string>> = { en, ar };
 

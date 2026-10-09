@@ -19,6 +19,7 @@ import { DemoOverlay } from './features/demo';
 import { FileNetHealthPage } from './features/filenet';
 import { AssistantDock } from './features/assistant';
 import { DocumentQueuePage, DocumentTypesPage } from './features/docintel';
+import { EntityPoliciesPage, GradingQueuePage, GradingVendorPage, ReceiptPage, UpgradeRequestPage, VendorLifecycleAdminPage, VendorSubscriptionPage } from './features/moi';
 
 const LANG_KEY = 'tf.lang';
 
@@ -39,8 +40,9 @@ const PROCUREMENT_NAV: NavItem[] = [
   { to: '/procurement/tenders/new', label: 'nav.newTender', roles: ['PROCUREMENT_OFFICER'] },
   { to: '/procurement/vendors', label: 'nav.vendors', roles: ['PROCUREMENT_OFFICER', 'DIRECTOR'] },
   { to: '/procurement/documents', label: 'nav.documentIntelligence' },
+  { to: '/procurement/grading', label: 'moi.nav.grading', roles: ['GRADING_AUTHORITY'] },
 ];
-const VENDOR_NAV: NavItem[] = [{ to: '/vendor', label: 'nav.myCompany', end: true }];
+const VENDOR_NAV: NavItem[] = [{ to: '/vendor', label: 'nav.myCompany', end: true }, { to: '/vendor/subscription', label: 'moi.nav.subscription' }];
 const ADMIN_NAV: NavItem[] = [
   { to: '/admin', label: 'nav.users', end: true, roles: ['TENANT_ADMIN'] },
   { to: '/admin/cycle', label: 'nav.cycleDesigner', roles: ['TENANT_ADMIN'] },
@@ -50,6 +52,8 @@ const ADMIN_NAV: NavItem[] = [
   { to: '/admin/audit', label: 'nav.audit' },
   { to: '/admin/filenet', label: 'nav.filenet' },
   { to: '/admin/system', label: 'nav.system' },
+  { to: '/admin/policies', label: 'moi.nav.policies' },
+  { to: '/admin/vendor-lifecycle', label: 'moi.nav.vendorLifecycle' },
 ];
 
 function Home() {
@@ -92,10 +96,12 @@ export default function App() {
             <Route path="/vendor" element={<Portal roles={['VENDOR']} nav={VENDOR_NAV} />}>
               <Route index element={<VendorHome />} />
               <Route path="tenders/:id" element={<VendorTender />} />
+              {/* moi routes */}
+              <Route path="subscription" element={<VendorSubscriptionPage />} />
             </Route>
             <Route
               path="/procurement"
-              element={<Portal roles={['PROCUREMENT_OFFICER', 'DIRECTOR', 'UNDERSECRETARY', 'COMMITTEE_CHAIR', 'EVALUATOR']} nav={PROCUREMENT_NAV} />}
+              element={<Portal roles={['PROCUREMENT_OFFICER', 'DIRECTOR', 'UNDERSECRETARY', 'COMMITTEE_CHAIR', 'EVALUATOR', 'GRADING_AUTHORITY']} nav={PROCUREMENT_NAV} />}
             >
               <Route index element={<Dashboard />} />
               <Route path="vendors" element={<VendorsQueue />} />
@@ -106,6 +112,10 @@ export default function App() {
               <Route path="tenders/:id" element={<TenderDetailPage />} />
               <Route path="tenders/:id/edit" element={<TenderForm />} />
               <Route path="documents" element={<DocumentQueuePage />} />
+              {/* moi routes */}
+              <Route path="grading" element={<GradingQueuePage />} />
+              <Route path="grading/vendors/:id" element={<GradingVendorPage />} />
+              <Route path="grading/upgrades/:id" element={<UpgradeRequestPage />} />
             </Route>
             <Route path="/admin" element={<Portal roles={['TENANT_ADMIN', 'AUDITOR']} nav={ADMIN_NAV} />}>
               <Route index element={<AdminUsers />} />
@@ -116,7 +126,12 @@ export default function App() {
               <Route path="documents" element={<DocumentQueuePage />} />
               <Route path="filenet" element={<FileNetHealthPage />} />
               <Route path="system" element={<AdminSystem />} />
+              {/* moi routes */}
+              <Route path="policies" element={<EntityPoliciesPage />} />
+              <Route path="vendor-lifecycle" element={<VendorLifecycleAdminPage />} />
             </Route>
+            {/* moi routes */}
+            <Route path="/receipt/:number" element={<ReceiptPage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
           <DemoOverlay />

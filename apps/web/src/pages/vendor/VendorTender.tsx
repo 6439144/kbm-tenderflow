@@ -1,4 +1,5 @@
 import { VendorCyclePanel, vendorBidBlock } from '../../features/cycle';
+import { bidsInScope, OutOfScopeNote, VendorTenderNotes } from '../../features/moi';
 import { useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api, type Bid, type BidReceipt } from '../../api';
@@ -125,6 +126,7 @@ export default function VendorTender() {
                     )}
                   </Card>
                   <VendorCyclePanel td={td} onChange={tender.reload} />
+                  <VendorTenderNotes td={td} />
                   <Card title={t('vendor.packDocs')}>
                     <DocList docs={packDocs} empty={t('vendor.noPackDocs')} />
                   </Card>
@@ -164,6 +166,7 @@ export default function VendorTender() {
                   </Card>
                 </div>
                 <div className="stack">
+                  {!bidsInScope(td.cycle) ? <OutOfScopeNote id="vendor-bid" /> : (
                   <Card id="vendor-bid" title={t('vendor.submitBid')}>
                     {receipt ? (
                       <Receipt receipt={receipt} />
@@ -214,6 +217,7 @@ export default function VendorTender() {
                       </form>
                     )}
                   </Card>
+                  )}
                 </div>
               </div>
             </>

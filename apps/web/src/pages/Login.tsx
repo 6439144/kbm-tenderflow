@@ -5,6 +5,7 @@ import { useI18n } from '../i18n';
 import { applyTheme, homeFor, useSession } from '../session';
 import { Header } from '../components/Layout';
 import { Button, ErrorBox, Field, Spinner, useAsync } from '../components/ui';
+import { isSuspendedError, SuspendedNotice } from '../features/moi';
 
 export default function Login() {
   const { t, pick } = useI18n();
@@ -60,7 +61,7 @@ export default function Login() {
                 {t('err.unauthorized')}
               </div>
             )}
-            {err ? <ErrorBox error={err} /> : null}
+            {err ? isSuspendedError(err) ? <SuspendedNotice error={err} /> : <ErrorBox error={err} /> : null}
             <form onSubmit={submit} noValidate={false}>
               <Field label={t('login.tenant')} required>
                 {(id) =>

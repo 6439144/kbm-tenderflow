@@ -2,8 +2,9 @@
 // requests, publication channels, notifications). Every call is a real request to /api/v1.
 import { http } from './api';
 
-export interface ApprovalLevel { role: string; labelEn: string; labelAr: string }
+export interface ApprovalLevel { role: string; labelEn: string; labelAr: string; dueHours?: number }
 export interface CycleConfig {
+  scope?: 'FULL_CYCLE' | 'PUBLICATION_AND_SALE';
   stages: { requestIntake: boolean; documentPurchase: boolean; gazette: boolean; capt: boolean; complianceScreening: boolean; recordsLock: boolean };
   approvals: { request: ApprovalLevel[]; publish: ApprovalLevel[]; award: ApprovalLevel[] };
   envelopes: 'ONE' | 'TWO';

@@ -1,5 +1,6 @@
 import { TendersForYou } from '../../features/assistant';
 import { VerifiedDocuments } from '../../features/docintel';
+import { VendorLifecycleSummary } from '../../features/moi';
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { api, type Bid, type Tender } from '../../api';
@@ -83,6 +84,7 @@ export default function VendorHome() {
         </AsyncView>
       </Card>
 
+      <VendorLifecycleSummary />
       <TendersForYou />
       <Card title={t('nav.availableTenders')} actions={<Button variant="ghost" onClick={tenders.reload}>{t('common.refresh')}</Button>}>
         <AsyncView state={tenders} empty={t('vendor.noTenders')}>

@@ -16,6 +16,7 @@ const Ctx = createContext<SessionCtx | null>(null);
 
 export function homeFor(user: User): string {
   if (user.roles.includes('VENDOR')) return '/vendor';
+  if (user.roles.includes('GRADING_AUTHORITY') && !user.roles.some((r) => r === 'PROCUREMENT_OFFICER' || r === 'DIRECTOR')) return '/procurement/grading';
   if (user.roles.some((r) => r === 'PROCUREMENT_OFFICER' || r === 'DIRECTOR' || r === 'UNDERSECRETARY' || r === 'COMMITTEE_CHAIR' || r === 'EVALUATOR'))
     return '/procurement';
   if (user.roles.includes('TENANT_ADMIN')) return '/admin';
