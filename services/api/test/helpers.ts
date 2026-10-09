@@ -16,10 +16,10 @@ export const PASSWORD = 'Test-Passw0rd!';
 
 export interface Running { handle: AppHandle; base: string; dataDir: string; stop(): Promise<void> }
 
-export async function startApp(dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tf-test-'))): Promise<Running> {
+export async function startApp(dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tf-test-')), extraEnv: Record<string, string> = {}): Promise<Running> {
   const config = loadConfig({
     BID_MASTER_KEY, AUDIT_SIGNING_KEY, DATA_DIR: dataDir, SEED_DEMO: 'false', CONTENT_STORE_TYPE: 'filesystem',
-    PUBLIC_BASE_URL: 'http://tenderflow.test', LOGIN_RATE_LIMIT_PER_MIN: '1000', WEB_DIST_DIR: path.join(dataDir, 'no-web'),
+    PUBLIC_BASE_URL: 'http://tenderflow.test', LOGIN_RATE_LIMIT_PER_MIN: '1000', WEB_DIST_DIR: path.join(dataDir, 'no-web'), ...extraEnv,
   });
   const handle = await createApp(config);
   const server = handle.app.listen(0, '127.0.0.1');

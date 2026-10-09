@@ -85,7 +85,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   }
 
   const port = Number(opt(env.PORT) ?? 4000);
-  const dataDir = path.resolve(opt(env.DATA_DIR) ?? path.join(REPO_ROOT, 'data'));
+  const dataDir = path.resolve(REPO_ROOT, opt(env.DATA_DIR) ?? 'data'); // relative paths are relative to the repo root
   const pem = opt(env.JWT_PRIVATE_KEY_PEM)?.replace(/\\n/g, '\n');
   return {
     port,
@@ -101,7 +101,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     demoPassword,
     contentStoreType: cst as 'filesystem' | 'filenet',
     corsOrigin: opt(env.CORS_ORIGIN),
-    webDistDir: path.resolve(opt(env.WEB_DIST_DIR) ?? path.join(REPO_ROOT, 'apps', 'web', 'dist')),
+    webDistDir: path.resolve(REPO_ROOT, opt(env.WEB_DIST_DIR) ?? path.join('apps', 'web', 'dist')),
     closeJobIntervalMs: Number(opt(env.CLOSE_JOB_INTERVAL_MS) ?? 60_000),
     loginRateLimit: Number(opt(env.LOGIN_RATE_LIMIT_PER_MIN) ?? 30),
   };

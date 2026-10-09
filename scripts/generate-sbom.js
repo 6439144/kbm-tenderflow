@@ -30,7 +30,7 @@ const sbom = {
 };
 
 // Traverse workspace packages
-const workspaceDirs = ['apps/vendor-portal', 'apps/procurement-app', 'apps/control-panel', 'packages/tenant-config', 'packages/ui', 'services/api', 'services/content-adapter'];
+const workspaceDirs = ['services/api', 'apps/web'];
 
 for (const ws of workspaceDirs) {
   const wsPkgPath = path.join(ws, 'package.json');

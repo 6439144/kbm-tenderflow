@@ -19,24 +19,25 @@ function chunk(text: string, label: string): { section: string; text: string }[]
   return out;
 }
 
-/** Split text on markdown headings (# ...) or numbered headings ("1. Scope", "2.3 Timeline"). */
+/** Split text on markdown headings (## ...) or, if there are none, on top-level numbered headings
+ * ("1. Scope"). Sub-items ("3.2 ...") stay inside their section. Falls back to ~1500-char chunks. */
 export function splitByHeadings(text: string): { section: string; text: string }[] {
   const lines = text.replace(/\r\n/g, '\n').split('\n');
-  const headingRe = /^\s*(#{1,6}\s+.+|\d+(\.\d+)*[.)]?\s+\S.{0,120})$/;
-  const sections: { section: string; text: string }[] = [];
-  let current: { section: string; lines: string[] } | null = null;
+  const mdRe = /^\s*#{1,6}\s+\S/;
+  const numRe = /^\s*\d+[.)]\s+\S.{0,120}$/;
+  const headingRe = lines.filter((l) => mdRe.test(l)).length >= 2 ? mdRe : lines.filter((l) => numRe.test(l)).length >= 2 ? numRe : null;
+  if (!headingRe) return chunk(text, 'part');
+  const sections: { section: string; lines: string[] }[] = [];
   const pre: string[] = [];
   for (const line of lines) {
-    if (headingRe.test(line) && line.trim().length <= 140) {
-      if (current) sections.push({ section: current.section, text: current.lines.join('\n').trim() });
-      current = { section: line.replace(/^\s*#+\s*/, '').trim(), lines: [] };
-    } else if (current) current.lines.push(line);
+    if (headingRe.test(line) && line.trim().length <= 160) sections.push({ section: line.replace(/^\s*#+\s*/, '').trim(), lines: [] });
+    else if (sections.length) sections[sections.length - 1].lines.push(line);
     else pre.push(line);
   }
-  if (current) sections.push({ section: current.section, text: current.lines.join('\n').trim() });
+  const result = sections
+    .map((s) => ({ section: s.section, text: s.lines.join('\n').trim() || s.section }))
+    .flatMap((s) => (s.text.length > CHUNK * 2 ? chunk(s.text, s.section) : [s]));
   const intro = pre.join('\n').trim();
-  if (sections.length < 2) return chunk(text, 'part');
-  const result = sections.flatMap((s) => (s.text.length > CHUNK * 2 ? chunk(s.text, s.section) : [s])).filter((s) => s.text);
   if (intro) result.unshift({ section: 'introduction', text: intro });
   return result;
 }
