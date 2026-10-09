@@ -211,5 +211,6 @@ export async function seedDemo(ctx: Ctx): Promise<void> {
     setClockOffset(0);
   }
   await tenders.closeDueTenders(ctx);
+  await (await import('./features/notify.js')).seedNotifications(ctx); // NOTIFY: notification templates + sample approval SLA
   console.log('[seed] done: entities kea (public tender) and gcia (two-envelope RFP); users officer/director/undersecretary/chair/evaluator1/evaluator2/admin/auditor/vendor1..4');
 }

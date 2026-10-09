@@ -33,6 +33,8 @@ export interface Config {
   docAiAuto: boolean | null;
   /** FILENET_AI_PROPERTIES — write TF_DocType / TF_ExpiryDate / TF_AIReviewed to the stored document on acceptance. */
   docAiProperties: boolean;
+  /** Notifications (SMTP / SMS HTTP), background jobs and delivery retries — see loadNotifyConfig below. */
+  notify: NotifyConfig;
 }
 
 export class ConfigError extends Error {}
@@ -117,5 +119,44 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     loginRateLimit: Number(opt(env.LOGIN_RATE_LIMIT_PER_MIN) ?? 30),
     docAiAuto: opt(env.DOC_AI_AUTO) === undefined ? null : ['true', '1', 'yes'].includes(opt(env.DOC_AI_AUTO)!.toLowerCase()),
     docAiProperties: ['true', '1', 'yes'].includes((opt(env.FILENET_AI_PROPERTIES) ?? 'false').toLowerCase()),
+    notify: loadNotifyConfig(env),
+  };
+}
+
+// --- notify --- (docs/NOTIFICATIONS-AND-ESCALATION.md)
+export interface NotifyConfig {
+  /** SMTP e-mail channel; configured when SMTP_HOST and SMTP_FROM are set. */
+  smtp: { host?: string; port: number; secure: boolean; user?: string; pass?: string; from?: string; rejectUnauthorized: boolean };
+  /** Generic HTTP SMS adapter; configured when SMS_HTTP_URL is set. */
+  sms: { url?: string; method: string; authHeader?: string; contentType: string; bodyTemplate: string; sender?: string; messageIdPath?: string; timeoutMs: number };
+  /** Language of SMS texts and of the first part of bilingual e-mails ('ar' | 'en'). */
+  defaultLang: 'ar' | 'en';
+  /** Background jobs on/off (default on, off under `node --test` unless SCHEDULER_ENABLED=true). */
+  schedulerEnabled: boolean;
+  deliveryJobMs: number;
+  escalationJobMs: number;
+  /** First retry delay; the n-th retry waits base × 2^(n-1). */
+  retryBaseMs: number;
+  /** Send queued e-mail / SMS right after the transaction that created them (in addition to the job). */
+  sendImmediately: boolean;
+}
+
+export function loadNotifyConfig(env: NodeJS.ProcessEnv): NotifyConfig {
+  const yes = (v: string | undefined, d: boolean) => (opt(v) === undefined ? d : ['true', '1', 'yes'].includes(opt(v)!.toLowerCase()));
+  const num = (v: string | undefined, d: number) => { const n = Number(opt(v)); return Number.isFinite(n) && n > 0 ? n : d; };
+  const secure = yes(env.SMTP_SECURE, false);
+  return {
+    smtp: { host: opt(env.SMTP_HOST), port: num(env.SMTP_PORT, secure ? 465 : 587), secure, user: opt(env.SMTP_USER), pass: opt(env.SMTP_PASS),
+      from: opt(env.SMTP_FROM), rejectUnauthorized: yes(env.SMTP_TLS_REJECT_UNAUTHORIZED, true) },
+    sms: { url: opt(env.SMS_HTTP_URL), method: (opt(env.SMS_HTTP_METHOD) ?? 'POST').toUpperCase(), authHeader: opt(env.SMS_HTTP_AUTH_HEADER),
+      contentType: opt(env.SMS_HTTP_CONTENT_TYPE) ?? 'application/json',
+      bodyTemplate: opt(env.SMS_HTTP_BODY_TEMPLATE) ?? '{"to":"{to}","from":"{sender}","text":"{text}"}',
+      sender: opt(env.SMS_SENDER), messageIdPath: opt(env.SMS_HTTP_MESSAGE_ID_PATH), timeoutMs: num(env.SMS_HTTP_TIMEOUT_MS, 15_000) },
+    defaultLang: opt(env.NOTIFY_DEFAULT_LANG) === 'en' ? 'en' : 'ar',
+    schedulerEnabled: yes(env.SCHEDULER_ENABLED, !process.env.NODE_TEST_CONTEXT),
+    deliveryJobMs: num(env.NOTIFY_DELIVERY_JOB_MS, 30_000),
+    escalationJobMs: num(env.APPROVAL_ESCALATION_JOB_MS, 300_000),
+    retryBaseMs: num(env.NOTIFY_RETRY_BASE_MS, 60_000),
+    sendImmediately: yes(env.NOTIFY_SEND_IMMEDIATELY, true),
   };
 }

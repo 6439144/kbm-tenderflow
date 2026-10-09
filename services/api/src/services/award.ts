@@ -7,7 +7,7 @@ import { loadTender, type TenderRow } from './tenders.js';
 import { financialSealed, loadBid } from './bids.js';
 import { configOf } from './templates.js';
 import { approvalChainView, currentRound, nextLevel } from './tenders.js';
-import { notifyRole } from './notifications.js';
+import { notify, notifyRole } from './notifications.js';
 import { uuid as newId } from '../util.js';
 import { insertDocument, putDocument } from './documents.js';
 import { committeeReportHtml, type ReportBid } from './reports.js';
@@ -154,6 +154,7 @@ export async function approveAward(ctx: Ctx, actor: Actor, tenderId: string, b: 
       [actor.id, approvedAt, doc.id, award.id]);
     await q.query(`INSERT INTO approvals (id, tenant_id, subject_type, subject_id, gate, level, role, approver_id, decision, reason, decided_at)
                    VALUES ($1,$2,'TENDER',$3,'AWARD',$4,$5,$6,'APPROVED',$7,$8)`, [newId(), t.tenant_id, t.id, step.levelNo, step.level.role, actor.id, reason, approvedAt]);
+    for (const uid of new Set([t.created_by, award.recommended_by])) await notify(q, { tenantId: t.tenant_id, userId: uid, kind: 'AWARD_APPROVED', body: { tenderId: t.id }, titleEn: `Award approved: ${t.tender_number}`, titleAr: `تم اعتماد الترسية: ${t.tender_number}` });
     await auditTx(ctx, q, { tenantId: actor.tenantId, actor, action: 'AWARD_APPROVED', resourceType: 'TENDER', resourceId: t.id,
       prevState: 'EVALUATION', newState: 'AWARDED', reason, details: { bidId: award.bid_id, reportDocumentId: doc.id, level: step.levelNo, of: chain.length } });
     return { award: camel(rows[0]), reportDocumentId: doc.id, final: true };
