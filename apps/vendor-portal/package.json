@@ -1,0 +1,25 @@
+{
+  "name": "@tenderflow/vendor-portal",
+  "version": "0.9.0",
+  "description": "TenderFlow Public Vendor Portal",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start -p 3000",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@tenderflow/tenant-config": "*",
+    "@tenderflow/ui": "*",
+    "next": "^14.1.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/react": "^18.2.66",
+    "@types/react-dom": "^18.2.22",
+    "typescript": "^5.4.0"
+  }
+}

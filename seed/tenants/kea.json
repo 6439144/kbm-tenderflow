@@ -1,0 +1,67 @@
+{
+  "tenantId": "kea",
+  "legalName": {
+    "en": "Kuwait Energy Authority",
+    "ar": "هيئة الطاقة الكويتية"
+  },
+  "branding": {
+    "primaryColor": "#0B4F6C",
+    "secondaryColor": "#01BAEF",
+    "logoUrl": "/brand/kea-logo.svg",
+    "faviconUrl": "/brand/kea-favicon.ico",
+    "defaultDirection": "rtl",
+    "defaultLocale": "ar"
+  },
+  "currency": {
+    "code": "KWD",
+    "symbolAr": "د.ك",
+    "symbolEn": "KWD",
+    "decimalPlaces": 3
+  },
+  "categories": [
+    { "code": "IT", "nameEn": "Information Technology & Telecom", "nameAr": "تكنولوجيا المعلومات والاتصالات" },
+    { "code": "ENG", "nameEn": "Engineering & Construction", "nameAr": "الهندسة والمقاولات العامة" },
+    { "code": "CONS", "nameEn": "Consulting & Advisory Services", "nameAr": "الخدمات الاستشارية والتنفيذية" },
+    { "code": "SUP", "nameEn": "Industrial Supplies & Equipment", "nameAr": "المعدات والتوريدات الصناعية" }
+  ],
+  "roles": [
+    {
+      "code": "PROCUREMENT_OFFICER",
+      "nameEn": "Procurement Officer",
+      "nameAr": "مسؤول مشتريات",
+      "permissions": ["tender:create", "tender:edit", "clarification:respond"]
+    },
+    {
+      "code": "OPENING_COMMITTEE_CHAIR",
+      "nameEn": "Bid Opening Committee Chair",
+      "nameAr": "رئيس لجنة فتح المظاريف",
+      "permissions": ["tender:open_bids", "tender:view_opened_bids"]
+    },
+    {
+      "code": "EVALUATOR",
+      "nameEn": "Technical Evaluator",
+      "nameAr": "مقيم فني",
+      "permissions": ["bid:evaluate", "scorecard:submit"]
+    },
+    {
+      "code": "DIRECTOR",
+      "nameEn": "Procurement Director",
+      "nameAr": "مدير المشتريات",
+      "permissions": ["tender:approve_publish", "tender:award", "vendor:approve"]
+    }
+  ],
+  "templates": {
+    "tenderNotice": "Official Procurement Announcement - Kuwait Energy Authority",
+    "awardNotice": "Formal Notice of Award - Contract Execution Protocol",
+    "rejectionNotice": "Clarification of Evaluation & Regret Notice"
+  },
+  "labels": {
+    "tender": { "en": "Tender Notice", "ar": "إعلان المناقصة" },
+    "committee": { "en": "Tendering Committee", "ar": "لجنة المناقصات" },
+    "sealedBid": { "en": "Sealed Envelope", "ar": "المظروف المغلق" }
+  },
+  "storage": {
+    "filenetObjectStore": "OS_KEA",
+    "rootFolder": "/TenderFlow/KEA"
+  }
+}

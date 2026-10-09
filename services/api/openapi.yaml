@@ -1,0 +1,966 @@
+openapi: 3.0.3
+info:
+  title: TenderFlow Core REST API
+  description: >-
+    Authoritative backend API for KBM TenderFlow v0.9.0.
+    Enforces tenant isolation, sealed bid cryptography, immutable audit logging,
+    and human-in-the-loop AI advisory integration.
+  version: 0.9.0
+  contact:
+    name: KBM TenderFlow Engineering
+servers:
+  - url: http://localhost:4000/api/v1
+    description: Local Development Server
+  - url: https://tenderflow-api.example.com/api/v1
+    description: TechZone Review Environment
+
+security:
+  - BearerAuth: []
+  - TenantHeader: []
+
+paths:
+  # ==========================================
+  # Tenant Management
+  # ==========================================
+  /tenants:
+    get:
+      summary: List all active tenants
+      operationId: listTenants
+      tags: [Tenants]
+      responses:
+        '200':
+          description: List of tenants
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Tenant'
+    post:
+      summary: Provision a new tenant from configuration package
+      operationId: createTenant
+      tags: [Tenants]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantCreateRequest'
+      responses:
+        '201':
+          description: Tenant provisioned successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /tenants/{tenantId}:
+    get:
+      summary: Get tenant details and branding package
+      operationId: getTenant
+      tags: [Tenants]
+      parameters:
+        - $ref: '#/components/parameters/TenantIdParam'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tenant'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ==========================================
+  # Vendor Onboarding & Management
+  # ==========================================
+  /vendors/register:
+    post:
+      summary: Public vendor self-registration
+      operationId: registerVendor
+      tags: [Vendors]
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/TenantHeaderParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VendorRegistrationRequest'
+      responses:
+        '201':
+          description: Registration submitted for verification
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Vendor'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /vendors:
+    get:
+      summary: List vendors under current tenant
+      operationId: listVendors
+      tags: [Vendors]
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [PENDING_REVIEW, APPROVED, REJECTED, SUSPENDED]
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Vendor'
+
+  /vendors/{vendorId}/approve:
+    post:
+      summary: Review and approve vendor registration
+      operationId: approveVendor
+      tags: [Vendors]
+      parameters:
+        - name: vendorId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+                  example: "Compliant commercial registration and tax certificate"
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Vendor'
+
+  # ==========================================
+  # Tender Lifecycle
+  # ==========================================
+  /tenders:
+    get:
+      summary: List tenders (filtered by tenant and role)
+      operationId: listTenders
+      tags: [Tenders]
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Tender'
+    post:
+      summary: Create new tender in DRAFT state
+      operationId: createTender
+      tags: [Tenders]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenderCreateRequest'
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tender'
+
+  /tenders/{tenderId}:
+    get:
+      summary: Get tender details
+      operationId: getTender
+      tags: [Tenders]
+      parameters:
+        - $ref: '#/components/parameters/TenderIdParam'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tender'
+
+  /tenders/{tenderId}/approve-publish:
+    post:
+      summary: Human sign-off authorizing tender publication (Rule 7)
+      operationId: approveTenderPublish
+      tags: [Tenders]
+      parameters:
+        - $ref: '#/components/parameters/TenderIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+                aiAdvisoryRef:
+                  type: string
+                  nullable: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tender'
+
+  /tenders/{tenderId}/publish:
+    post:
+      summary: Publish tender to public vendor portal
+      operationId: publishTender
+      tags: [Tenders]
+      parameters:
+        - $ref: '#/components/parameters/TenderIdParam'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tender'
+
+  # ==========================================
+  # Clarifications & Addenda
+  # ==========================================
+  /tenders/{tenderId}/clarifications:
+    get:
+      summary: List clarification questions for tender
+      operationId: listClarifications
+      tags: [Clarifications]
+      parameters:
+        - $ref: '#/components/parameters/TenderIdParam'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Clarification'
+    post:
+      summary: Vendor submits clarification question
+      operationId: submitClarification
+      tags: [Clarifications]
+      parameters:
+        - $ref: '#/components/parameters/TenderIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [question]
+              properties:
+                question:
+                  type: string
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Clarification'
+
+  /tenders/{tenderId}/clarifications/{clarificationId}/respond:
+    post:
+      summary: Procurement officer records approved response to clarification
+      operationId: respondClarification
+      tags: [Clarifications]
+      parameters:
+        - $ref: '#/components/parameters/TenderIdParam'
+        - name: clarificationId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [answer]
+              properties:
+                answer:
+                  type: string
+                publishAsAddendum:
+                  type: boolean
+                  default: false
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Clarification'
+
+  # ==========================================
+  # Sealed Bids & Opening Ceremony (Rule 1)
+  # ==========================================
+  /tenders/{tenderId}/bids:
+    get:
+      summary: List submitted bids for tender (Bodies remain locked/sealed)
+      operationId: listBids
+      tags: [Bids]
+      parameters:
+        - $ref: '#/components/parameters/TenderIdParam'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BidSummary'
+    post:
+      summary: Vendor submits cryptographically sealed bid dossier
+      operationId: submitBid
+      tags: [Bids]
+      parameters:
+        - $ref: '#/components/parameters/TenderIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BidSubmissionRequest'
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BidSummary'
+
+  /tenders/{tenderId}/bids/{bidId}/content:
+    get:
+      summary: Retrieve unsealed bid content (Strictly BLOCKED prior to opening event)
+      operationId: getBidContent
+      tags: [Bids]
+      parameters:
+        - $ref: '#/components/parameters/TenderIdParam'
+        - name: bidId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Bid unsealed content (Accessible only after Bid Opening Event)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BidUnsealedContent'
+        '403':
+          description: BIDS_SEALED_UNTIL_OPENING_EVENT - Strictly enforced by server
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /tenders/{tenderId}/opening-ceremony:
+    post:
+      summary: Record Bid Opening Event (Unseals bids and writes certified audit event)
+      operationId: recordBidOpening
+      tags: [Bids]
+      parameters:
+        - $ref: '#/components/parameters/TenderIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [committeeChair, attendees]
+              properties:
+                committeeChair:
+                  type: string
+                  example: "chair@kea.gov.kw"
+                attendees:
+                  type: array
+                  items:
+                    type: string
+                  example: ["chair@kea.gov.kw", "procurement_lead@kea.gov.kw"]
+                minutesNotes:
+                  type: string
+                  example: "All bids confirmed sealed and intact prior to ceremony."
+      responses:
+        '200':
+          description: Opening event recorded successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpeningCeremonyRecord'
+
+  # ==========================================
+  # Evaluation & Award
+  # ==========================================
+  /tenders/{tenderId}/evaluations/scorecard:
+    post:
+      summary: Human evaluator submits signed score sheet (Rule 7)
+      operationId: submitScorecard
+      tags: [Evaluation]
+      parameters:
+        - $ref: '#/components/parameters/TenderIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScorecardSubmissionRequest'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenderEvaluationSummary'
+
+  /tenders/{tenderId}/award:
+    post:
+      summary: Authorized Officer issues final award to winning vendor
+      operationId: awardTender
+      tags: [Award]
+      parameters:
+        - $ref: '#/components/parameters/TenderIdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [winningVendorId, awardValue, justification]
+              properties:
+                winningVendorId:
+                  type: string
+                awardValue:
+                  type: number
+                justification:
+                  type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tender'
+
+  # ==========================================
+  # Documents & Content Adapter
+  # ==========================================
+  /documents/upload:
+    post:
+      summary: Upload file to Content Adapter
+      operationId: uploadDocument
+      tags: [Documents]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, title, docType]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                title:
+                  type: string
+                docType:
+                  type: string
+                  enum: [TENDER_DOSSIER, VENDOR_LICENSE, TECHNICAL_PROPOSAL, FINANCIAL_PROPOSAL, ADDENDUM, AWARD_NOTICE]
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentReference'
+
+  /documents/{documentId}:
+    get:
+      summary: Download file stream from Content Adapter
+      operationId: getDocument
+      tags: [Documents]
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Document binary stream
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+
+  # ==========================================
+  # AI Advisory Integration (Rule 7)
+  # ==========================================
+  /ai/advisory/tender-completeness-check:
+    post:
+      summary: Advisory AI agent analyzes tender draft completeness
+      operationId: checkTenderCompleteness
+      tags: [AI Advisory]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tenderId]
+              properties:
+                tenderId:
+                  type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AICompletenessReport'
+
+  # ==========================================
+  # Audit Log Explorer (Rule 2)
+  # ==========================================
+  /audit-logs:
+    get:
+      summary: Query immutable audit events
+      operationId: getAuditLogs
+      tags: [Audit]
+      parameters:
+        - name: resourceType
+          in: query
+          schema:
+            type: string
+        - name: resourceId
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuditEvent'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    TenantHeader:
+      type: apiKey
+      in: header
+      name: X-Tenant-ID
+
+  parameters:
+    TenantIdParam:
+      name: tenantId
+      in: path
+      required: true
+      schema:
+        type: string
+    TenantHeaderParam:
+      name: X-Tenant-ID
+      in: header
+      required: true
+      schema:
+        type: string
+    TenderIdParam:
+      name: tenderId
+      in: path
+      required: true
+      schema:
+        type: string
+
+  schemas:
+    Tenant:
+      type: object
+      required: [id, nameEn, nameAr, status, defaultCurrency]
+      properties:
+        id:
+          type: string
+          example: "kea"
+        nameEn:
+          type: string
+          example: "Kuwait Energy Authority"
+        nameAr:
+          type: string
+          example: "هيئة الطاقة الكويتية"
+        status:
+          type: string
+          enum: [ACTIVE, SUSPENDED]
+        defaultCurrency:
+          type: string
+          example: "KWD"
+        branding:
+          type: object
+          properties:
+            primaryColor:
+              type: string
+              example: "#0B4F6C"
+            logoUrl:
+              type: string
+            dirDefault:
+              type: string
+              enum: [rtl, ltr]
+              default: "rtl"
+
+    TenantCreateRequest:
+      type: object
+      required: [id, nameEn, nameAr, defaultCurrency]
+      properties:
+        id:
+          type: string
+        nameEn:
+          type: string
+        nameAr:
+          type: string
+        defaultCurrency:
+          type: string
+        branding:
+          type: object
+
+    Vendor:
+      type: object
+      required: [id, tenantId, legalNameEn, legalNameAr, crNumber, status]
+      properties:
+        id:
+          type: string
+        tenantId:
+          type: string
+        legalNameEn:
+          type: string
+        legalNameAr:
+          type: string
+        crNumber:
+          type: string
+        contactEmail:
+          type: string
+        status:
+          type: string
+          enum: [PENDING_REVIEW, APPROVED, REJECTED, SUSPENDED]
+        documents:
+          type: array
+          items:
+            $ref: '#/components/schemas/DocumentReference'
+
+    VendorRegistrationRequest:
+      type: object
+      required: [legalNameEn, legalNameAr, crNumber, contactEmail, documentIds]
+      properties:
+        legalNameEn:
+          type: string
+        legalNameAr:
+          type: string
+        crNumber:
+          type: string
+        contactEmail:
+          type: string
+        contactPhone:
+          type: string
+        documentIds:
+          type: array
+          items:
+            type: string
+
+    Tender:
+      type: object
+      required: [id, tenantId, tenderNumber, titleEn, titleAr, status, category, estimatedBudget, submissionDeadline]
+      properties:
+        id:
+          type: string
+        tenantId:
+          type: string
+        tenderNumber:
+          type: string
+        titleEn:
+          type: string
+        titleAr:
+          type: string
+        category:
+          type: string
+        status:
+          type: string
+          enum: [DRAFT, APPROVED_FOR_PUBLICATION, PUBLISHED, CLOSED, BIDS_OPENED, EVALUATED, AWARDED, CANCELLED]
+        estimatedBudget:
+          type: number
+        currency:
+          type: string
+        submissionDeadline:
+          type: string
+          format: date-time
+        documents:
+          type: array
+          items:
+            $ref: '#/components/schemas/DocumentReference'
+        awardedVendorId:
+          type: string
+          nullable: true
+
+    TenderCreateRequest:
+      type: object
+      required: [tenderNumber, titleEn, titleAr, category, estimatedBudget, submissionDeadline]
+      properties:
+        tenderNumber:
+          type: string
+        titleEn:
+          type: string
+        titleAr:
+          type: string
+        category:
+          type: string
+        estimatedBudget:
+          type: number
+        submissionDeadline:
+          type: string
+          format: date-time
+        documentIds:
+          type: array
+          items:
+            type: string
+
+    Clarification:
+      type: object
+      required: [id, tenderId, question, status, createdAt]
+      properties:
+        id:
+          type: string
+        tenderId:
+          type: string
+        vendorId:
+          type: string
+        question:
+          type: string
+        answer:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [PENDING, ANSWERED]
+        createdAt:
+          type: string
+          format: date-time
+        answeredAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    BidSummary:
+      type: object
+      required: [id, tenderId, vendorId, vendorName, status, submittedAt, hashDigest]
+      properties:
+        id:
+          type: string
+        tenderId:
+          type: string
+        vendorId:
+          type: string
+        vendorName:
+          type: string
+        status:
+          type: string
+          enum: [SEALED, OPENED, DISQUALIFIED]
+        submittedAt:
+          type: string
+          format: date-time
+        hashDigest:
+          type: string
+          description: SHA-256 cryptographic receipt of sealed package
+
+    BidSubmissionRequest:
+      type: object
+      required: [vendorId, technicalProposalDocId, financialProposalDocId, hashDigest]
+      properties:
+        vendorId:
+          type: string
+        technicalProposalDocId:
+          type: string
+        financialProposalDocId:
+          type: string
+        hashDigest:
+          type: string
+
+    BidUnsealedContent:
+      type: object
+      required: [bidId, technicalProposalDocId, financialProposalDocId, unsealedAt]
+      properties:
+        bidId:
+          type: string
+        technicalProposalDocId:
+          type: string
+        financialProposalDocId:
+          type: string
+        unsealedAt:
+          type: string
+          format: date-time
+
+    OpeningCeremonyRecord:
+      type: object
+      required: [tenderId, ceremonyTime, committeeChair, attendees, openedBidsCount]
+      properties:
+        tenderId:
+          type: string
+        ceremonyTime:
+          type: string
+          format: date-time
+        committeeChair:
+          type: string
+        attendees:
+          type: array
+          items:
+            type: string
+        openedBidsCount:
+          type: integer
+
+    ScorecardSubmissionRequest:
+      type: object
+      required: [bidId, evaluatorId, technicalScore, financialScore, comments]
+      properties:
+        bidId:
+          type: string
+        evaluatorId:
+          type: string
+        technicalScore:
+          type: number
+        financialScore:
+          type: number
+        comments:
+          type: string
+
+    TenderEvaluationSummary:
+      type: object
+      required: [tenderId, rankings]
+      properties:
+        tenderId:
+          type: string
+        rankings:
+          type: array
+          items:
+            type: object
+            properties:
+              rank:
+                type: integer
+              bidId:
+                type: string
+              vendorName:
+                type: string
+              compositeScore:
+                type: number
+
+    DocumentReference:
+      type: object
+      required: [id, title, docType, mimeType, byteSize, storageUri]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        docType:
+          type: string
+        mimeType:
+          type: string
+        byteSize:
+          type: integer
+        storageUri:
+          type: string
+
+    AICompletenessReport:
+      type: object
+      required: [isComplete, score, recommendation, findings]
+      properties:
+        isComplete:
+          type: boolean
+        score:
+          type: integer
+        recommendation:
+          type: string
+          enum: [RECOMMENDED_FOR_APPROVAL, REVISION_REQUIRED]
+        findings:
+          type: array
+          items:
+            type: object
+            properties:
+              item:
+                type: string
+              status:
+                type: string
+                enum: [PASSED, WARNING, MISSING]
+              detail:
+                type: string
+
+    AuditEvent:
+      type: object
+      required: [id, tenantId, actorId, action, resourceType, resourceId, timestamp, hmacSignature]
+      properties:
+        id:
+          type: string
+        tenantId:
+          type: string
+        actorId:
+          type: string
+        action:
+          type: string
+        resourceType:
+          type: string
+        resourceId:
+          type: string
+        prevState:
+          type: string
+          nullable: true
+        newState:
+          type: string
+          nullable: true
+        reason:
+          type: string
+          nullable: true
+        timestamp:
+          type: string
+          format: date-time
+        hmacSignature:
+          type: string
+
+    ErrorResponse:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+
+  responses:
+    BadRequest:
+      description: Invalid payload or parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'

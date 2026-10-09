@@ -1,0 +1,40 @@
+{
+  "realm": "tenderflow",
+  "enabled": true,
+  "displayName": "TenderFlow Identity Realm",
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "roles": {
+    "realm": [
+      { "name": "SUPER_ADMIN", "description": "Platform administrator" },
+      { "name": "DIRECTOR", "description": "Procurement Director with approval authority" },
+      { "name": "PROCUREMENT_OFFICER", "description": "Buyer and procurement specialist" },
+      { "name": "OPENING_COMMITTEE_CHAIR", "description": "Bid Opening Committee Chairperson" },
+      { "name": "EVALUATOR", "description": "Technical and financial evaluator" },
+      { "name": "VENDOR", "description": "Registered vendor representative" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "tenderflow-api",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "tenderflow-client-secret-change-me",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": true
+    },
+    {
+      "clientId": "tenderflow-apps",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": [
+        "http://localhost:3000/*",
+        "http://localhost:3001/*",
+        "http://localhost:3002/*"
+      ]
+    }
+  ]
+}

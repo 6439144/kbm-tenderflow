@@ -1,0 +1,30 @@
+{
+  "name": "@tenderflow/api",
+  "version": "0.9.0",
+  "description": "TenderFlow Core REST API Service",
+  "main": "./dist/server.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "node --watch --loader ts-node/esm src/server.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test dist/**/*.test.js"
+  },
+  "dependencies": {
+    "@tenderflow/content-adapter": "*",
+    "@tenderflow/tenant-config": "*",
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.11.3"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/jsonwebtoken": "^9.0.6",
+    "@types/node": "^20.11.0",
+    "@types/pg": "^8.11.2",
+    "typescript": "^5.4.0"
+  }
+}

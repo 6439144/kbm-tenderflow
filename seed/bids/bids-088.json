@@ -1,0 +1,26 @@
+[
+  {
+    "id": "bid_kea_088_001",
+    "tenderId": "tnd_kea_088",
+    "vendorId": "vnd_001",
+    "vendorName": "Gulf Infrastructure Consortium",
+    "status": "SEALED",
+    "submittedAt": "2026-10-12T09:14:22Z",
+    "hashDigest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "technicalProposalDocId": "doc_prop_tech_001",
+    "financialProposalDocId": "doc_prop_fin_001",
+    "envelopeEncryptedKey": "enc_env_key_001_synthetic_lock"
+  },
+  {
+    "id": "bid_kea_088_002",
+    "tenderId": "tnd_kea_088",
+    "vendorId": "vnd_002",
+    "vendorName": "National Smart Systems K.S.C.C.",
+    "status": "SEALED",
+    "submittedAt": "2026-10-12T11:45:10Z",
+    "hashDigest": "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb",
+    "technicalProposalDocId": "doc_prop_tech_002",
+    "financialProposalDocId": "doc_prop_fin_002",
+    "envelopeEncryptedKey": "enc_env_key_002_synthetic_lock"
+  }
+]

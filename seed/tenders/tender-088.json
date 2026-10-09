@@ -1,0 +1,18 @@
+{
+  "id": "tnd_kea_088",
+  "tenantId": "kea",
+  "tenderNumber": "KEA-TND-2026-088",
+  "titleEn": "Enterprise Data Center Modernization & High-Availability Network",
+  "titleAr": "تحديث مركز البيانات والمحفظة الشبكية عالية التوافر",
+  "category": "IT",
+  "status": "PUBLISHED",
+  "estimatedBudget": 250000,
+  "currency": "KWD",
+  "submissionDeadline": "2026-10-14T12:00:00Z",
+  "documentIds": ["doc_spec_088", "doc_terms_088"],
+  "evaluationCriteria": [
+    { "code": "TECH_CAPACITY", "weight": 40, "nameEn": "Technical Architecture & SLA" },
+    { "code": "EXPERIENCE", "weight": 30, "nameEn": "Past Track Record in Utilities" },
+    { "code": "COMMERCIAL", "weight": 30, "nameEn": "Price Competitiveness" }
+  ]
+}

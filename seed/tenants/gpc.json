@@ -1,0 +1,50 @@
+{
+  "tenantId": "gpc",
+  "legalName": {
+    "en": "Gulf Petrochemical Corporation",
+    "ar": "شركة الخليج للبتروكيماويات"
+  },
+  "branding": {
+    "primaryColor": "#1B4965",
+    "secondaryColor": "#62B6CB",
+    "logoUrl": "/brand/gpc-logo.svg",
+    "faviconUrl": "/brand/gpc-favicon.ico",
+    "defaultDirection": "rtl",
+    "defaultLocale": "ar"
+  },
+  "currency": {
+    "code": "KWD",
+    "symbolAr": "د.ك",
+    "symbolEn": "KWD",
+    "decimalPlaces": 3
+  },
+  "categories": [
+    { "code": "PETRO_ENG", "nameEn": "Refinery Engineering", "nameAr": "هندسة المصافي" },
+    { "code": "SAFETY", "nameEn": "HSE & Environmental Systems", "nameAr": "الصحة والسلامة والبيئة" },
+    { "code": "LOGISTICS", "nameEn": "Marine & Land Logistics", "nameAr": "الخدمات اللوجستية البحرية والبرية" }
+  ],
+  "roles": [
+    {
+      "code": "PROCUREMENT_OFFICER",
+      "nameEn": "Purchasing Specialist",
+      "nameAr": "أخصائي مشتريات",
+      "permissions": ["tender:create", "tender:edit", "clarification:respond"]
+    },
+    {
+      "code": "COMMITTEE_MEMBER",
+      "nameEn": "Tender Board Member",
+      "nameAr": "عضو مجلس المناقصات",
+      "permissions": ["tender:open_bids", "bid:evaluate"]
+    },
+    {
+      "code": "VP_SUPPLY",
+      "nameEn": "VP Supply Chain",
+      "nameAr": "نائب الرئيس لسلاسل الإمداد",
+      "permissions": ["tender:approve_publish", "tender:award", "vendor:approve"]
+    }
+  ],
+  "storage": {
+    "filenetObjectStore": "OS_GPC",
+    "rootFolder": "/TenderFlow/GPC"
+  }
+}

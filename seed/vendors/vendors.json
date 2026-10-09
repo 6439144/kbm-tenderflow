@@ -1,0 +1,35 @@
+[
+  {
+    "id": "vnd_001",
+    "tenantId": "kea",
+    "legalNameEn": "Gulf Infrastructure Consortium",
+    "legalNameAr": "تحالف الخليج للبنية التحتية",
+    "crNumber": "CR-984210",
+    "contactEmail": "tenders@gulf-infra.example.com",
+    "contactPhone": "+965 2200 1100",
+    "status": "APPROVED",
+    "documentIds": ["doc_lic_001", "doc_tax_001"]
+  },
+  {
+    "id": "vnd_002",
+    "tenantId": "kea",
+    "legalNameEn": "National Smart Systems K.S.C.C.",
+    "legalNameAr": "الأنظمة الذكية الوطنية ش.م.ك.م",
+    "crNumber": "CR-415890",
+    "contactEmail": "bids@smart-systems.example.com",
+    "contactPhone": "+965 2244 5566",
+    "status": "APPROVED",
+    "documentIds": ["doc_lic_002"]
+  },
+  {
+    "id": "vnd_003",
+    "tenantId": "kea",
+    "legalNameEn": "Arabian Advanced Networks",
+    "legalNameAr": "الشبكات المتقدمة العربية",
+    "crNumber": "CR-771234",
+    "contactEmail": "info@arabian-adv.example.com",
+    "contactPhone": "+965 2488 9900",
+    "status": "PENDING_REVIEW",
+    "documentIds": ["doc_lic_003"]
+  }
+]
