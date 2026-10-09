@@ -1,8 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { api, CATEGORIES, type Criterion, type RequiredDocument, type Tender } from '../../api';
+import { api, CATEGORIES, type Criterion, type RequiredDocument, type Tender, type TenderDetail } from '../../api';
+import type { CycleConfig } from '../../api-platform';
 import { useI18n } from '../../i18n';
 import { Button, Card, ErrorBox, Field, Spinner, useToast } from '../../components/ui';
+import { TenderCycleFields, type TenderCycleValue } from '../../features/cycle';
 
 function toLocalInput(iso: string | undefined): string {
   if (!iso) return '';
@@ -50,6 +52,13 @@ const EMPTY: Form = {
   requiredDocuments: [{ key: '', nameEn: '', nameAr: '' }],
 };
 
+/** Criteria preset for a two-envelope template (technical / experience / price). */
+const TWO_ENVELOPE_CRITERIA: Criterion[] = [
+  { key: 'technical', nameEn: 'Technical solution', nameAr: 'الحل الفني', weight: 50 },
+  { key: 'experience', nameEn: 'Experience & team', nameAr: 'الخبرة وفريق العمل', weight: 20 },
+  { key: 'price', nameEn: 'Price', nameAr: 'السعر', weight: 30 },
+];
+
 function fromTender(x: Tender): Form {
   return {
     tenderNumber: x.tenderNumber ?? '',
@@ -77,6 +86,10 @@ export default function TenderForm() {
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<unknown>(null);
+  const [cyc, setCyc] = useState<TenderCycleValue>({ templateId: '', eligibility: { activityCodes: [], minGrade: null } });
+  const [pinned, setPinned] = useState<Pick<TenderDetail, 'template' | 'cycle' | 'stages'> | null>(null);
+  const [tplCfg, setTplCfg] = useState<CycleConfig | null>(null);
+  const [critTouched, setCritTouched] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -86,6 +99,8 @@ export default function TenderForm() {
       .then((x) => {
         setF(fromTender(x));
         setStatus(x.status);
+        setCyc({ templateId: x.template?.id ?? '', eligibility: { activityCodes: x.eligibility?.activityCodes ?? [], minGrade: x.eligibility?.minGrade ?? null } });
+        setPinned({ template: x.template ?? null, cycle: x.cycle, stages: x.stages });
       })
       .catch(setLoadErr)
       .finally(() => setLoading(false));
@@ -93,16 +108,40 @@ export default function TenderForm() {
 
   const total = f.criteria.reduce((s, c) => s + (Number(c.weight) || 0), 0);
   const weightsOk = Math.abs(total - 100) < 0.001 && f.criteria.length > 0;
+  // Two-envelope rule (enforced by the server too): ≥1 financial criterion (template keys) and ≥1 technical criterion.
+  const two = tplCfg?.envelopes === 'TWO';
+  const finKeys = two ? tplCfg!.evaluation.financialCriteria : [];
+  const effKey = (c: Criterion, i: number) => c.key || slug(c.nameEn, i, 'c');
+  const isFin = (c: Criterion, i: number) => finKeys.includes(effKey(c, i));
+  const finCount = f.criteria.filter(isFin).length;
+  const envelopeOk = !two || (finCount > 0 && finCount < f.criteria.length);
 
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setF((x) => ({ ...x, [k]: v }));
-  const setCrit = (i: number, patch: Partial<Criterion>) =>
+  const setCrit = (i: number, patch: Partial<Criterion>) => {
+    setCritTouched(true);
     set('criteria', f.criteria.map((c, j) => (j === i ? { ...c, ...patch } : c)));
+  };
+  const toggleFin = (i: number, on: boolean) => {
+    const c = f.criteria[i];
+    if (on) {
+      const used = new Set(f.criteria.map((x, j) => (j === i ? '' : effKey(x, j))));
+      const key = finKeys.find((k) => !used.has(k));
+      if (key) setCrit(i, { key });
+    } else {
+      const base = slug(c.nameEn, i, 'c');
+      setCrit(i, { key: finKeys.includes(base) ? `${base}_tech` : base });
+    }
+  };
+  const onTemplate = (cfg: CycleConfig | null) => {
+    setTplCfg(cfg);
+    if (!editing && !critTouched && cfg?.envelopes === 'TWO') setF((x) => ({ ...x, criteria: TWO_ENVELOPE_CRITERIA.map((c) => ({ ...c })) }));
+  };
   const setDoc = (i: number, patch: Partial<RequiredDocument>) =>
     set('requiredDocuments', f.requiredDocuments.map((c, j) => (j === i ? { ...c, ...patch } : c)));
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!weightsOk) return;
+    if (!weightsOk || !envelopeOk) return;
     setBusy(true);
     setErr(null);
     const body = {
@@ -120,8 +159,11 @@ export default function TenderForm() {
         .filter((d) => d.nameEn.trim() || d.nameAr.trim())
         .map((d, i) => ({ ...d, key: d.key || slug(d.nameEn, i, 'd') })),
     };
+    const full = id
+      ? { ...body, eligibility: cyc.eligibility }
+      : { ...body, eligibility: cyc.eligibility, ...(cyc.templateId ? { templateId: cyc.templateId } : {}) };
     try {
-      const saved = id ? await api.updateTender(id, body) : await api.createTender(body);
+      const saved = id ? await api.updateTender(id, full) : await api.createTender(full);
       toast(t(id ? 'form.updated' : 'form.created'));
       navigate(`/procurement/tenders/${saved?.id ?? id}`);
     } catch (e2) {
@@ -194,17 +236,33 @@ export default function TenderForm() {
         </div>
       </Card>
 
+      <TenderCycleFields value={cyc} onChange={setCyc} pinned={editing ? pinned : null} onTemplate={onTemplate} />
+
       <Card
         title={t('form.criteria')}
         actions={
-          <Button variant="secondary" onClick={() => set('criteria', [...f.criteria, { key: '', nameEn: '', nameAr: '', weight: 0 }])}>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setCritTouched(true);
+              set('criteria', [...f.criteria, { key: '', nameEn: '', nameAr: '', weight: 0 }]);
+            }}
+          >
             {t('common.add')}
           </Button>
         }
       >
+        {two && (
+          <div className={`alert ${envelopeOk ? 'alert-info' : 'alert-warn'}`} role="note">
+            <div>
+              {t('cycle.f.finRule', { keys: finKeys.join(', ') })}
+              {!envelopeOk && <div className="field-error">{t('cycle.f.finMissing')}</div>}
+            </div>
+          </div>
+        )}
         <div className="rows">
           {f.criteria.map((c, i) => (
-            <div className="row-grid row-grid-crit" key={i}>
+            <div className={`row-grid row-grid-crit ${two ? 'cyc-crit-two' : ''}`} key={i}>
               <Field label={t('form.criterionEn')} required>
                 {(fid) => <input id={fid} value={c.nameEn} onChange={(e) => setCrit(i, { nameEn: e.target.value })} required dir="ltr" />}
               </Field>
@@ -225,7 +283,20 @@ export default function TenderForm() {
                   />
                 )}
               </Field>
-              <Button variant="ghost" onClick={() => set('criteria', f.criteria.filter((_, j) => j !== i))} disabled={f.criteria.length <= 1}>
+              {two && (
+                <label className="check cyc-fin-check">
+                  <input type="checkbox" checked={isFin(c, i)} onChange={(e) => toggleFin(i, e.target.checked)} />
+                  <span>{t('cycle.f.finCheckbox')}</span>
+                </label>
+              )}
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setCritTouched(true);
+                  set('criteria', f.criteria.filter((_, j) => j !== i));
+                }}
+                disabled={f.criteria.length <= 1}
+              >
                 {t('common.remove')}
               </Button>
             </div>
@@ -265,7 +336,7 @@ export default function TenderForm() {
         <Link className="btn btn-ghost" to={id ? `/procurement/tenders/${id}` : '/procurement/tenders'}>
           {t('common.cancel')}
         </Link>
-        <Button type="submit" busy={busy} disabled={!weightsOk}>
+        <Button type="submit" busy={busy} disabled={!weightsOk || !envelopeOk}>
           {t('form.save')}
         </Button>
       </div>

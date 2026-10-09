@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ClassificationsEditor } from '../../features/cycle';
 import { api, type Vendor } from '../../api';
 import { useI18n } from '../../i18n';
 import { useSession } from '../../session';
@@ -107,6 +108,7 @@ export default function VendorsQueue() {
                 </dl>
                 <h3>{t('vendor.documents')}</h3>
                 <DocList docs={v.documents ?? []} empty={t('vendor.noDocs')} />
+                <ClassificationsEditor vendorId={v.id} canEdit={hasRole('PROCUREMENT_OFFICER', 'TENANT_ADMIN')} />
               </div>
             )
           }
