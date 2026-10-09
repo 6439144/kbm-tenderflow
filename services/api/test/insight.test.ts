@@ -97,6 +97,12 @@ test('evidence pack before opening: contents, hashes, audit chain, sealed bids e
   const actions = audit.events.map((e: any) => e.action);
   for (const a of ['TENDER_CREATED', 'TENDER_DOCUMENT_UPLOADED', 'TENDER_APPROVED', 'TENDER_PUBLISHED', 'BID_SUBMITTED', 'TENDER_CLOSED']) assert.ok(actions.includes(a), `slice has ${a}`);
   assert.ok(audit.events.every((e: any) => typeof e.hmac === 'string' && e.hmac.length === 64));
+  // numeric order (seq crosses 99 → 100 in the demo seed), and the chain head is the highest seq
+  const seqs = audit.events.map((e: any) => e.seq);
+  assert.deepEqual(seqs, [...seqs].sort((x: number, y: number) => x - y), 'events in numeric seq order');
+  assert.ok(audit.slice.firstSeq <= audit.slice.lastSeq);
+  const maxSeq = (await run.handle.ctx.db.query<{ n: number }>(`SELECT max(seq)::int AS n FROM audit_events WHERE tenant_id='kea'`))[0].n;
+  assert.ok(audit.chainVerification.chainHead.seq >= 100 && audit.chainVerification.chainHead.seq <= maxSeq, 'chain head is the latest event');
   const approvals = JSON.parse(files.get('approvals.json')!.toString());
   assert.ok(approvals.decisions.some((d: any) => d.gate === 'PUBLISH' && d.decision === 'APPROVED'));
   const tender = JSON.parse(files.get('tender.json')!.toString());

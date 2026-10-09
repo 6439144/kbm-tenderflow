@@ -205,10 +205,10 @@ export async function generateEvidencePack(ctx: Ctx, actor: Actor, body: any) {
   const events = scope.type === 'TENDER'
     ? await ctx.db.query<any>(
       `SELECT ${cols} FROM audit_events WHERE tenant_id=$1 AND (resource_id = ANY($2::text[]) OR details->>'tenderId' = ANY($2::text[])
-         OR details->>'documentId' = ANY($2::text[]) OR details->>'subjectId' = ANY($2::text[])) ORDER BY seq`, [tenantId, ids])
-    : await ctx.db.query<any>(`SELECT ${cols} FROM audit_events WHERE tenant_id=$1 AND at >= $2 AND at <= $3 ORDER BY seq`, [tenantId, scope.from, scope.to]);
+         OR details->>'documentId' = ANY($2::text[]) OR details->>'subjectId' = ANY($2::text[])) ORDER BY audit_events.seq`, [tenantId, ids])
+    : await ctx.db.query<any>(`SELECT ${cols} FROM audit_events WHERE tenant_id=$1 AND at >= $2 AND at <= $3 ORDER BY audit_events.seq`, [tenantId, scope.from, scope.to]);
   const chain = await verifyAudit(ctx.db, ctx.config.auditSigningKey, tenantId);
-  const head = (await ctx.db.query<{ seq: string; hmac: string }>('SELECT seq::text AS seq, hmac FROM audit_events WHERE tenant_id=$1 ORDER BY seq DESC LIMIT 1', [tenantId]))[0];
+  const head = (await ctx.db.query<{ seq: string; hmac: string }>('SELECT seq::text AS seq, hmac FROM audit_events WHERE tenant_id=$1 ORDER BY audit_events.seq DESC LIMIT 1', [tenantId]))[0];
   const auditJson = {
     chainVerification: {
       verifiedAt: generatedAt.toISOString(), algorithm: 'HMAC-SHA256 over canonical JSON, chained per entity (hmac = HMAC(key, prev_hmac | payload))',
