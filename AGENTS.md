@@ -12,12 +12,19 @@
    - State model & tenant config schema
    Changed only via PR reviewed by A0 and affected agents.
 4. **Non-Negotiables**:
-   - Sealed bids: Zero read access before opening ceremony event.
-   - Audit trail: Every state change writes an immutable audit event.
-   - Server-enforced authorization and tenant isolation.
-   - Synthetic data only. All entity, vendor and person names must be clearly fictitious.
+   - Sealed bids: Zero read access before opening ceremony event (Rule 1).
+   - Audit trail: Every state change writes an immutable audit event (Rule 2).
+   - Server-enforced authorization and tenant isolation (Rule 3).
+   - Synthetic data only. All entity, vendor and person names must be clearly fictitious (Rule 4).
+   - Zero secrets in code, prompts, logs or commits. Use .env.example placeholders (Rule 5).
+   - Send nothing outside the repository and review environments (Rule 6).
    - AI is advisory (Rule 7): Human approval required for all state transitions, approvals, publications, and awards.
    - Product names, UI text and docs contain no IBM product names (Rule 8).
+   - **Rule 9 (No simulated success)**: No stub, mock or fallback may return success for a real integration. If FileNet, Orchestrate, PostgreSQL or Keycloak is not configured or not reachable, the code must fail loudly (error + non-zero exit + health "down"). Mocks are allowed only inside unit tests, in files named `*.test.ts` or under `test/fakes/`.
+   - **Rule 10 (No failure hiding)**: No `|| true`, no `|| echo`, no "mock mode" in scripts (`install.sh`, `import.sh`, `provision`, CI). A failing step fails the script.
+   - **Rule 11 (No hard-coded AI output)**: Every AI result shown to a user comes from a model call through watsonx Orchestrate, grounded on documents retrieved from FileNet, with the source document and section returned. No canned answers, no fixed confidence numbers.
+   - **Rule 12 (Evidence or it did not happen)**: Every "done" in `BOARD.md` links to evidence in `docs/evidence/<task-id>/`: command run, real output (secrets redacted), date, and for integrations a screenshot from GraphiQL / Navigator / Orchestrate.
+   - **Rule 13 (Docs never claim more than the code does)**: Before release, every sentence in release notes, ESA questionnaire and architecture docs is checked against code and evidence. Anything not true is removed or moved to `docs/roadmap.md`.
 5. **Daily Rhythm**:
    - Questions logged in `docs/agents/QUESTIONS.md` with options and recommendation. Never invent rules.
    - Update `docs/agents/STATUS.md` against `docs/review-demo.md` daily at 14:30.
