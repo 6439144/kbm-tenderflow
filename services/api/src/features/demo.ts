@@ -12,6 +12,7 @@ import { actor, h, requireRoles } from '../routes.js';
 import { publicUser, type UserRow } from '../services/identity.js';
 import { autoClose, type TenderRow } from '../services/tenders.js';
 import { ApiError, conflict, isUuid, notFound, now, reqStr } from '../util.js';
+import { assertLoginAllowed } from '../services/vendor-lifecycle.js';
 
 const PING_TTL_MS = 30_000;
 
@@ -148,6 +149,7 @@ export function registerDemoRoutes(r: express.Router, ctx: Ctx): void {
     const rows = await ctx.db.query<UserRow>('SELECT * FROM users WHERE tenant_id=$1 AND username=$2 AND active', [a.tenantId, username]);
     const u = rows[0];
     if (!u) throw notFound('Active user in this entity');
+    await assertLoginAllowed(ctx.db, u); // a blocked vendor stays blocked in presenter mode too (FR-013)
     const token = await ctx.tokens.issue(u);
     await ctx.db.tx((q) => auditTx(ctx, q, { tenantId: a.tenantId, actor: { id: a.id, roles: a.roles }, action: 'DEMO_PERSONA_SWITCH',
       resourceType: 'USER', resourceId: u.id, details: { from: a.username, to: u.username, demoMode: true } }));

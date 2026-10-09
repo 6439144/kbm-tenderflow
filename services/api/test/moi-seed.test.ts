@@ -8,7 +8,7 @@ import { api, fileForm, login, startApp } from './helpers.js';
 const PW = 'Demo-Passw0rd!';
 
 test('moi seed: policies + catalogue, eligibility-filtered viewing, MOI receipts, exemption, blocked login, grading queue, reminder', async () => {
-  const run = await startApp(undefined, { SEED_DEMO: 'true', DEMO_PASSWORD: PW });
+  const run = await startApp(undefined, { SEED_DEMO: 'true', DEMO_PASSWORD: PW, DEMO_MODE: 'true' });
   try {
     const ten = await api(run, 'GET', '/api/v1/public/tenants');
     const moi = ten.body.find((t: any) => t.id === 'moi');
@@ -58,6 +58,10 @@ test('moi seed: policies + catalogue, eligibility-filtered viewing, MOI receipts
     const l4 = await api(run, 'POST', '/api/v1/auth/login', { json: { tenantId: 'moi', username: 'vendor4', password: PW } });
     assert.equal(l4.body.code, 'ACCOUNT_SUSPENDED');
     assert.ok(new Date(l4.body.suspendedUntil).getTime() > Date.now() + 6 * 86_400_000);
+    // … and the presenter's persona switch does not bypass the block
+    const sw = await api(run, 'POST', '/api/v1/demo/persona', { token: admin, json: { username: 'vendor4' } });
+    assert.equal(sw.status, 403, sw.text);
+    assert.equal(sw.body.code, 'ACCOUNT_SUSPENDED');
 
     // grading queue: vendor3 application + vendor2 upgrade request
     const grader = await login(run, 'moi', 'grader', PW);
