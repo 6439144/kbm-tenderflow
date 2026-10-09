@@ -123,6 +123,7 @@ const coreEn = {
   'role.COMMITTEE_CHAIR': 'Committee chair',
   'role.EVALUATOR': 'Evaluator',
   'role.TENANT_ADMIN': 'Administrator',
+  'role.SYSTEM': 'System (automatic)',
   'role.AUDITOR': 'Auditor',
 
   // tender status
@@ -134,6 +135,7 @@ const coreEn = {
   'st.OPENED': 'Opened',
   'st.EVALUATION': 'Evaluation',
   'st.AWARDED': 'Awarded',
+  'st.RECOMMENDED': 'Recommended',
   'st.CANCELLED': 'Cancelled',
   // vendor status
   'vst.PENDING_REVIEW': 'Pending review',
@@ -224,6 +226,9 @@ const coreEn = {
   'dash.title': 'Procurement dashboard',
   'dash.empty': 'No figures returned.',
   'dash.aiRuns': 'AI advisor runs',
+  'dash.aiRunsFailed': 'AI runs failed',
+  'dash.vendorsApproved': 'Approved vendors',
+  'dash.openClarifications': 'Open clarifications',
   'td.goDocs': 'Upload pack files',
   'td.goPackCheck': 'Run AI pack check',
   'td.goClar': 'Answer clarifications',
@@ -526,6 +531,7 @@ const coreAr: Record<keyof typeof coreEn, string> = {
   'role.COMMITTEE_CHAIR': 'رئيس اللجنة',
   'role.EVALUATOR': 'مقيّم',
   'role.TENANT_ADMIN': 'مسؤول النظام',
+  'role.SYSTEM': 'النظام (تلقائي)',
   'role.AUDITOR': 'مدقق',
 
   'st.DRAFT': 'مسودة',
@@ -536,6 +542,7 @@ const coreAr: Record<keyof typeof coreEn, string> = {
   'st.OPENED': 'مفتوحة المظاريف',
   'st.EVALUATION': 'قيد التقييم',
   'st.AWARDED': 'تمت الترسية',
+  'st.RECOMMENDED': 'موصى بها',
   'st.CANCELLED': 'ملغاة',
   'vst.PENDING_REVIEW': 'قيد المراجعة',
   'vst.PENDING': 'قيد المراجعة',
@@ -619,6 +626,9 @@ const coreAr: Record<keyof typeof coreEn, string> = {
   'dash.title': 'لوحة المشتريات',
   'dash.empty': 'لم تُرجع أي أرقام.',
   'dash.aiRuns': 'عمليات المساعد الذكي',
+  'dash.aiRunsFailed': 'عمليات ذكاء اصطناعي فشلت',
+  'dash.vendorsApproved': 'الموردون المعتمدون',
+  'dash.openClarifications': 'استفسارات مفتوحة',
   'td.goDocs': 'رفع ملفات الكراسة',
   'td.goPackCheck': 'فحص الكراسة بالمساعد الذكي',
   'td.goClar': 'الرد على الاستفسارات',

@@ -1,4 +1,5 @@
 import { ChainView, TenderCyclePanel, waitingStep, type CycleBid, type Step } from '../../features/cycle';
+import { auditLabel } from '../../locales/audit';
 import { TenderAiExtras } from '../../features/assistant';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
@@ -1293,7 +1294,7 @@ function EvaluationSummary({
 // ---------------------------------------------------------------- side panel
 
 function Timeline({ audit }: { audit: Async<AuditEvent[]> }) {
-  const { t, te, fmtDate } = useI18n();
+  const { t, te, fmtDate, lang } = useI18n();
   const forbidden = audit.error instanceof ApiError && audit.error.status === 403;
   const events = [...(audit.data ?? [])].sort((a, b) => {
     if (a.seq !== undefined && b.seq !== undefined) return Number(a.seq) - Number(b.seq);
@@ -1309,7 +1310,7 @@ function Timeline({ audit }: { audit: Async<AuditEvent[]> }) {
             <ol className="timeline">
               {events.map((e) => (
                 <li key={e.id ?? String(e.seq)}>
-                  <div className="tl-action">{e.action}</div>
+                  <div className="tl-action" title={e.action}>{auditLabel(lang, e.action)}</div>
                   {(e.prevState || e.newState) && (
                     <div className="small">
                       {te('st.', e.prevState)} → {te('st.', e.newState)}

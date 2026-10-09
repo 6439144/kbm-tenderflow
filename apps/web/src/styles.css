@@ -3571,3 +3571,14 @@ tr.di-inactive td {
     max-inline-size: none;
   }
 }
+
+/* integration: keep the Assistant button clear of the docked Demo Story panel */
+html.demo-docked .ast-dock {
+  inset-inline-end: calc(var(--demo-w) + 20px);
+}
+@media (max-width: 1100px) {
+  html.demo-docked .ast-dock {
+    inset-inline-end: 20px;
+    inset-block-end: 84px;
+  }
+}

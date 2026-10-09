@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { auditLabel } from '../../locales/audit';
 import { ALL_ROLES, api, type AuditVerify, type Role } from '../../api';
 import { useI18n } from '../../i18n';
 import { useSession } from '../../session';
@@ -120,7 +121,7 @@ function CreateUser({ open, onClose, onCreated }: { open: boolean; onClose: () =
 // ---------------------------------------------------------------- audit
 
 export function AdminAudit() {
-  const { t, te, fmtDate } = useI18n();
+  const { t, te, fmtDate, lang } = useI18n();
   const [resourceId, setResourceId] = useState('');
   const [limit, setLimit] = useState(200);
   const [query, setQuery] = useState({ resourceId: '', limit: 200 });
@@ -200,7 +201,9 @@ export function AdminAudit() {
                   <td dir="ltr">{e.seq ?? '—'}</td>
                   <td className="nowrap">{fmtDate(e.at)}</td>
                   <td>
-                    <code>{e.action}</code>
+                    {auditLabel(lang, e.action)}
+                    <br />
+                    <code className="small">{e.action}</code>
                   </td>
                   <td className="small">
                     {(e.actorRoles ?? []).map((r) => te('role.', r)).join(', ')}
