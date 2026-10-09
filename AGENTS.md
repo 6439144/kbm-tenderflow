@@ -55,6 +55,15 @@
   - **T14 (Tue 13 Oct)**: Sealed-bid vault (per-bid encryption, release only after recorded opening event, deadline lock), opening, weighted evaluation scoring, award, PDF report generation for opening record and committee report. AI tool endpoints with caller permission verification.
 - **Constraints**: All documents go through the `ContentStore` interface. Never store document bodies in PostgreSQL. Server-side authorization and tenant isolation strictly enforced.
 
+### A3 — Frontend Agent
+- **Role**: Three Next.js (TypeScript) applications, shared design system in `packages/ui`, bilingual Arabic & English with full RTL/LTR switch, Keycloak role-aware navigation, OpenAPI client integration.
+- **Owned Folders**: `apps/` (`apps/vendor-portal`, `apps/procurement-app`, `apps/control-panel`), `packages/ui/`.
+- **Assigned Tasks**:
+  - **T06 (Sun 11 Oct)**: Three Next.js apps on shared design system in `packages/ui`; Arabic/English runtime RTL/LTR switch, i18n files, Keycloak login with role-aware nav, API client generated from `services/api/openapi.yaml`.
+  - **T09 (Mon 12 Oct)**: Vendor registration and profile, tender drafting and publication, clarifications and addenda (demo steps 1-4).
+  - **T15 (Tue 13 Oct)**: Sealed bid submission with cryptographic receipt, opening session, evaluation and scoring, award, control panel (users, roles, tender types, templates, labels, branding), audit log viewer, basic KPIs.
+- **Constraints**: Tenant branding comes from tenant config, never hard-coded. WCAG 2.1 AA accessibility basics. Zero business rules in the UI; the API decides.
+
 ---
 
-*(Additional agents A3 through A6 will be appended as their briefs are introduced)*
+*(Additional agents A4 through A6 will be appended as their briefs are introduced)*
