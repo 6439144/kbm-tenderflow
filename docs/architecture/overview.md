@@ -89,3 +89,82 @@ flowchart TD
   - Tender category taxonomy (IT, Works, Consulting, Supplies).
   - Approval threshold matrix (e.g. tenders above 100,000 KWD require Director sign-off).
   - Localized terminology overrides.
+
+---
+
+## Key Sequence Workflows
+
+### 1. Sealed Bid Submission & Opening Ceremony (Rule 1 Enforcement)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Vendor as Vendor Representative
+    actor Officer as Procurement Officer
+    actor Chair as Opening Committee Chair
+    participant VP as Vendor Portal (UI)
+    participant API as REST API Gateway
+    participant Vault as Sealed Bid Vault
+    participant Ledger as HMAC Audit Ledger
+
+    Note over Vendor,Vault: Step 7: Sealed Bid Submission
+    Vendor->>VP: Upload Technical & Financial Envelopes
+    VP->>VP: Compute SHA-256 Digest
+    VP->>API: POST /api/v1/tenders/{id}/bids (with Hash)
+    API->>Vault: Encrypt Envelope & Lock Status: SEALED
+    API->>Ledger: Log Event: BID_SUBMITTED_SEALED
+    API-->>VP: Digital Receipt (hashDigest)
+
+    Note over Officer,Vault: Unauthorized Attempt Prior to Opening
+    Officer->>API: GET /bids/{id}/content
+    API->>Vault: Query Bid Payload
+    Vault-->>API: Rejected: SealedBidAccessViolation
+    API-->>Officer: HTTP 403 Forbidden (BIDS_SEALED_UNTIL_OPENING_EVENT)
+
+    Note over Chair,Vault: Step 8: Formal Bid Opening Ceremony
+    Chair->>API: POST /bids/opening-ceremony (Attendees, Minutes)
+    API->>Vault: executeOpeningCeremony()
+    Vault->>Vault: Transition Bids to OPENED
+    API->>Ledger: Log Event: BID_OPENING_RECORDED
+    API-->>Chair: Opening Record Generated
+
+    Note over Officer,Vault: Technical Access Granted After Ceremony
+    Officer->>API: GET /bids/{id}/content
+    API->>Vault: Query Bid Payload
+    Vault-->>API: Return Unsealed Technical Payload
+    API-->>Officer: HTTP 200 OK
+```
+
+### 2. AI Advisory Workflow with Human Approval Gate (Rule 7 Enforcement)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Buyer as Procurement Officer
+    actor Director as Procurement Director
+    participant PA as Procurement App
+    participant API as REST API Gateway
+    participant AI as watsonx Orchestrate Agent
+    participant Ledger as HMAC Audit Ledger
+
+    Buyer->>PA: Click "Run AI Completeness Check"
+    PA->>API: POST /api/v1/ai/advisory/tender-completeness-check
+    API->>AI: Invoke ADK Advisory Tool
+    AI->>AI: Screen Specs, Budget, Terms
+    AI-->>API: Return Advisory Recommendations (Draft Only)
+    API-->>PA: Display Advisory Scorecard
+
+    Note over Director,API: Mandatory Human Gate (Rule 7)
+    Director->>PA: Review AI Score & Enter Justification
+    Director->>PA: Click "Authorize Publication"
+    PA->>API: POST /tenders/{id}/approve-publish
+    API->>API: Validate Role: DIRECTOR
+    API->>Ledger: Log Event: TENDER_APPROVED_FOR_PUBLISH
+    API-->>PA: Status: APPROVED_FOR_PUBLICATION
+
+    Buyer->>PA: Click "Publish to Vendor Portal"
+    PA->>API: POST /tenders/{id}/publish
+    API->>Ledger: Log Event: TENDER_PUBLISHED
+    API-->>PA: Status: PUBLISHED (Visible to Vendors)
+```
+

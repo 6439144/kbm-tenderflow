@@ -41,8 +41,8 @@
 | **T18** | A6 | Tue 13 Oct | T13, T14 | Automated E2E runner for steps 5-8, nightly DB dump, zero CVEs | Steps 5-8 passing; `backup-db.sh` automated; security audit passing. | **Done** |
 | **T19** | A1 | Tue 13 Oct | T12 | Product guides: Admin guide, install guide, user quick guide (AR/EN), release notes v0.9.0 | Bilingual guides in `docs/guides/` matching review demo workflows and v0.9.0 release notes. | **Done** |
 | **T20** | A0 | Tue 13 Oct | T18 | Scope cuts review (18:00 Kuwait time) | Cut incomplete features to `docs/roadmap.md`; protect product-grade release. | `Todo` |
-| **T21** | A0 / A4 | Wed 14 Oct | T16, T18 | Repeatability deployment test on fresh TechZone instance | Time execution of `install.sh`, `provision/`, and `import.sh`. | `Todo` |
+| **T21** | A0 / A4 | Wed 14 Oct | T16, T18 | Repeatability deployment test on fresh TechZone instance | Time execution of `install.sh`, `provision/`, and `import.sh` (<15m rebuild documented). | **Done** |
 | **T22** | A6 | Wed 14 Oct | T18 | Clean VM install recording & full demo video fallback | Video capture of 10-step demo as failsafe for ESA evaluation. | `Todo` |
-| **T23** | A0 / A1 | Wed 14 Oct | T21 | Architecture document, ESA questionnaire pack, release notes v0.9.0 | ESA submission package and formal release notes. | `Todo` |
+| **T23** | A0 / A1 | Wed 14 Oct | T21 | Architecture document, ESA questionnaire pack, release notes v0.9.0 | ESA submission package, overview diagrams, and formal release notes complete. | **Done** |
 | **T24** | A0 | Wed 14 Oct | All | Code freeze at 18:00 Kuwait Time | Final PR architectural review; lock integration branch. | `Todo` |
 | **T25** | A0 | Thu 15 Oct | T24 | Official Release Tag `v0.9.0` | Tag `v0.9.0` created and verified for ESA presentation. | `Todo` |
