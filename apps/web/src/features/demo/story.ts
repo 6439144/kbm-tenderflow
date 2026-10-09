@@ -65,14 +65,14 @@ export const TRACKS: Record<EntityId, Chapter[]> = {
     {
       id: 'kea4', entity: 'kea', title: 'demo.ch.kea4.title', why: 'demo.ch.kea4.why', say: 'demo.ch.kea4.say',
       do: ['demo.ch.kea4.do1', 'demo.ch.kea4.do2', 'demo.ch.kea4.do3'],
-      moves: [{ persona: 'director', target: T101, spot: ['[data-tour="approval-chain"]', '.next-action'] }],
+      moves: [{ persona: 'director', target: T101, spot: ['[data-tour="approval-chain"]', '.cyc-chains-view', '.next-action'] }],
       orch: 'demo.ch.kea4.orch',
       evidence: { aiKinds: ['PACK_CHECK'], tender: 'KEA-2026-101' },
     },
     {
       id: 'kea5', entity: 'kea', title: 'demo.ch.kea5.title', why: 'demo.ch.kea5.why', say: 'demo.ch.kea5.say',
       do: ['demo.ch.kea5.do1', 'demo.ch.kea5.do2', 'demo.ch.kea5.do3'],
-      moves: [{ persona: 'officer', target: T102, spot: ['[data-tour="publications"]', '[data-tour="cycle-panel"]', '.next-action'] }],
+      moves: [{ persona: 'officer', target: T102, spot: ['[data-tour="publications"]', '#sec-publications', '[data-tour="cycle-panel"]', '.next-action'] }],
       filenet: 'demo.ch.kea5.filenet', orch: 'demo.ch.kea5.orch',
       evidence: { actions: ['NOTICE_PUBLISHED'], ownerTypes: ['NOTICE'], aiKinds: ['GAZETTE_NOTICE'], tender: 'KEA-2026-102' },
     },
@@ -121,7 +121,7 @@ export const TRACKS: Record<EntityId, Chapter[]> = {
       do: ['demo.ch.kea11.do1', 'demo.ch.kea11.do2', 'demo.ch.kea11.do3'],
       moves: [
         { persona: 'evaluator1', target: T088, spot: ['#sec-scoring'], label: 'demo.ch.kea11.m1' },
-        { persona: 'chair', target: T088, spot: ['[data-tour="narrative"]', '#sec-summary'], label: 'demo.ch.kea11.m2' },
+        { persona: 'chair', target: T088, spot: ['[data-tour="narrative"]', '#sec-orchestrate', '#sec-summary'], label: 'demo.ch.kea11.m2' },
       ],
       filenet: 'demo.ch.kea11.filenet', orch: 'demo.ch.kea11.orch',
       evidence: { ownerTypes: ['EVALUATION_NARRATIVE', 'COMMITTEE_REPORT'], aiKinds: ['EVALUATION_NARRATIVE'], tender: 'KEA-2026-088' },
@@ -142,19 +142,19 @@ export const TRACKS: Record<EntityId, Chapter[]> = {
       id: 'gcia1', entity: 'gcia', title: 'demo.ch.gcia1.title', why: 'demo.ch.gcia1.why', say: 'demo.ch.gcia1.say',
       do: ['demo.ch.gcia1.do1', 'demo.ch.gcia1.do2', 'demo.ch.gcia1.do3'],
       moves: [{ persona: 'undersecretary', target: { kind: 'tender', titleEn: 'Coastal Road Drainage Upgrade' },
-        spot: ['[data-tour="approval-chain"]', '.next-action'] }],
+        spot: ['[data-tour="approval-chain"]', '.cyc-chains-view', '.next-action'] }],
     },
     {
       id: 'gcia2', entity: 'gcia', title: 'demo.ch.gcia2.title', why: 'demo.ch.gcia2.why', say: 'demo.ch.gcia2.say',
       do: ['demo.ch.gcia2.do1', 'demo.ch.gcia2.do2', 'demo.ch.gcia2.do3'],
       moves: [{ persona: 'vendor3', target: { kind: 'tender', titleEn: 'Fishing Harbour Breakwater Repair' },
-        spot: ['[data-tour="eligibility"]', '#vendor-bid'] }],
+        spot: ['[data-tour="eligibility"]', '#sec-eligibility', '#vendor-bid'] }],
     },
     {
       id: 'gcia3', entity: 'gcia', title: 'demo.ch.gcia3.title', why: 'demo.ch.gcia3.why', say: 'demo.ch.gcia3.say',
       do: ['demo.ch.gcia3.do1', 'demo.ch.gcia3.do2', 'demo.ch.gcia3.do3'],
       moves: [{ persona: 'vendor2', target: { kind: 'tender', titleEn: 'Fishing Harbour Breakwater Repair' },
-        spot: ['[data-tour="purchase"]', '#vendor-bid'] }],
+        spot: ['[data-tour="purchase"]', '#sec-purchase', '#vendor-bid'] }],
     },
     {
       id: 'gcia4', entity: 'gcia', title: 'demo.ch.gcia4.title', why: 'demo.ch.gcia4.why', say: 'demo.ch.gcia4.say',

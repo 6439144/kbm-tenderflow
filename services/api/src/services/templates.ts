@@ -252,10 +252,11 @@ export async function publishTemplate(ctx: Ctx, actor: Actor, id: string, b: any
   parseConfig(t.config); // re-validate
   const makeDefault = b?.makeDefault === true;
   return ctx.db.tx(async (q) => {
-    // Older published versions of the same code retire; running tenders keep their snapshot.
-    await q.query(`UPDATE cycle_templates SET status='RETIRED', is_default=false WHERE tenant_id=$1 AND code=$2 AND status='PUBLISHED'`, [actor.tenantId, t.code]);
+    // A new version of the current default template stays the default; otherwise only when asked (or when none exists).
     const prevDefault = await q.query<{ code: string }>(`SELECT code FROM cycle_templates WHERE tenant_id=$1 AND is_default`, [actor.tenantId]);
     const becomeDefault = makeDefault || prevDefault.length === 0 || prevDefault.some((p) => p.code === t.code);
+    // Older published versions of the same code retire; running tenders keep their snapshot.
+    await q.query(`UPDATE cycle_templates SET status='RETIRED', is_default=false WHERE tenant_id=$1 AND code=$2 AND status='PUBLISHED'`, [actor.tenantId, t.code]);
     if (becomeDefault) await q.query(`UPDATE cycle_templates SET is_default=false WHERE tenant_id=$1`, [actor.tenantId]);
     const rows = await q.query<TemplateRow>(
       `UPDATE cycle_templates SET status='PUBLISHED', published_at=$1, is_default=$2 WHERE id=$3 RETURNING *`, [now(), becomeDefault, id]);

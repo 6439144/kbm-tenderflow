@@ -40,7 +40,7 @@ const PROCUREMENT_NAV: NavItem[] = [
 ];
 const VENDOR_NAV: NavItem[] = [{ to: '/vendor', label: 'nav.myCompany', end: true }];
 const ADMIN_NAV: NavItem[] = [
-  { to: '/admin', label: 'nav.users', end: true },
+  { to: '/admin', label: 'nav.users', end: true, roles: ['TENANT_ADMIN'] },
   { to: '/admin/cycle', label: 'nav.cycleDesigner', roles: ['TENANT_ADMIN'] },
   { to: '/admin/entity', label: 'nav.entity', roles: ['TENANT_ADMIN'] },
   { to: '/admin/audit', label: 'nav.audit' },
