@@ -217,7 +217,7 @@ export function enqueue(ctx: Ctx, actor: Actor, documentId: string, trigger: Tri
       if (d) await classifyDocumentRow(ctx, actor, d, trigger);
     } catch (err) {
       const e = err as ApiError;
-      if (!['AI_ERROR', 'AI_NOT_CONFIGURED'].includes(String(e?.code))) console.error(`[docintel] auto classification of ${documentId} failed:`, e?.message ?? err);
+      if (!['AI_ERROR', 'AI_NOT_CONFIGURED', 'AI_AGENT_NOT_IMPORTED'].includes(String(e?.code))) console.error(`[docintel] auto classification of ${documentId} failed:`, e?.message ?? err);
     } finally { s.pending.delete(documentId); }
   });
   return true;

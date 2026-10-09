@@ -3582,3 +3582,18 @@ html.demo-docked .ast-dock {
     inset-block-end: 84px;
   }
 }
+
+/* assistant: answers computed by TenderFlow without AI (agent not imported yet) */
+.ast-local {
+  border: 1px dashed var(--border, #d0d5dd);
+  background: var(--surface, #fff);
+}
+.ast-local-tag {
+  display: inline-block;
+  margin-block-end: 0.35rem;
+  padding: 0.05rem 0.5rem;
+  border-radius: 999px;
+  background: var(--warn-bg);
+  color: #6b3f00;
+  font-weight: 600;
+}

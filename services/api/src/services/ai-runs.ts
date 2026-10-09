@@ -66,6 +66,9 @@ export async function recordRun<T extends { agent: string; model?: string; outpu
         details: { kind, tenderId, subjectId, error: message.slice(0, 500) } });
     });
     if (notConfigured) throw new ApiError(503, 'AI_NOT_CONFIGURED', message, { aiRunId: id });
+    if ((err as any)?.code === 'AI_AGENT_NOT_IMPORTED') {
+      throw new ApiError(503, 'AI_AGENT_NOT_IMPORTED', message, { aiRunId: id, agent: (err as any).agentName ?? null });
+    }
     if (err instanceof ApiError) throw err;
     throw new ApiError(502, 'AI_ERROR', `AI service call failed: ${message}`, { aiRunId: id });
   }

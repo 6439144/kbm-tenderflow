@@ -3,7 +3,7 @@
 // page — the tender id from the URL. Not configured → a clear banner and no reply (nothing is simulated).
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { ApiError, isAiNotConfigured, type Citation } from '../../api';
+import { agentNameOf, ApiError, isAgentNotImported, isAiNotConfigured, type Citation } from '../../api';
 import { useI18n, type TKey } from '../../i18n';
 import { useSession } from '../../session';
 import { Citations } from '../../components/shared';
@@ -14,7 +14,11 @@ import { AiInsightsCard } from './AiInsights';
 type Msg =
   | { id: number; role: 'user'; text: string }
   | { id: number; role: 'bot'; reply: ChatReply }
-  | { id: number; role: 'notice'; text: string };
+  | { id: number; role: 'notice'; text: string }
+  | { id: number; role: 'local'; kind: 'tasks' | 'other'; tasks: Task[] };
+
+/** Questions that the TenderFlow task list answers without AI ("what is waiting for me?"). */
+const TASK_QUESTION = /(waiting|pending|to.?do|my tasks|what (do|should) i|ينتظر|المطلوب مني|مهامي|مهام)/i;
 
 const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 const TENDER_PATH = new RegExp(`^/(?:procurement|vendor)/tenders/(${UUID})(?:/|$)`, 'i');
@@ -54,6 +58,8 @@ export function AssistantDock() {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<'chat' | 'tasks' | 'insights'>('chat');
   const [configured, setConfigured] = useState<boolean | null>(null);
+  /** Name of the supervisor agent when Orchestrate is connected but that agent is not imported on the instance. */
+  const [missingAgent, setMissingAgent] = useState<string | null>(null);
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [threadId, setThreadId] = useState<string | null>(null);
   const [input, setInput] = useState('');
@@ -70,13 +76,18 @@ export function AssistantDock() {
 
   // A different user (sign-out / sign-in) never sees the previous conversation.
   useEffect(() => {
-    setMsgs([]); setThreadId(null); setTasks(null); setConfigured(null); setOpen(false); setTab('chat');
+    setMsgs([]); setThreadId(null); setTasks(null); setConfigured(null); setMissingAgent(null); setOpen(false); setTab('chat');
   }, [user?.id]);
 
   useEffect(() => {
     if (!user) return;
     let alive = true;
-    assistantApi.status().then((s) => alive && setConfigured(s.configured)).catch(() => alive && setConfigured(null));
+    assistantApi.status().then((s) => {
+      if (!alive) return;
+      setConfigured(s.configured);
+      const sup = s.agents?.checked ? s.agents.missing.find((m) => m.role === 'assistant') : undefined;
+      setMissingAgent(sup ? sup.name : null);
+    }).catch(() => alive && setConfigured(null));
     setTasksErr(null);
     assistantApi.myTasks().then((x) => alive && setTasks(x)).catch((e) => alive && setTasksErr(e));
     return () => { alive = false; };
@@ -113,6 +124,14 @@ export function AssistantDock() {
     setErr(null);
     setInput('');
     setMsgs((m) => [...m, { id: ++seq.current, role: 'user', text: message }]);
+    // The supervisor agent is not on the instance: answer task questions from TenderFlow's own task list (no AI).
+    const answerLocally = async () => {
+      let list = tasks;
+      if (!list) { try { list = await assistantApi.myTasks(); setTasks(list); } catch { list = []; } }
+      const kind = TASK_QUESTION.test(message) ? 'tasks' : 'other';
+      setMsgs((m) => [...m, { id: ++seq.current, role: 'local', kind, tasks: list ?? [] }]);
+    };
+    if (missingAgent) { await answerLocally(); inputRef.current?.focus(); return; }
     setBusy(true);
     try {
       let reply: ChatReply;
@@ -129,6 +148,7 @@ export function AssistantDock() {
       setMsgs((m) => [...m, { id: ++seq.current, role: 'bot', reply }]);
     } catch (e) {
       if (isAiNotConfigured(e)) setConfigured(false);
+      else if (isAgentNotImported(e)) { setMissingAgent(agentNameOf(e)); await answerLocally(); }
       else setErr(e);
     } finally {
       setBusy(false);
@@ -169,6 +189,14 @@ export function AssistantDock() {
           {tab === 'chat' && (
             <>
               <div className="ast-body" ref={listRef} aria-live="polite">
+                {!notConfigured && missingAgent && (
+                  <div className="alert alert-warn ast-banner" role="status">
+                    <div>
+                      <strong>{t('assistant.notImported')}</strong>
+                      <div className="small">{t('assistant.notImportedDetail', { agent: missingAgent })}</div>
+                    </div>
+                  </div>
+                )}
                 {notConfigured && (
                   <div className="alert alert-info ast-banner" role="status">
                     <div>
@@ -184,6 +212,23 @@ export function AssistantDock() {
                     <div key={m.id} className="ast-msg ast-user"><div className="ast-bubble" dir="auto">{m.text}</div></div>
                   ) : m.role === 'notice' ? (
                     <div key={m.id} className="ast-note small">{m.text}</div>
+                  ) : m.role === 'local' ? (
+                    <div key={m.id} className="ast-msg ast-bot">
+                      <div className="ast-bubble ast-local">
+                        <div className="ast-local-tag small">{t('assistant.local.label')}</div>
+                        {m.kind === 'tasks' ? (
+                          <>
+                            <p className="small">{t('assistant.local.tasksIntro')}</p>
+                            <TaskList tasks={m.tasks} onNavigate={() => setOpen(false)} />
+                          </>
+                        ) : (
+                          <>
+                            <p className="small">{t('assistant.local.other')}</p>
+                            <Button variant="secondary" onClick={() => setTab('tasks')}>{t('assistant.local.openTasks')}</Button>
+                          </>
+                        )}
+                      </div>
+                    </div>
                   ) : (
                     <BotMessage key={m.id} reply={m.reply} />
                   ),

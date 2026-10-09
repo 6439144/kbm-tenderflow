@@ -15,6 +15,8 @@
 
 export class OrchestrateError extends Error {
   code = 'ORCHESTRATE_ERROR';
+  /** Set when the error is about one named agent (e.g. not imported on the instance). */
+  agentName?: string;
   constructor(message: string, public readonly status?: number, public readonly operation?: string) {
     super(message);
     this.name = 'OrchestrateError';
@@ -191,7 +193,10 @@ export class OrchestrateClient {
       const found = await this.listAgents([ref]);
       agent = found.find((a) => a.name === ref);
       if (!agent) {
-        throw new OrchestrateError(`Orchestrate agent "${ref}" was not found on the instance. Import it with agents/import.ps1 (or import.sh) and check the WXO_AGENT_* settings.`, 404, 'resolve agent');
+        const e = new OrchestrateError(`Orchestrate agent "${ref}" was not found on the instance. Import it with agents/import.ps1 (or import.sh) and check the WXO_AGENT_* settings.`, 404, 'resolve agent');
+        e.code = 'AI_AGENT_NOT_IMPORTED';
+        e.agentName = ref;
+        throw e;
       }
     }
     this.agentCache.set(ref, agent);

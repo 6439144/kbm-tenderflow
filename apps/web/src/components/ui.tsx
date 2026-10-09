@@ -9,7 +9,7 @@ import {
   type ButtonHTMLAttributes,
   type ReactNode,
 } from 'react';
-import { ApiError, isAiNotConfigured } from '../api';
+import { agentNameOf, ApiError, isAgentNotImported, isAiNotConfigured } from '../api';
 import { useI18n } from '../i18n';
 
 // ---------------------------------------------------------------- data hook
@@ -171,6 +171,7 @@ export function EmptyState({ message, children }: { message: ReactNode; children
 export function ErrorBox({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
   const { t } = useI18n();
   if (isAiNotConfigured(error)) return <AiNotConfiguredBanner />;
+  if (isAgentNotImported(error)) return <AgentNotImportedBanner agent={agentNameOf(error)} />;
   const code = error instanceof ApiError ? error.code : 'CLIENT_ERROR';
   const message = error instanceof Error ? error.message : String(error);
   const forbidden = error instanceof ApiError && error.status === 403;
@@ -188,6 +189,22 @@ export function ErrorBox({ error, onRetry }: { error: unknown; onRetry?: () => v
           {t('common.retry')}
         </Button>
       )}
+    </div>
+  );
+}
+
+export function AgentNotImportedBanner({ agent }: { agent: string }) {
+  const { t } = useI18n();
+  return (
+    <div className="alert alert-warn" role="status">
+      <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2">
+        <circle cx="12" cy="12" r="10" />
+        <path d="M12 8v5M12 16h.01" />
+      </svg>
+      <div>
+        <strong>{t('ai.agentNotImported', { agent })}</strong>
+        <div className="small">{t('ai.agentNotImportedDetail')}</div>
+      </div>
     </div>
   );
 }

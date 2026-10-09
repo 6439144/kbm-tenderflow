@@ -24,6 +24,8 @@ export interface FakeOrchestrate {
   reply: (call: FakeCall) => FakeReply;
   /** Queue of replies used before `reply` (shifted per run). */
   queue: FakeReply[];
+  /** Agent names the fake pretends are NOT imported on the instance (left out of the agent listing). */
+  hidden: Set<string>;
   close(): Promise<void>;
 }
 
@@ -51,7 +53,7 @@ export async function startFakeOrchestrate(): Promise<FakeOrchestrate> {
     if (!String(req.headers.authorization ?? '').startsWith('Bearer tok-')) return json(res, 401, { detail: 'unauthorized' });
     if (url.pathname === '/v1/orchestrate/agents' && req.method === 'GET') {
       const names = url.searchParams.getAll('names');
-      const all = AGENT_NAMES.map((name) => ({ id: ids.get(name), name, llm: 'watsonx/meta-llama/llama-3-3-70b-instruct' }));
+      const all = AGENT_NAMES.filter((name) => !fake.hidden.has(name)).map((name) => ({ id: ids.get(name), name, llm: 'watsonx/meta-llama/llama-3-3-70b-instruct' }));
       return json(res, 200, names.length ? all.filter((a) => names.includes(a.name)) : all);
     }
     if (url.pathname === '/v1/orchestrate/runs' && req.method === 'POST') {
@@ -83,7 +85,7 @@ export async function startFakeOrchestrate(): Promise<FakeOrchestrate> {
   await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   fake = {
-    base, calls: [], queue: [], reply: () => '{}',
+    base, calls: [], queue: [], hidden: new Set<string>(), reply: () => '{}',
     env: { WXO_INSTANCE_URL: base, WXO_API_KEY: FAKE_API_KEY, WXO_IAM_URL: `${base}/identity/token` },
     close: () => new Promise<void>((r) => { server.closeAllConnections(); server.close(() => r()); }),
   };

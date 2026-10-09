@@ -101,6 +101,8 @@ export interface ClassifyDocumentInput {
 export interface AiService {
   isConfigured(): boolean;
   ping(): Promise<{ ok: boolean; detail: string }>;
+  /** Which configured agents exist on the instance (cached ~60 s). `checked:false` when the check itself failed. */
+  agentStatus(): Promise<{ checked: boolean; missing: { role: string; name: string }[]; detail?: string }>;
   checkTenderPack(input: { tender: { titleEn: string; titleAr: string; category: string; deadline: string; criteria: unknown; requiredDocuments: unknown }; documents: DocText[]; language: 'ar' | 'en' }): Promise<AiResult<{ findings: PackFinding[]; summary: string }>>;
   draftClarification(input: { tender: { titleEn: string; titleAr: string }; question: string; documents: DocText[]; priorAnswers: { question: string; answer: string }[] }): Promise<AiResult<ClarificationDraft>>;
   screenCompliance(input: { requiredDocuments: { key: string; nameEn: string; nameAr: string }[]; bid: { bidId: string; vendorName: string; documents: DocText[] } }): Promise<AiResult<{ items: ComplianceItem[] }>>;

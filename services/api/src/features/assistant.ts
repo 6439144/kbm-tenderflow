@@ -14,7 +14,10 @@ const DECIDERS = [OFFICER, 'DIRECTOR', 'UNDERSECRETARY', 'COMMITTEE_CHAIR', 'TEN
 
 export function registerAssistantRoutes(r: express.Router, ctx: Ctx): void {
   // Assistant (any signed-in user; context is role-scoped on the server)
-  r.get('/assistant/status', h(async () => ({ configured: ctx.ai.isConfigured() })));
+  r.get('/assistant/status', h(async () => {
+    const configured = ctx.ai.isConfigured();
+    return { configured, agents: configured ? await ctx.ai.agentStatus() : { checked: false, missing: [] } };
+  }));
   r.get('/assistant/my-tasks', h((req) => myTasks(ctx, actor(req))));
   r.post('/assistant/chat', h(async (req, res) => { res.status(201); return chat(ctx, actor(req), req.body); }));
   r.get('/assistant/insights', requireRoles('TENANT_ADMIN', 'AUDITOR'), h((req) => insights(ctx, actor(req))));

@@ -1,6 +1,12 @@
 // Typed client for the Orchestrate assistant routes (services/api/src/features/assistant.ts). Real HTTP calls only.
 import { http, type AiRun, type Citation, type DocumentMeta } from '../../api';
 
+export interface AssistantStatus {
+  configured: boolean;
+  /** Which configured agents are missing on the Orchestrate instance (checked:false when the check could not run). */
+  agents?: { checked: boolean; missing: { role: string; name: string }[]; detail?: string };
+}
+
 export interface ChatReply {
   answer: string;
   notFound: boolean;
@@ -76,7 +82,7 @@ export interface GradeCriterion { key: string; nameEn: string; nameAr: string }
 const enc = encodeURIComponent;
 
 export const assistantApi = {
-  status: () => http.get<{ configured: boolean }>('/assistant/status'),
+  status: () => http.get<AssistantStatus>('/assistant/status'),
   myTasks: () => http.get<Task[]>('/assistant/my-tasks'),
   chat: (b: { message: string; threadId?: string | null; page?: string; tenderId?: string | null }) =>
     http.post<ChatReply>('/assistant/chat', { message: b.message, threadId: b.threadId || undefined, page: b.page, tenderId: b.tenderId || undefined }),

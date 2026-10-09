@@ -66,6 +66,8 @@ export function createAiService(options: CreateAiServiceOptions = {}): AiService
     return { ok: true, agent: first.agentName, model: first.model, output: result.value as T, citations: dedupe(result.citations), raw: meta };
   }
 
+  let statusCache: { at: number; value: { checked: boolean; missing: { role: string; name: string }[]; detail?: string } } | null = null;
+
   const run = <T>(role: AgentRole, prompt: string, schema: string, validate: (obj: unknown) => Validated<T>) =>
     runText(role, prompt, schema, (text) => jsonThen(text, validate));
 
@@ -86,6 +88,22 @@ export function createAiService(options: CreateAiServiceOptions = {}): AiService
       } catch (e) {
         return { ok: false, detail: (e as Error).message };
       }
+    },
+
+    async agentStatus() {
+      if (!isConfigComplete(cfg)) return { checked: false, missing: [], detail: 'not configured' };
+      if (statusCache && Date.now() - statusCache.at < 60_000) return statusCache.value;
+      let value: { checked: boolean; missing: { role: string; name: string }[]; detail?: string };
+      try {
+        const agents = await getClient().listAgents();
+        const names = new Set(agents.flatMap((a) => [a.name, a.id]));
+        const roles = Object.keys(cfg.agents) as AgentRole[];
+        value = { checked: true, missing: roles.filter((r) => !names.has(cfg.agents[r])).map((r) => ({ role: r, name: cfg.agents[r] })) };
+      } catch (e) {
+        value = { checked: false, missing: [], detail: (e as Error).message };
+      }
+      statusCache = { at: Date.now(), value };
+      return value;
     },
 
     async checkTenderPack(input) {
