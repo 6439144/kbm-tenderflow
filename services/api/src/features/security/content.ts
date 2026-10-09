@@ -101,7 +101,8 @@ async function watermarkFor(ctx: Ctx, actor: Actor, ref: string, receipt: string
   if (actor.vendorId) {
     const v = (await ctx.db.query<{ legal_name_en: string; legal_name_ar: string; cr_number: string }>(
       'SELECT legal_name_en, legal_name_ar, cr_number FROM vendors WHERE id=$1 AND tenant_id=$2', [actor.vendorId, actor.tenantId]))[0];
-    const idLine = `Vendor ${actor.vendorId.slice(0, 8)} · CR ${v?.cr_number ?? '—'}`;
+    const cr = v?.cr_number ?? '—';
+    const idLine = `Vendor ${actor.vendorId.slice(0, 8)} · ${/^CR/i.test(cr) ? cr : `CR ${cr}`}`;
     const lines = [v?.legal_name_en ?? 'Vendor', idLine, `user ${actor.username}`, at, `ref ${ref.slice(0, 8)}`, ...(receipt ? [`receipt ${receipt}`] : [])];
     return {
       lines,

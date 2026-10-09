@@ -186,7 +186,7 @@ export function ErrorBox({ error, onRetry }: { error: unknown; onRetry?: () => v
   const code = error instanceof ApiError ? error.code : 'CLIENT_ERROR';
   const raw = error instanceof Error ? error.message : String(error);
   const message = te('security.err.', code) !== code ? te('security.err.', code) : raw; // SEC: bilingual security refusals
-  const forbidden = error instanceof ApiError && error.status === 403;
+  const forbidden = error instanceof ApiError && error.status === 403 && message === raw;
   return (
     <div className="alert alert-danger" role="alert">
       <div>

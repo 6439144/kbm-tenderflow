@@ -92,7 +92,7 @@ test('VIEW_ONLY: vendor original download refused (403 CONTENT_PROTECTED), staff
   assert.match(v.body.pages[0].text.replace(/[​⁠]/g, ''), /Scope of work: supply of 40 servers/);
   assert.equal(readFingerprint(v.body.pages[0].text), v.body.viewId.slice(0, 8), 'text carries the view fingerprint');
   assert.equal(v.body.watermark.lines[0], 'vnot Trading (fictitious)');
-  assert.match(v.body.watermark.lines.join(' '), /CR CR-vnot/);
+  assert.match(v.body.watermark.lines.join(' '), /Vendor [0-9a-f]{8} · CR-vnot/);
   assert.match(v.body.watermark.lines.join(' '), /user vnot/);
   assert.match(v.body.watermark.lines.join(' '), new RegExp(`ref ${v.body.viewId.slice(0, 8)}`));
   assert.equal(v.body.watermark.linesAr[0], 'vnot للتجارة (وهمية)');
@@ -148,7 +148,7 @@ test('WATERMARKED_DOWNLOAD: purchase required → 402 until purchased; stamped P
   assert.equal(text.length, 2);
   for (const pageText of text) {
     assert.match(pageText, /vpaid Trading \(fictitious\)/);
-    assert.match(pageText, /CR CR-vpaid/);
+    assert.match(pageText, /CR-vpaid/);
     assert.match(pageText, /\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} UTC/);
     assert.match(pageText, new RegExp(`receipt ${receipt}`));
   }

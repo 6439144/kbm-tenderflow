@@ -8,7 +8,7 @@ import {
   otpauthUri, totp, verifyTotp, timeStep,
 } from '../src/auth/totp.js';
 import { cidrContains, ipInList, parseCidr, parseIp, formatIp } from '../src/auth/cidr.js';
-import { fingerprintText, readFingerprint, stampPdf } from '../src/content/watermark.js';
+import { fingerprintText, readFingerprint, stampPdf, wrapFooter } from '../src/content/watermark.js';
 
 test('TOTP: RFC 6238 Appendix B test vectors (SHA1, SHA256, SHA512, 8 digits)', () => {
   const s1 = Buffer.from('12345678901234567890', 'ascii');
@@ -146,4 +146,14 @@ test('stampPdf: every page carries the diagonal stamp and footer; original untou
   const loaded = await PDFDocument.load(stamped);
   assert.match(loaded.getSubject() ?? '', /Licensed copy deadbeef-0000/);
   await assert.rejects(stampPdf(Buffer.from('%PDF-1.4 garbage'), { lines: ['x'], footer: 'x' }, { id: 'x' }), (e: any) => e.code === 'PDF_UNREADABLE' || e.code === 'PDF_ENCRYPTED');
+});
+
+test('wrapFooter: long footers wrap at separators and are never cut off', () => {
+  const w = (s: string) => s.length;
+  const footer = 'Licensed to A Very Long Vendor Name W.L.L. (fictitious) · Vendor 1a2b3c4d · CR-100001 · vendor1 · 2026-10-10 09:00:00 UTC · ref deadbeef · receipt GCIA-R-2026-00001';
+  const lines = wrapFooter(footer, w, 60);
+  assert.ok(lines.length > 1);
+  assert.ok(lines.every((l) => l.length <= 60));
+  assert.equal(lines.join(' · '), footer, 'nothing lost');
+  assert.deepEqual(wrapFooter('x'.repeat(25), w, 10), ['x'.repeat(10), 'x'.repeat(10), 'x'.repeat(5)]);
 });

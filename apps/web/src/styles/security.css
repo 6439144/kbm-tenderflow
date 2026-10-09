@@ -138,9 +138,17 @@
 }
 .security-doc-actions {
   display: inline-flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-start;
+}
+.security-doc-actions .btn {
+  white-space: nowrap;
   gap: 6px;
-  align-items: center;
+}
+.security-doc-actions .muted {
+  max-width: 14ch;
+  padding-inline: 8px;
 }
 @media (max-width: 720px) {
   .security-map-row {

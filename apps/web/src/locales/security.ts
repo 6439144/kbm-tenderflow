@@ -183,10 +183,10 @@ export const en = {
   'security.accounts.amendToast': 'Account updated',
 
   // protected viewer
-  'security.viewer.view': 'View (protected)',
-  'security.viewer.downloadWatermarked': 'Download watermarked PDF',
-  'security.viewer.purchaseFirst': 'Purchase the documents to download a watermarked copy',
-  'security.viewer.viewOnlyFormat': 'View only (not a PDF)',
+  'security.viewer.view': 'View',
+  'security.viewer.downloadWatermarked': 'Watermarked PDF',
+  'security.viewer.purchaseFirst': 'Download after purchase',
+  'security.viewer.viewOnlyFormat': 'View only (not PDF)',
   'security.viewer.viewOnly': 'View only',
   'security.viewer.title': 'Protected document',
   'security.viewer.preparing': 'Preparing the protected view…',
@@ -424,9 +424,9 @@ export const ar: Record<keyof typeof en, string> = {
   'security.accounts.rolesToast': 'تم تحديث الأدوار',
   'security.accounts.amendToast': 'تم تحديث الحساب',
 
-  'security.viewer.view': 'عرض (محمي)',
-  'security.viewer.downloadWatermarked': 'تنزيل PDF بعلامة مائية',
-  'security.viewer.purchaseFirst': 'اشترِ المستندات لتنزيل نسخة بعلامة مائية',
+  'security.viewer.view': 'عرض',
+  'security.viewer.downloadWatermarked': 'PDF بعلامة مائية',
+  'security.viewer.purchaseFirst': 'التنزيل بعد الشراء',
   'security.viewer.viewOnlyFormat': 'للعرض فقط (ليس PDF)',
   'security.viewer.viewOnly': 'للعرض فقط',
   'security.viewer.title': 'مستند محمي',

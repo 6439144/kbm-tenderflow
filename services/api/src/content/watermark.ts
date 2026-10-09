@@ -44,18 +44,38 @@ export async function stampPdf(original: Buffer, wm: Watermark, meta: { id: stri
         page.drawText(stamp, { x, y, size, font: bold, color: rgb(0.75, 0.1, 0.1), opacity: 0.16, rotate: degrees(angle) });
       }
     }
-    // Footer band.
+    // Footer band: the footer wrapped at ' · ' boundaries into as many lines as needed (never cut off).
     const fs = Math.max(6, Math.min(8, width / 80));
-    page.drawRectangle({ x: 0, y: 0, width, height: fs * 2.6, color: rgb(1, 1, 1), opacity: 0.85 });
-    let f = footer;
-    while (f.length > 10 && font.widthOfTextAtSize(f, fs) > width - 24) f = f.slice(0, -2);
-    page.drawText(f, { x: 12, y: fs * 0.9, size: fs, font, color: rgb(0.45, 0.05, 0.05) });
+    const lines = wrapFooter(footer, (t) => font.widthOfTextAtSize(t, fs), width - 24);
+    const band = fs * (1.4 * lines.length + 1.2);
+    page.drawRectangle({ x: 0, y: 0, width, height: band, color: rgb(1, 1, 1), opacity: 0.85 });
+    lines.forEach((l, i) => page.drawText(l, { x: 12, y: band - fs * (1.4 * (i + 1)), size: fs, font, color: rgb(0.45, 0.05, 0.05) }));
   }
   doc.setSubject(latin1(`Licensed copy ${meta.id} — ${wm.lines.join(' / ')}`));
   doc.setKeywords(['TenderFlow', 'watermarked', meta.id]);
   doc.setProducer('TenderFlow watermark (pdf-lib)');
   doc.setModificationDate(new Date());
   return Buffer.from(await doc.save());
+}
+
+/** Greedy wrap on ' · ' separators; a single over-long part is split by characters. */
+export function wrapFooter(text: string, width: (s: string) => number, max: number): string[] {
+  const parts = text.split(' · ');
+  const out: string[] = [];
+  let cur = '';
+  for (let p of parts) {
+    while (width(p) > max && p.length > 1) {
+      let k = p.length;
+      while (k > 1 && width(p.slice(0, k)) > max) k--;
+      if (cur) { out.push(cur); cur = ''; }
+      out.push(p.slice(0, k));
+      p = p.slice(k);
+    }
+    const next = cur ? `${cur} · ${p}` : p;
+    if (cur && width(next) > max) { out.push(cur); cur = p; } else cur = next;
+  }
+  if (cur) out.push(cur);
+  return out;
 }
 
 // ---------------- invisible text fingerprint ----------------
