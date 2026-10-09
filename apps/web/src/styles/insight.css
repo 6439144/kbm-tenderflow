@@ -1,0 +1,284 @@
+/* Insight workstream: role dashboards, analytics, evidence pack, public tender board.
+   Logical properties only, so Arabic (RTL) and English share the same rules. */
+
+.insight-dash {
+  gap: 1.25rem;
+}
+.insight-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+.insight-section-title {
+  font-size: 1.15rem;
+  margin: 0;
+  padding-block-end: 0.35rem;
+  border-block-end: 2px solid var(--line);
+}
+.insight-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+@media (max-width: 1000px) {
+  .insight-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* tiles (extend the shared .tile) */
+.insight-tile .tile-num {
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.insight-tile-ok {
+  border-block-start-color: var(--success);
+}
+.insight-tile-warn {
+  border-block-start-color: #c98500;
+}
+.insight-tile-danger {
+  border-block-start-color: var(--danger);
+}
+.insight-tile-danger .tile-num {
+  color: var(--danger);
+}
+
+/* charts */
+.insight-chart {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-inline-size: 0;
+}
+.insight-chart figcaption {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+.insight-svg {
+  inline-size: 100%;
+  block-size: auto;
+  overflow: visible;
+}
+.insight-axis-label,
+.insight-tick {
+  fill: var(--ink-2);
+  font-size: 12px;
+  font-family: var(--font);
+}
+.insight-tick {
+  fill: var(--muted);
+  font-size: 11px;
+}
+.insight-value {
+  fill: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font);
+}
+.insight-svg .insight-gridline {
+  stroke: var(--line-2);
+  stroke-width: 1;
+}
+.insight-mark {
+  cursor: default;
+}
+.insight-mark:hover rect:not([fill='transparent']),
+.insight-mark:hover .insight-dot,
+path.insight-mark:hover {
+  opacity: 0.8;
+}
+.insight-mark:hover rect[fill='transparent'] {
+  fill: var(--primary-soft);
+  fill-opacity: 0.5;
+}
+.insight-nodata {
+  color: var(--muted);
+  font-style: italic;
+  padding: 1rem;
+  text-align: center;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-sm);
+  margin: 0;
+}
+.insight-table-toggle summary {
+  cursor: pointer;
+  color: var(--primary);
+  font-size: 0.85rem;
+}
+.insight-table-toggle[open] summary {
+  margin-block-end: 0.4rem;
+}
+.insight-donut {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.insight-donut-svg {
+  inline-size: 170px;
+  block-size: 170px;
+  flex: none;
+}
+.insight-donut-total {
+  fill: var(--ink);
+  font-size: 22px;
+  font-weight: 700;
+  font-family: var(--font);
+}
+.insight-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-inline-size: 160px;
+  flex: 1;
+}
+.insight-legend li {
+  display: grid;
+  grid-template-columns: 12px 1fr auto;
+  gap: 0.5rem;
+  align-items: center;
+  font-size: 0.88rem;
+}
+.insight-swatch {
+  inline-size: 12px;
+  block-size: 12px;
+  border-radius: 3px;
+}
+.insight-num {
+  font-variant-numeric: tabular-nums;
+}
+.insight-list li {
+  padding-block: 0.35rem;
+  border-block-end: 1px solid var(--line-2);
+}
+
+/* filters (analytics + public board) */
+.insight-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: flex-end;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+}
+.insight-filters .field {
+  margin: 0;
+  min-inline-size: 180px;
+}
+.insight-filters .segmented button {
+  padding-inline: 0.7rem;
+}
+
+/* evidence pack */
+.insight-checklist {
+  margin: 0;
+  padding-inline-start: 1.1rem;
+  color: var(--ink-2);
+}
+.insight-steps {
+  padding-inline-start: 1.2rem;
+}
+.insight-code {
+  background: #0f172a;
+  color: #e2e8f0;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  text-align: left;
+}
+
+/* public tender board */
+.insight-board {
+  margin-inline: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.insight-board-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.insight-board-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 1rem;
+}
+.insight-board-item {
+  padding: 1rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  border-inline-start: 4px solid var(--primary);
+}
+.insight-board-entity {
+  font-size: 0.82rem;
+  font-weight: 650;
+  color: var(--muted);
+  text-transform: none;
+}
+.insight-board-title {
+  font-size: 1.05rem;
+  margin: 0;
+}
+.insight-board-num {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  color: var(--primary);
+  margin-inline-end: 0.35rem;
+}
+.insight-chip {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: var(--line-2);
+  color: var(--ink-2);
+  font-size: 0.78rem;
+}
+.insight-board-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.4rem 1rem;
+  margin: 0;
+  font-size: 0.88rem;
+}
+.insight-board-facts dt {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.insight-board-facts dd {
+  margin: 0;
+}
+@media (max-width: 760px) {
+  .insight-board-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .insight-filters .field {
+    min-inline-size: 100%;
+  }
+}
+@media print {
+  .insight-table-toggle,
+  .insight-filters {
+    display: none;
+  }
+}

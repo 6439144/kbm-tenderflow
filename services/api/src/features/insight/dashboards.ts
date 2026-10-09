@@ -50,6 +50,7 @@ async function officerSection(ctx: Ctx, a: Actor) {
        FROM tenders t WHERE t.tenant_id=$1 AND t.status='PUBLISHED' AND t.submission_deadline > $2 AND t.submission_deadline <= $3
       ORDER BY t.submission_deadline LIMIT 20`, [t, now(), new Date(now().getTime() + 14 * DAY)]);
   const reqReady = await count(ctx.db, `SELECT count(*)::text AS n FROM procurement_requests WHERE tenant_id=$1 AND status='APPROVED'`, [t]);
+  const vendorsPending = await count(ctx.db, `SELECT count(*)::text AS n FROM vendors WHERE tenant_id=$1 AND status='PENDING_REVIEW'`, [t]);
   return {
     tendersByStatus: Object.fromEntries(byStatus.map((r) => [r.status, num(r.n)])),
     myDrafts: drafts.map((d) => ({ id: d.id, tenderNumber: d.tender_number, titleEn: d.title_en, titleAr: d.title_ar, updatedAt: iso(d.updated_at), packDocuments: d.pack_docs })),
@@ -57,6 +58,7 @@ async function officerSection(ctx: Ctx, a: Actor) {
     documentsNeedingReview: review,
     upcomingDeadlines: deadlines.map((d) => ({ id: d.id, tenderNumber: d.tender_number, titleEn: d.title_en, titleAr: d.title_ar, deadline: iso(d.submission_deadline), daysLeft: Math.round(((new Date(d.submission_deadline).getTime() - now().getTime()) / DAY) * 10) / 10, purchases: d.purchases })),
     requestsReadyToConvert: reqReady,
+    vendorsPendingReview: vendorsPending,
   };
 }
 

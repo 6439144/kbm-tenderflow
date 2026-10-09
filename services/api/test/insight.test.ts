@@ -195,6 +195,8 @@ test('role dashboards: one section per role, tenant-scoped, real numbers', async
   assert.ok(off.body.officer.myDrafts.some((d: any) => d.tenderNumber === 'KEA-2026-101'));
   assert.equal(off.body.officer.clarificationsWaiting.total, 1);
   assert.ok(off.body.officer.upcomingDeadlines.some((d: any) => d.tenderNumber === 'KEA-2026-102'));
+  const pend = await run.handle.ctx.db.query<{ n: number }>(`SELECT count(*)::int AS n FROM vendors WHERE tenant_id='kea' AND status='PENDING_REVIEW'`);
+  assert.equal(off.body.officer.vendorsPendingReview, pend[0].n);
 
   const aud = await api(run, 'GET', '/api/v1/insight/dashboard', { token: await T('kea', 'auditor') });
   assert.equal(aud.body.auditor.auditChain.valid, true);

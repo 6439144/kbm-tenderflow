@@ -1,6 +1,7 @@
 // Entity settings (/admin/entity): profile, numbering patterns, channels, identity provider, activity codes.
 import { useEffect, useState, type FormEvent } from 'react';
 import { platform, type ActivityCode, type EntityProfile } from '../../api-platform';
+import { PublicBoardSetting } from '../insight';
 import { useI18n, type TKey } from '../../i18n';
 import { applyTheme } from '../../session';
 import { AsyncView, Button, Card, ErrorBox, Field, Spinner, Table, useAsync, useToast } from '../../components/ui';
@@ -53,7 +54,8 @@ function ProfileForm({ initial, onSaved }: { initial: EntityProfile; onSaved: (p
         identityProvider: p.identityProvider ?? 'LOCAL',
         channels: { knet: !!ch.knet, gazette: !!ch.gazette, capt: !!ch.capt },
         fiscalYearStartMonth: p.fiscalYearStartMonth,
-      });
+        publicBoard: (p as { publicBoard?: boolean }).publicBoard !== false,
+      } as EntityProfile);
       applyTheme(saved.primaryColor);
       onSaved(saved);
       toast(t('cycle.e.saved'));
@@ -162,6 +164,7 @@ function ProfileForm({ initial, onSaved }: { initial: EntityProfile; onSaved: (p
           </div>
           <p className="muted small">{t('cycle.e.idpHint')}</p>
         </Card>
+        <PublicBoardSetting value={(p as { publicBoard?: boolean }).publicBoard !== false} onChange={(v) => setP((x) => ({ ...x, publicBoard: v }))} />
       </div>
       <div className="row-end">
         <Button type="submit" busy={busy} disabled={!colorOk || !patOk(p.numberingPattern) || !patOk(p.receiptPattern)}>

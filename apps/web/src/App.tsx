@@ -19,6 +19,7 @@ import { DemoOverlay } from './features/demo';
 import { FileNetHealthPage } from './features/filenet';
 import { AssistantDock } from './features/assistant';
 import { DocumentQueuePage, DocumentTypesPage } from './features/docintel';
+import { AdminOverviewPage, AnalyticsPage, EvidencePackPage, PublicBoardPage } from './features/insight';
 
 const LANG_KEY = 'tf.lang';
 
@@ -39,6 +40,7 @@ const PROCUREMENT_NAV: NavItem[] = [
   { to: '/procurement/tenders/new', label: 'nav.newTender', roles: ['PROCUREMENT_OFFICER'] },
   { to: '/procurement/vendors', label: 'nav.vendors', roles: ['PROCUREMENT_OFFICER', 'DIRECTOR'] },
   { to: '/procurement/documents', label: 'nav.documentIntelligence' },
+  { to: '/procurement/analytics', label: 'insight.nav.analytics', roles: ['DIRECTOR', 'UNDERSECRETARY'] },
 ];
 const VENDOR_NAV: NavItem[] = [{ to: '/vendor', label: 'nav.myCompany', end: true }];
 const ADMIN_NAV: NavItem[] = [
@@ -50,6 +52,9 @@ const ADMIN_NAV: NavItem[] = [
   { to: '/admin/audit', label: 'nav.audit' },
   { to: '/admin/filenet', label: 'nav.filenet' },
   { to: '/admin/system', label: 'nav.system' },
+  { to: '/admin/overview', label: 'insight.nav.overview' },
+  { to: '/admin/analytics', label: 'insight.nav.analytics' },
+  { to: '/admin/evidence', label: 'insight.nav.evidence' },
 ];
 
 function Home() {
@@ -89,6 +94,8 @@ export default function App() {
             <Route path="/" element={<Home />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            {/* insight routes */}
+            <Route path="/tenders" element={<PublicBoardPage />} />
             <Route path="/vendor" element={<Portal roles={['VENDOR']} nav={VENDOR_NAV} />}>
               <Route index element={<VendorHome />} />
               <Route path="tenders/:id" element={<VendorTender />} />
@@ -106,6 +113,8 @@ export default function App() {
               <Route path="tenders/:id" element={<TenderDetailPage />} />
               <Route path="tenders/:id/edit" element={<TenderForm />} />
               <Route path="documents" element={<DocumentQueuePage />} />
+              {/* insight routes */}
+              <Route path="analytics" element={<AnalyticsPage />} />
             </Route>
             <Route path="/admin" element={<Portal roles={['TENANT_ADMIN', 'AUDITOR']} nav={ADMIN_NAV} />}>
               <Route index element={<AdminUsers />} />
@@ -116,6 +125,10 @@ export default function App() {
               <Route path="documents" element={<DocumentQueuePage />} />
               <Route path="filenet" element={<FileNetHealthPage />} />
               <Route path="system" element={<AdminSystem />} />
+              {/* insight routes */}
+              <Route path="overview" element={<AdminOverviewPage />} />
+              <Route path="analytics" element={<AnalyticsPage />} />
+              <Route path="evidence" element={<EvidencePackPage />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
