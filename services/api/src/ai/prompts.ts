@@ -2,8 +2,10 @@
 // document text with explicit [DOC ...] markers (budgeted), and a strict JSON-only output contract.
 // The same contracts are repeated in the agent instructions (agents/*.yaml) so both sides agree.
 
-import type { DocText } from './types.js';
-import { keyTerms, normalizeText } from './text-utils.js';
+import type {
+  ChatInput, ClassifyRequestInput, DocText, DraftNoticeInput, NarrateEvaluationInput, RankRelevanceInput, ReviewGradeInput,
+} from './types.js';
+import { detectLanguage, keyTerms, normalizeText } from './text-utils.js';
 
 export const PACK_SCHEMA = `{
   "summary": "<2-4 sentence overview of pack completeness and clarity>",
@@ -187,6 +189,218 @@ ${COMMON_RULES('en')}
 
 OUTPUT SCHEMA:
 ${COMPLIANCE_SCHEMA}`;
+}
+
+// ================================================================ Phase 1 agents
+
+export const CLASSIFY_SCHEMA = `{
+  "tenderType": "<one cycle template code from the list>",
+  "activityCodes": ["<activity code from the list>", "..."],
+  "urgency": "LOW" | "MEDIUM" | "HIGH",
+  "estimatedBudget": <number copied exactly from the input> | null,
+  "summaryEn": "<2-3 sentence English summary of what is requested>",
+  "summaryAr": "<the same summary in Arabic>",
+  "citations": [ { "documentId": "<id from a DOC marker>", "section": "<section from the same DOC marker>", "quote": "<short exact quote>" } ]
+}`;
+
+export const NOTICE_SCHEMA = `{
+  "noticeAr": "<formal Arabic notice text>",
+  "noticeEn": "<formal English notice text>",
+  "citations": [ { "documentId": "<id from a DOC marker>", "section": "<section from the same DOC marker>", "quote": "<short exact quote>" } ]
+}`;
+
+export const RANKING_SCHEMA = `{
+  "ranked": [ { "id": "<candidate id exactly as given>", "score": <integer 0-100>, "reasonsEn": "<one or two sentences>", "reasonsAr": "<the same reasons in Arabic>" } ]
+}`;
+
+export const NARRATIVE_SCHEMA = `{
+  "narrativeEn": "<committee narrative in English>",
+  "narrativeAr": "<the same narrative in Arabic>"
+}`;
+
+export const CHAT_SCHEMA = `{
+  "answer": "<the answer, in the language of the question>",
+  "notFound": true | false,
+  "citations": [ { "documentId": "<id from a DOC marker>", "section": "<section from the same DOC marker>" } ]
+}`;
+
+/** All section text of the documents (no markers): the "input" against which numbers in the output are checked. */
+export function documentsText(docs: DocText[]): string {
+  return docs.flatMap((d) => [d.title, ...d.sections.map((s) => `${s.section}\n${s.text}`)]).join('\n');
+}
+
+const NUMBERS_RULE = 'Every number, date, time, amount, percentage, score and count you write must appear in the input exactly as given (you may omit it). Do not compute, round, convert (e.g. to Hijri dates) or invent numbers.';
+
+export function buildClassifyPrompt(input: ClassifyRequestInput, maxChars: number): string {
+  const r = input.request;
+  const terms = keyTerms(r.subject, r.department, ...input.activityCodes.flatMap((c) => [c.nameEn, c.nameAr]),
+    'budget scope urgent deadline required', 'ميزانية نطاق عاجل موعد مطلوب');
+  const docs = renderDocuments(input.documents, terms, maxChars);
+  return `TASK: PROCUREMENT REQUEST CLASSIFICATION (advisory).
+A department submitted the procurement request below (registered in TenderFlow; the GM letter text was extracted from the content store).
+Propose, for the procurement officer to accept or ignore:
+- "tenderType": the most suitable cycle template code from CYCLE TEMPLATES;
+- "activityCodes": the activity codes from ACTIVITY CODES that the requested goods/works/services fall under (may be empty);
+- "urgency": HIGH only when the text states an urgent need or a near date, LOW when it states no time pressure, otherwise MEDIUM;
+- "estimatedBudget": the budget figure stated in the input as a plain number, or null when none is stated;
+- "summaryEn" / "summaryAr": a short neutral summary of what is requested.
+
+REQUEST (from the system):
+- Number: ${r.requestNumber}
+- Department: ${r.department}
+- Subject: ${r.subject}
+- Source: ${r.source}${r.sourceReference ? ` (${r.sourceReference})` : ''}
+
+CYCLE TEMPLATES (code — English — Arabic):
+${input.templates.map((t) => `- ${t.code} — ${t.nameEn} — ${t.nameAr}`).join('\n') || '(none)'}
+
+ACTIVITY CODES (code — English — Arabic):
+${input.activityCodes.map((c) => `- ${c.code} — ${c.nameEn} — ${c.nameAr}`).join('\n') || '(none)'}
+
+${docsBlock(docs)}
+
+${COMMON_RULES('en')}
+6. Write "summaryEn" in English and "summaryAr" in Arabic. Use only codes from the lists. ${NUMBERS_RULE}
+7. Include at least one citation of the request text you relied on.
+
+OUTPUT SCHEMA:
+${CLASSIFY_SCHEMA}`;
+}
+
+export function noticeInputText(input: DraftNoticeInput): string {
+  return `${input.facts.map((f) => `${f.label}: ${f.value}`).join('\n')}\n${documentsText(input.documents)}`;
+}
+
+export function buildNoticePrompt(input: DraftNoticeInput, maxChars: number): string {
+  const channel = input.channel === 'KUWAIT_ALYOUM'
+    ? 'the official gazette Kuwait Al-Youm (الكويت اليوم)'
+    : 'the Central Agency for Public Tenders (CAPT, الجهاز المركزي للمناقصات العامة)';
+  const terms = keyTerms(...input.facts.map((f) => f.value), 'scope submission deadline documents eligibility bid security',
+    'نطاق تقديم موعد مستندات تأهيل ضمان');
+  const docs = renderDocuments(input.documents, terms, maxChars);
+  return `TASK: PUBLICATION NOTICE DRAFT for ${channel} (advisory).
+Draft the tender announcement for this channel in formal gazette style: one Arabic text (Modern Standard Arabic) and one English text with
+the same content. Use only the FACTS and the pack text. Copy the tender number, dates, times, amounts and fees exactly as written.
+If an element that notices usually contain is not in the input (for example a fee, an address or a phone number), leave it out.
+A procurement officer edits the draft and a different approver approves it before anything is published.
+
+FACTS (from the TenderFlow record; authoritative):
+${input.facts.map((f) => `- ${f.label}: ${f.value}`).join('\n')}
+
+${docsBlock(docs)}
+
+${COMMON_RULES('en')}
+6. "noticeAr" is Arabic and "noticeEn" is English; this rule replaces rule 4 for those two fields. ${NUMBERS_RULE}
+7. Cite the pack sections you used.
+
+OUTPUT SCHEMA:
+${NOTICE_SCHEMA}`;
+}
+
+export function buildRankingPrompt(input: RankRelevanceInput): string {
+  const what = input.mode === 'VENDORS_FOR_TENDER'
+    ? { subject: 'TENDER', cand: 'VENDORS', goal: 'how well each vendor\'s activities, grades and track record match this tender' }
+    : { subject: 'VENDOR', cand: 'OPEN TENDERS', goal: 'how well each open tender matches this vendor\'s activities, grades and track record' };
+  return `TASK: RELEVANCE RANKING (advisory).
+Every candidate below has ALREADY passed TenderFlow's rule-based eligibility check (activity codes and grade). You do not decide
+eligibility and you never exclude anyone: you only order the candidates by ${what.goal}, give each a relevance score from 0 to 100
+and short reasons in English and Arabic based ONLY on the profile data shown. Rank every candidate exactly once and never add ids.
+
+${what.subject}: ${input.subject.label}
+${JSON.stringify(input.subject.profile, null, 1)}
+
+CANDIDATE ${what.cand} (id: profile):
+${input.candidates.map((c) => `- id ${c.id} — ${c.label}: ${JSON.stringify(c.profile)}`).join('\n') || '(none)'}
+
+RULES (mandatory):
+1. Use ONLY the data above. No outside knowledge about companies or projects.
+2. "id" must be copied exactly. One entry per candidate.
+3. You are advisory only: never say a candidate is eligible, ineligible, approved, rejected or should win.
+4. "reasonsEn" in English, "reasonsAr" in Arabic.
+5. Return ONLY one JSON object that matches the schema below. No markdown, no code fences, no text before or after the JSON.
+
+OUTPUT SCHEMA:
+${RANKING_SCHEMA}`;
+}
+
+/** The narrator's input as stable, number-checkable text (no UUIDs, so only real figures count as "in the input"). */
+export function narrativeInputText(input: NarrateEvaluationInput): string {
+  return JSON.stringify(input, null, 1);
+}
+
+export function buildNarrativePrompt(input: NarrateEvaluationInput): string {
+  return `TASK: EVALUATION NARRATIVE for the committee report (advisory).
+Write the narrative section of the evaluation committee report, in English and in Arabic, from the EVALUATION DATA only: the
+criteria and weights, the evaluators' scores and comments, each bid's average weighted total and rank, the technical pass/fail
+result (two-envelope tenders), the compliance screening results and the chair's recommended bid with its justification.
+The committee's numbers are final: quote them exactly as given or leave them out. Never recompute, round, change or invent a score,
+weight, total or count. Do not decide or announce the award: the recommendation is the chair's and approval stays with the approvers.
+Write in a formal, neutral report style; refer to bids by vendor name and bid reference.
+
+EVALUATION DATA (JSON, from TenderFlow):
+${narrativeInputText(input)}
+
+RULES (mandatory):
+1. Use ONLY the evaluation data. No outside knowledge.
+2. ${NUMBERS_RULE}
+3. "narrativeEn" in English, "narrativeAr" in Arabic (Modern Standard Arabic), same content.
+4. Return ONLY one JSON object that matches the schema below. No markdown, no code fences, no text before or after the JSON.
+
+OUTPUT SCHEMA:
+${NARRATIVE_SCHEMA}`;
+}
+
+export function buildGradePrompt(input: ReviewGradeInput, maxChars: number): string {
+  const terms = keyTerms(...input.criteria.flatMap((c) => [c.key.replace(/[_-]+/g, ' '), c.nameEn, c.nameAr]));
+  const docs = renderDocuments(input.documents, terms, maxChars);
+  const grade = ({ 1: 'First grade / الدرجة الأولى', 2: 'Second grade / الدرجة الثانية', 3: 'Third grade / الدرجة الثالثة' } as const)[input.grade];
+  return `TASK: VENDOR GRADE DOCUMENT REVIEW (advisory, no decision).
+A procurement officer is reviewing whether the vendor's uploaded documents support the requested classification grade. For each
+checklist item below return exactly one item with status PRESENT (clearly evidenced in the text; cite it), MISSING (no trace of it in
+the text) or UNCLEAR (partial, expired, ambiguous or cannot be confirmed). Return one item per key, in the listed order, and no other
+items. Do NOT grant, refuse or recommend a grade; the officer decides.
+
+VENDOR: ${input.vendor.nameEn} / ${input.vendor.nameAr} (CR ${input.vendor.crNumber})
+REQUESTED GRADE: ${grade}
+
+CHECKLIST (key — English — Arabic; configured by the entity):
+${input.criteria.map((c) => `- ${c.key} — ${c.nameEn} — ${c.nameAr}`).join('\n') || '(none)'}
+
+${docsBlock(docs)}
+
+${COMMON_RULES('en')}
+6. "requirement" must be the key exactly as listed. PRESENT requires a citation; MISSING uses "citation": null.
+
+OUTPUT SCHEMA:
+${COMPLIANCE_SCHEMA}`;
+}
+
+export function chatInputText(input: ChatInput): string {
+  return `${input.message}\n${documentsText(input.context)}`;
+}
+
+export function buildChatPrompt(input: ChatInput, maxChars: number): string {
+  const docs = renderDocuments(input.context, keyTerms(input.message), maxChars);
+  const lang = detectLanguage(input.message);
+  return `TASK: TENDERFLOW ASSISTANT TURN (advisory, read-only).
+TenderFlow sent the context below for the signed-in user; it is already limited to what this user's role may see. Answer the user's
+question from this context only. If the context does not contain the answer, say so plainly and set "notFound": true. You never take
+actions (approve, return, publish, open bids, score, recommend, award, submit, pay): when asked, explain which TenderFlow step does it
+and who performs it, if the context says so. Never reveal or guess bid contents, other bidders' data or anything outside the context.
+
+${docsBlock(docs).replace('BEGIN DOCUMENTS', 'BEGIN DOCUMENTS (TenderFlow context)')}
+
+USER QUESTION (language: ${lang === 'ar' ? 'Arabic' : 'English'}):
+${input.message}
+
+RULES (mandatory):
+1. Use ONLY the context between BEGIN DOCUMENTS and END DOCUMENTS (and earlier turns of this conversation).
+2. Answer in ${lang === 'ar' ? 'Arabic (Modern Standard Arabic)' : 'English'}, concisely. ${NUMBERS_RULE}
+3. Cite the context sections you used: copy "documentId" and "section" exactly from the [DOC ...] markers.
+4. Return ONLY one JSON object that matches the schema below. No markdown, no code fences, no text before or after the JSON.
+
+OUTPUT SCHEMA:
+${CHAT_SCHEMA}`;
 }
 
 export function buildRepairPrompt(problems: string[], schema: string): string {

@@ -16,6 +16,12 @@ const AGENT_IDS: Record<string, string> = {
   tenderflow_pack_checker: '11111111-1111-4111-8111-111111111111',
   tenderflow_clarification_assistant: '22222222-2222-4222-8222-222222222222',
   tenderflow_compliance_screener: '33333333-3333-4333-8333-333333333333',
+  tenderflow_request_classifier: '44444444-4444-4444-8444-444444444444',
+  tenderflow_notice_drafter: '55555555-5555-4555-8555-555555555555',
+  tenderflow_relevance_matcher: '66666666-6666-4666-8666-666666666666',
+  tenderflow_evaluation_narrator: '77777777-7777-4777-8777-777777777777',
+  tenderflow_grade_reviewer: '88888888-8888-4888-8888-888888888888',
+  tenderflow_assistant: '99999999-9999-4999-8999-999999999999',
 };
 
 type Reply = string | { status: 'failed'; error: string } | { hang: true };

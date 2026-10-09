@@ -7,7 +7,26 @@ export const DEFAULT_AGENT_NAMES = {
   packChecker: 'tenderflow_pack_checker',
   clarification: 'tenderflow_clarification_assistant',
   compliance: 'tenderflow_compliance_screener',
+  requestClassifier: 'tenderflow_request_classifier',
+  noticeDrafter: 'tenderflow_notice_drafter',
+  relevanceMatcher: 'tenderflow_relevance_matcher',
+  evaluationNarrator: 'tenderflow_evaluation_narrator',
+  gradeReviewer: 'tenderflow_grade_reviewer',
+  assistant: 'tenderflow_assistant',
 } as const;
+
+/** Environment variable that overrides each agent reference (name or id). */
+export const AGENT_ENV: Record<keyof typeof DEFAULT_AGENT_NAMES, string> = {
+  packChecker: 'WXO_AGENT_PACK_CHECKER',
+  clarification: 'WXO_AGENT_CLARIFICATION',
+  compliance: 'WXO_AGENT_COMPLIANCE',
+  requestClassifier: 'WXO_AGENT_REQUEST_CLASSIFIER',
+  noticeDrafter: 'WXO_AGENT_NOTICE_DRAFTER',
+  relevanceMatcher: 'WXO_AGENT_RELEVANCE_MATCHER',
+  evaluationNarrator: 'WXO_AGENT_EVALUATION_NARRATOR',
+  gradeReviewer: 'WXO_AGENT_GRADE_REVIEWER',
+  assistant: 'WXO_AGENT_ASSISTANT',
+};
 
 export type AgentRole = keyof typeof DEFAULT_AGENT_NAMES;
 
@@ -34,11 +53,8 @@ export function readAiConfig(env: NodeJS.ProcessEnv = process.env): AiConfig {
     instanceUrl: clean(env.WXO_INSTANCE_URL).replace(/\/+$/, ''),
     apiKey: clean(env.WXO_API_KEY),
     iamUrl: clean(env.WXO_IAM_URL) || DEFAULT_IAM_URL,
-    agents: {
-      packChecker: clean(env.WXO_AGENT_PACK_CHECKER) || DEFAULT_AGENT_NAMES.packChecker,
-      clarification: clean(env.WXO_AGENT_CLARIFICATION) || DEFAULT_AGENT_NAMES.clarification,
-      compliance: clean(env.WXO_AGENT_COMPLIANCE) || DEFAULT_AGENT_NAMES.compliance,
-    },
+    agents: Object.fromEntries((Object.keys(DEFAULT_AGENT_NAMES) as AgentRole[])
+      .map((r) => [r, clean(env[AGENT_ENV[r]]) || DEFAULT_AGENT_NAMES[r]])) as Record<AgentRole, string>,
     timeoutMs: Number.isFinite(timeout) && timeout > 0 ? timeout : 60000,
     maxDocChars: Number.isFinite(maxChars) && maxChars > 1000 ? maxChars : 24000,
   };
@@ -46,7 +62,7 @@ export function readAiConfig(env: NodeJS.ProcessEnv = process.env): AiConfig {
 
 /** True only when the instance URL and API key are present (agent refs always have defaults). */
 export function isConfigComplete(cfg: AiConfig): boolean {
-  return Boolean(cfg.instanceUrl && cfg.apiKey && cfg.agents.packChecker && cfg.agents.clarification && cfg.agents.compliance);
+  return Boolean(cfg.instanceUrl && cfg.apiKey && (Object.keys(DEFAULT_AGENT_NAMES) as AgentRole[]).every((r) => cfg.agents[r]));
 }
 
 /** Lists missing settings by name only (never values). */
