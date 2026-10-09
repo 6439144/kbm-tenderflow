@@ -115,11 +115,17 @@ async function flagsFor(ctx: Ctx, d: DocumentRow, r: InsightRow, info?: DocConte
   const typeDef = await typeByCode(ctx, d.tenant_id, eff.docType);
   const ctxName = contextOf(d.owner_type);
   const cat = ctxName ? await catalogueFor(ctx, d.tenant_id, ctxName) : [];
-  return computeFlags({
+  const flags = computeFlags({
     docType: eff.docType, fields: eff.fields, typeDef, today: today(),
     vendor: d.owner_type === 'VENDOR' || isBidDoc(d) ? i.vendor : null,
     expectedType: expectedTypeOf(d.owner_type, d.title, cat), tenderCurrency: i.tender?.currency ?? null,
   });
+  for (const f of flags) {
+    if (f.code !== 'TYPE_MISMATCH') continue;
+    const [e, x] = [await typeByCode(ctx, d.tenant_id, String(f.data.expected)), await typeByCode(ctx, d.tenant_id, String(f.data.found))];
+    Object.assign(f.data, { expectedEn: e?.nameEn ?? f.data.expected, expectedAr: e?.nameAr ?? f.data.expected, foundEn: x?.nameEn ?? f.data.found, foundAr: x?.nameAr ?? f.data.found });
+  }
+  return flags;
 }
 
 // ------------------------------------------------------------------ classification

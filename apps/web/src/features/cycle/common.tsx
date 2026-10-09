@@ -7,7 +7,7 @@ import { Badge } from '../../components/ui';
 
 export const APPROVER_ROLES: Role[] = ['DIRECTOR', 'UNDERSECRETARY', 'COMMITTEE_CHAIR', 'TENANT_ADMIN'];
 export const GRADES = [1, 2, 3] as const;
-export const AI_KEYS: (keyof CycleConfig['ai'])[] = ['packCheck', 'clarification', 'compliance', 'gazette', 'relevance', 'narrative', 'requestClassify'];
+export const AI_KEYS: (keyof CycleConfig['ai'])[] = ['packCheck', 'clarification', 'compliance', 'gazette', 'relevance', 'narrative', 'requestClassify', 'documentIntelligence'];
 export const STAGE_TOGGLES: (keyof CycleConfig['stages'])[] = ['requestIntake', 'documentPurchase', 'gazette', 'capt', 'complianceScreening', 'recordsLock'];
 
 /** Bid row as returned to staff by GET /tenders/:id/bids (two-envelope fields included). */

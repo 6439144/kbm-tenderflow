@@ -38,7 +38,7 @@ const BLANK: CycleConfig = {
   evaluation: { technicalPassMark: null, financialCriteria: [] },
   eligibility: { activityCodes: [], minGrade: null },
   fees: { documentPrice: 0, currency: 'KWD', exemptionAllowed: false },
-  ai: { packCheck: true, clarification: true, compliance: true, gazette: true, relevance: true, narrative: true, requestClassify: true },
+  ai: { packCheck: true, clarification: true, compliance: true, gazette: true, relevance: true, narrative: true, requestClassify: true, documentIntelligence: true },
 };
 
 const clone = <T,>(x: T): T => JSON.parse(JSON.stringify(x)) as T;
@@ -622,7 +622,7 @@ function Editor({
           <div className="checks">
             {AI_KEYS.map((k) => (
               <label key={k} className="check">
-                <input type="checkbox" checked={c.ai[k]} onChange={(e) => setCfg((x) => void (x.ai[k] = e.target.checked))} />
+                <input type="checkbox" checked={c.ai[k] ?? true} onChange={(e) => setCfg((x) => void (x.ai[k] = e.target.checked))} />
                 <span>{t(`cycle.ai.${k}` as TKey)}</span>
               </label>
             ))}

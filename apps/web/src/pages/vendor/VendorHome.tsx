@@ -1,4 +1,5 @@
 import { TendersForYou } from '../../features/assistant';
+import { VerifiedDocuments } from '../../features/docintel';
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { api, type Bid, type Tender } from '../../api';
@@ -106,6 +107,7 @@ export default function VendorHome() {
       </Card>
 
       {tenders.data && tenders.data.length > 0 && <MyBids tenders={tenders.data} />}
+      <VerifiedDocuments />
     </div>
   );
 }

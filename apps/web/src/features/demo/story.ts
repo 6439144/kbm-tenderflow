@@ -49,6 +49,16 @@ export const TRACKS: Record<EntityId, Chapter[]> = {
       evidence: { actions: ['REQUEST_SUBMITTED'], ownerTypes: ['REQUEST_LETTER'], aiKinds: ['REQUEST_CLASSIFY'] },
     },
     {
+      id: 'keaDI', entity: 'kea', title: 'demo.ch.keaDI.title', why: 'demo.ch.keaDI.why', say: 'demo.ch.keaDI.say',
+      do: ['demo.ch.keaDI.do1', 'demo.ch.keaDI.do2', 'demo.ch.keaDI.do3'],
+      moves: [
+        { persona: 'vendor1', target: { kind: 'path', path: '/vendor' }, spot: ['.inline-form', 'main .card'], label: 'demo.ch.keaDI.m1' },
+        { persona: 'officer', target: { kind: 'path', path: '/procurement/documents' }, spot: ['[data-tour="docintel-open"]', '.di-counts', 'main h1'], label: 'demo.ch.keaDI.m2' },
+      ],
+      filenet: 'demo.ch.keaDI.filenet', orch: 'demo.ch.keaDI.orch',
+      evidence: { actions: ['VENDOR_DOCUMENT_UPLOADED'], ownerTypes: ['VENDOR'], aiKinds: ['DOCUMENT_INTELLIGENCE'] },
+    },
+    {
       id: 'kea2', entity: 'kea', title: 'demo.ch.kea2.title', why: 'demo.ch.kea2.why', say: 'demo.ch.kea2.say',
       do: ['demo.ch.kea2.do1', 'demo.ch.kea2.do2', 'demo.ch.kea2.do3'],
       moves: [{ persona: 'officer', target: T101, spot: ['#sec-docs'] }],

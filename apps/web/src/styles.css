@@ -1937,6 +1937,83 @@ ul.plain {
   padding: 0.75rem 0.8rem;
 }
 .cyc-bell-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.cyc-bell-list li + li {
+  border-block-start: 1px solid var(--line-2);
+}
+.cyc-bell-list li.unread {
+  background: var(--primary-soft);
+}
+.cyc-bell-item {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  inline-size: 100%;
+  text-align: start;
+  background: none;
+  border: 0;
+  padding: 0.6rem 0.8rem;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.cyc-bell-item:hover {
+  background: var(--line-2);
+}
+.cyc-bell-text {
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 0;
+}
+.cyc-bell-title {
+  font-size: 0.88rem;
+}
+.cyc-dot {
+  flex: none;
+  inline-size: 0.5rem;
+  block-size: 0.5rem;
+  border-radius: 50%;
+  background: var(--primary);
+  margin-block-start: 0.45rem;
+}
+
+@media (max-width: 1000px) {
+  .cyc-designer,
+  .cyc-config-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cyc-designer > aside {
+    position: static;
+  }
+}
+@media (max-width: 760px) {
+  .cyc-code-grid,
+  .cyc-class-form,
+  .cyc-crit-two {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.cyc-files .btn {
+  max-inline-size: 11rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+}
+.field .row > input.cyc-color.cyc-color {
+  inline-size: 2.6rem;
+  min-inline-size: 2.6rem;
+  flex: none;
+  padding: 0.1rem;
+}
+.field .row > input.cyc-color-text.cyc-color-text {
+  flex: 1;
+  max-inline-size: 9rem;
+}
+
 /* ---------------------------------------------------------------- filenet (FileNet workstream) */
 .fn-icon {
   flex: none;
@@ -2101,77 +2178,6 @@ ul.plain {
   margin: 0;
   padding: 0;
 }
-.cyc-bell-list li + li {
-  border-block-start: 1px solid var(--line-2);
-}
-.cyc-bell-list li.unread {
-  background: var(--primary-soft);
-}
-.cyc-bell-item {
-  display: flex;
-  gap: 0.5rem;
-  align-items: flex-start;
-  inline-size: 100%;
-  text-align: start;
-  background: none;
-  border: 0;
-  padding: 0.6rem 0.8rem;
-  font: inherit;
-  color: inherit;
-  cursor: pointer;
-}
-.cyc-bell-item:hover {
-  background: var(--line-2);
-}
-.cyc-bell-text {
-  display: flex;
-  flex-direction: column;
-  min-inline-size: 0;
-}
-.cyc-bell-title {
-  font-size: 0.88rem;
-}
-.cyc-dot {
-  flex: none;
-  inline-size: 0.5rem;
-  block-size: 0.5rem;
-  border-radius: 50%;
-  background: var(--primary);
-  margin-block-start: 0.45rem;
-}
-
-@media (max-width: 1000px) {
-  .cyc-designer,
-  .cyc-config-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .cyc-designer > aside {
-    position: static;
-  }
-}
-@media (max-width: 760px) {
-  .cyc-code-grid,
-  .cyc-class-form,
-  .cyc-crit-two {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-.cyc-files .btn {
-  max-inline-size: 11rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  display: inline-block;
-}
-.field .row > input.cyc-color.cyc-color {
-  inline-size: 2.6rem;
-  min-inline-size: 2.6rem;
-  flex: none;
-  padding: 0.1rem;
-}
-.field .row > input.cyc-color-text.cyc-color-text {
-  flex: 1;
-  max-inline-size: 9rem;
 .fn-tree ul {
   padding-left: 1.1rem;
   border-left: 1px dashed var(--line);
@@ -2224,6 +2230,8 @@ ul.plain {
 .fn-why-item p {
   margin: 0;
   color: var(--ink-2);
+}
+
 /* ================================================================ assistant (watsonx Orchestrate) — ast- */
 .ast-dock {
   --ast-a: #0f62fe;
@@ -3230,5 +3238,336 @@ html.demo-docked body {
   .demo-tour-backdrop,
   .demo-launcher {
     display: none !important;
+  }
+}
+
+/* ===================================================================== document intelligence (di-) */
+.di-icon {
+  flex: none;
+  vertical-align: -2px;
+}
+.di-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.5;
+  border: 1px solid var(--line);
+  background: var(--line-2);
+  color: var(--ink-2);
+  max-inline-size: 100%;
+}
+.di-tone-info {
+  background: var(--info-bg);
+  color: var(--info);
+  border-color: color-mix(in srgb, var(--info) 25%, white);
+}
+.di-tone-warn {
+  background: var(--warn-bg);
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 25%, white);
+}
+.di-tone-success {
+  background: var(--success-bg);
+  color: var(--success);
+  border-color: color-mix(in srgb, var(--success) 25%, white);
+}
+.di-tone-danger {
+  background: var(--danger-bg);
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 25%, white);
+}
+.di-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  margin-block-start: 0.3rem;
+}
+.di-inline {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+}
+.di-bid-doc {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+}
+.di-data-btn,
+.di-classify {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.di-flags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+.di-flag {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-inline-start: 3px solid currentColor;
+}
+.di-flags-compact .di-flag {
+  font-size: 0.7rem;
+  padding: 0.05rem 0.4rem;
+}
+.di-flag-high {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+.di-flag-medium {
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+.di-flag-low {
+  background: var(--info-bg);
+  color: var(--info);
+}
+.di-reading {
+  align-items: center;
+  justify-content: flex-start;
+}
+.di-modal-title,
+.di-title,
+.di-card-title,
+.di-h {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.di-doc-name {
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.di-h {
+  font-size: 0.95rem;
+  margin-block: 0.25rem;
+}
+.di-advisory {
+  justify-content: flex-start;
+  font-size: 0.85rem;
+}
+.di-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding-block-end: 0.5rem;
+  border-block-end: 1px solid var(--line-2);
+}
+.di-flag-box > .di-h {
+  margin: 0;
+}
+.di-flag-box {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+.di-label {
+  font-weight: 600;
+  text-align: start;
+  white-space: nowrap;
+}
+.di-value {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.di-evidence {
+  max-inline-size: 22rem;
+}
+.di-evidence .cite-quote {
+  display: block;
+  overflow-wrap: anywhere;
+}
+tr.di-corrected td,
+tr.di-corrected th {
+  background: color-mix(in srgb, var(--success-bg) 60%, white);
+}
+.di-correct .field input {
+  inline-size: 100%;
+}
+.di-summary p {
+  margin-block: 0.2rem;
+}
+.di-actions {
+  padding-block-start: 0.5rem;
+  border-block-start: 1px solid var(--line-2);
+}
+.di-filenet {
+  margin: 0;
+  padding: 0.35rem 0.6rem;
+  border-radius: var(--radius-sm);
+  background: var(--line-2);
+  overflow-wrap: anywhere;
+}
+.di-filenet-written {
+  background: var(--success-bg);
+  color: var(--success);
+}
+.di-filenet-failed {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+.di-applied {
+  margin: 0;
+  color: var(--success);
+  font-weight: 600;
+}
+.di-apply,
+.di-prefill {
+  padding: 0.75rem;
+  border: 1px solid var(--primary-line);
+  border-radius: var(--radius-sm);
+  background: var(--primary-soft);
+}
+.di-prefill {
+  margin-block-start: 0.75rem;
+}
+.di-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding-block-start: 0.6rem;
+  border-block-start: 1px solid var(--line);
+  font-size: 0.78rem;
+  color: var(--ink-2);
+}
+.di-run {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.di-kv {
+  display: grid;
+  gap: 0.15rem;
+  margin: 0;
+}
+.di-kv > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.di-kv dt {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.di-kv dt::after {
+  content: ':';
+}
+.di-kv dd {
+  margin: 0;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+.di-verified {
+  margin-block: 0.75rem;
+}
+.di-verify-note {
+  font-size: 0.85rem;
+  justify-content: flex-start;
+}
+.di-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.di-count {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-inline-size: 7.5rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+  text-align: start;
+}
+.di-count.on {
+  border-color: var(--primary);
+  box-shadow: inset 0 0 0 1px var(--primary);
+  color: var(--ink);
+}
+.di-count-n {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+.di-count-pending_review .di-count-n {
+  color: var(--warn);
+}
+.di-count-failed .di-count-n {
+  color: var(--danger);
+}
+.di-filters {
+  margin-block-end: 0.5rem;
+}
+.di-ctxs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+.di-ctx {
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: var(--line-2);
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+tr.di-inactive td {
+  color: var(--muted);
+}
+.di-auto {
+  font-weight: 600;
+}
+.di-fieldset {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.75rem;
+  margin: 0;
+}
+.di-fieldset legend {
+  padding-inline: 0.3rem;
+  font-weight: 600;
+}
+.di-field-row {
+  display: grid;
+  grid-template-columns: minmax(7rem, 1fr) minmax(8rem, 1.3fr) minmax(8rem, 1.3fr) minmax(6rem, 0.8fr) auto auto;
+  gap: 0.5rem;
+  align-items: end;
+  padding-block-end: 0.5rem;
+  margin-block-end: 0.5rem;
+  border-block-end: 1px dashed var(--line-2);
+}
+.di-active {
+  align-self: end;
+}
+@media (max-width: 760px) {
+  .di-field-row {
+    grid-template-columns: 1fr 1fr;
+  }
+  .di-evidence {
+    max-inline-size: none;
   }
 }

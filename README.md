@@ -10,7 +10,7 @@ advisor runs on **IBM watsonx Orchestrate** agents. Both are optional at start-u
 product runs on a local file store and the AI buttons say "not connected" (never fake output).
 
 Full specification: [docs/BUILD-SPEC.md](docs/BUILD-SPEC.md) · FileNet: [docs/filenet/README.md](docs/filenet/README.md) ·
-AI agents: [agents/README.md](agents/README.md) · What is verified: [docs/release-notes-v1.0.0-rc1.md](docs/release-notes-v1.0.0-rc1.md)
+AI agents: [agents/README.md](agents/README.md) · Document intelligence: [docs/DOCUMENT-INTELLIGENCE.md](docs/DOCUMENT-INTELLIGENCE.md) · What is verified: [docs/release-notes-v1.0.0-rc1.md](docs/release-notes-v1.0.0-rc1.md)
 
 ## The cycle and who does what
 
@@ -18,6 +18,7 @@ AI agents: [agents/README.md](agents/README.md) · What is verified: [docs/relea
 |---|---|---|
 | Register company, upload documents | new vendor (`/register`) | Vendor portal |
 | Approve vendor | `officer` | Procurement → Vendors |
+| Every upload classified + key data extracted with citations by Orchestrate; a person accepts / corrects / rejects | `officer` (bids: `chair`, evaluators after opening) | Document row "Data" button · Procurement → Document intelligence |
 | Draft tender, upload pack, AI pack check | `officer` | Procurement → Tenders → New / tender page |
 | Approve for publication (not the creator) | `director` | tender page |
 | Publish | `officer` | tender page |

@@ -5,6 +5,7 @@ import { api, type Vendor } from '../../api';
 import { useI18n } from '../../i18n';
 import { useSession } from '../../session';
 import { DocList } from '../../components/shared';
+import { VerifiedDocuments } from '../../features/docintel';
 import { AsyncView, Badge, Button, Card, Modal, ReasonDialog, Table, useAsync, useToast } from '../../components/ui';
 
 const FILTERS = ['PENDING_REVIEW', 'APPROVED', 'REJECTED', ''];
@@ -109,6 +110,7 @@ export default function VendorsQueue() {
                 </dl>
                 <h3>{t('vendor.documents')}</h3>
                 <DocList docs={v.documents ?? []} empty={t('vendor.noDocs')} />
+                <VerifiedDocuments vendorId={v.id} />
                 <ClassificationsEditor vendorId={v.id} canEdit={hasRole('PROCUREMENT_OFFICER', 'TENANT_ADMIN')} />
                 <VendorGradeReview vendorId={v.id} />
               </div>

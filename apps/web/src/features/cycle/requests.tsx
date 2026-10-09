@@ -9,6 +9,7 @@ import { useSession } from '../../session';
 import { DocButton } from '../../components/Layout';
 import { AsyncView, Badge, Button, Card, ErrorBox, Field, FileInput, ReasonDialog, Spinner, Table, useAsync, useToast } from '../../components/ui';
 import { RequestAiExtras } from '../assistant';
+import { DocInsightInline, LetterPrefill } from '../docintel';
 import { ChainView, REQUEST_TONE, StageStrip, TemplateBadge, waitingStep, type Step } from './common';
 
 export function RequestsPage() {
@@ -283,8 +284,10 @@ function RequestDetail({ r, reload }: { r: ProcurementRequest & { createdBy?: st
                   <div className="muted small">{r.letter?.title ?? r.letterDocumentId}</div>
                 </div>
                 <DocButton path={`/documents/${r.letterDocumentId}`} name={r.letter?.title ?? 'letter'} variant="secondary" />
+                <DocInsightInline documentId={r.letterDocumentId} title={r.letter?.title ?? 'letter'} />
               </div>
             )}
+            {r.letterDocumentId && r.status === 'APPROVED' && <LetterPrefill documentId={r.letterDocumentId} />}
           </Card>
           <RequestAiExtras requestId={r.id} onChange={reload} />
         </div>
@@ -335,6 +338,17 @@ function ConvertForm({ r }: { r: ProcurementRequest }) {
   const [weights, setWeights] = useState(DEFAULT_CRITERIA.map((c) => c.weight));
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<unknown>(null);
+  // Document intelligence: data accepted from the GM letter offered as prefill (the officer applies it).
+  const [budget, setBudget] = useState<number | null>(null);
+  useEffect(() => {
+    const on = (e: Event) => {
+      const d = (e as CustomEvent<{ subject?: string; estimatedBudget?: number }>).detail ?? {};
+      if (d.subject) setTitleEn(d.subject);
+      if (typeof d.estimatedBudget === 'number') setBudget(d.estimatedBudget);
+    };
+    window.addEventListener('tf:request-prefill', on);
+    return () => window.removeEventListener('tf:request-prefill', on);
+  }, []);
 
   useEffect(() => {
     if (templateId || !templates.data?.length) return;
@@ -358,6 +372,7 @@ function ConvertForm({ r }: { r: ProcurementRequest }) {
         titleEn: titleEn.trim(),
         titleAr: titleAr.trim(),
         currency: 'KWD',
+        ...(budget !== null ? { estimatedBudget: budget } : {}),
         criteria: DEFAULT_CRITERIA.map((c, i) => ({ ...c, weight: Number(weights[i]) })).filter((c) => c.weight > 0),
       });
       toast(t('cycle.r.convertedToast', { n: x.tenderNumber }));

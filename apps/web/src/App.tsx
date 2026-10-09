@@ -18,6 +18,7 @@ import { CycleDesignerPage, EntitySettingsPage, RequestDetailPage, RequestsPage 
 import { DemoOverlay } from './features/demo';
 import { FileNetHealthPage } from './features/filenet';
 import { AssistantDock } from './features/assistant';
+import { DocumentQueuePage, DocumentTypesPage } from './features/docintel';
 
 const LANG_KEY = 'tf.lang';
 
@@ -37,12 +38,15 @@ const PROCUREMENT_NAV: NavItem[] = [
   { to: '/procurement/tenders', label: 'nav.tenders' },
   { to: '/procurement/tenders/new', label: 'nav.newTender', roles: ['PROCUREMENT_OFFICER'] },
   { to: '/procurement/vendors', label: 'nav.vendors', roles: ['PROCUREMENT_OFFICER', 'DIRECTOR'] },
+  { to: '/procurement/documents', label: 'nav.documentIntelligence' },
 ];
 const VENDOR_NAV: NavItem[] = [{ to: '/vendor', label: 'nav.myCompany', end: true }];
 const ADMIN_NAV: NavItem[] = [
   { to: '/admin', label: 'nav.users', end: true, roles: ['TENANT_ADMIN'] },
   { to: '/admin/cycle', label: 'nav.cycleDesigner', roles: ['TENANT_ADMIN'] },
   { to: '/admin/entity', label: 'nav.entity', roles: ['TENANT_ADMIN'] },
+  { to: '/admin/document-types', label: 'nav.documentTypes', roles: ['TENANT_ADMIN'] },
+  { to: '/admin/documents', label: 'nav.documentIntelligence' },
   { to: '/admin/audit', label: 'nav.audit' },
   { to: '/admin/filenet', label: 'nav.filenet' },
   { to: '/admin/system', label: 'nav.system' },
@@ -101,12 +105,15 @@ export default function App() {
               <Route path="tenders/new" element={<TenderForm />} />
               <Route path="tenders/:id" element={<TenderDetailPage />} />
               <Route path="tenders/:id/edit" element={<TenderForm />} />
+              <Route path="documents" element={<DocumentQueuePage />} />
             </Route>
             <Route path="/admin" element={<Portal roles={['TENANT_ADMIN', 'AUDITOR']} nav={ADMIN_NAV} />}>
               <Route index element={<AdminUsers />} />
               <Route path="audit" element={<AdminAudit />} />
               <Route path="cycle" element={<CycleDesignerPage />} />
               <Route path="entity" element={<EntitySettingsPage />} />
+              <Route path="document-types" element={<DocumentTypesPage />} />
+              <Route path="documents" element={<DocumentQueuePage />} />
               <Route path="filenet" element={<FileNetHealthPage />} />
               <Route path="system" element={<AdminSystem />} />
             </Route>

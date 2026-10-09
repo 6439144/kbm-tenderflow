@@ -4,11 +4,15 @@ import { useI18n } from '../i18n';
 import { DocButton } from './Layout';
 import { Badge, Button, EmptyState, fmtBytes, Hash, Table } from './ui';
 import { DocumentBadges, DocumentEvidence } from '../features/filenet';
+import { ReadingNotice, RowBadge, RowDataButton, useDocListInsights } from '../features/docintel';
 
 export function DocList({ docs, empty, pathFor }: { docs: DocumentMeta[]; empty: string; pathFor?: (d: DocumentMeta) => string }) {
   const { t, te, fmtDate } = useI18n();
+  const di = useDocListInsights(docs); // document intelligence: one request for all rows, polls while Orchestrate reads
   if (docs.length === 0) return <EmptyState message={empty} />;
   return (
+    <>
+    <ReadingNotice docs={docs} hook={di} />
     <Table head={[t('common.title'), t('common.type'), t('common.size'), t('common.sha256'), t('common.date'), t('common.actions')]}>
       {docs.map((d) => (
         <tr key={d.id}>
@@ -17,6 +21,7 @@ export function DocList({ docs, empty, pathFor }: { docs: DocumentMeta[]; empty:
               <span>{d.title}</span>
               <DocumentBadges doc={d} />
             </span>
+            <RowBadge doc={d} hook={di} />
           </td>
           <td>
             {d.ownerType ? <Badge label={te('doc.', d.addendum ? 'ADDENDUM' : d.ownerType)} tone={d.ownerType === 'ADDENDUM' || d.addendum ? 'warn' : 'neutral'} /> : '—'}
@@ -33,10 +38,12 @@ export function DocList({ docs, empty, pathFor }: { docs: DocumentMeta[]; empty:
               mode={d.mimeType?.includes('html') ? 'open' : 'download'}
             />
             <DocumentEvidence doc={d} />
+            <RowDataButton doc={d} hook={di} />
           </td>
         </tr>
       ))}
     </Table>
+    </>
   );
 }
 

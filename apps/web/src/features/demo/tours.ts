@@ -22,6 +22,7 @@ export const TOURS: Record<TourId, TourStep[]> = {
     { title: 'demo.tour.officer.3.t', body: 'demo.tour.officer.3.b', spot: ['a[href="/procurement/tenders"]'] },
     { title: 'demo.tour.officer.4.t', body: 'demo.tour.officer.4.b', spot: ['a[href="/procurement/tenders/new"]'] },
     { title: 'demo.tour.officer.5.t', body: 'demo.tour.officer.5.b', spot: ['a[href="/procurement/vendors"]'] },
+    { title: 'demo.tour.officer.di.t', body: 'demo.tour.officer.di.b', spot: ['a[href="/procurement/documents"]'] },
     { title: 'demo.tour.officer.6.t', body: 'demo.tour.officer.6.b', spot: LANG },
     END,
   ],

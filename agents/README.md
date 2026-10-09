@@ -1,7 +1,7 @@
 # TenderFlow AI agents (watsonx Orchestrate)
 
-TenderFlow's AI layer is nine **advisory** watsonx Orchestrate native agents: eight specialists that cover the whole
-tender cycle, plus the supervisor **`tenderflow_assistant`** (the copilot shown in every portal) that lists the eight as
+TenderFlow's AI layer is ten **advisory** watsonx Orchestrate native agents: nine specialists that cover the whole
+tender cycle, plus the supervisor **`tenderflow_assistant`** (the copilot shown in every portal) that lists the nine as
 ADK `collaborators`. The API (`services/api/src/ai/`) gathers the input — records from the database and document text
 extracted from the content store (IBM FileNet) — and sends it **outbound** to the agent; the agent answers only from that
 input and returns JSON (with citations where documents are involved). TenderFlow validates every answer, records it as an
@@ -18,12 +18,13 @@ flow (an optional read-only OpenAPI tool pack is described in [`tools/README.md`
 | 6 | `tenderflow_compliance_screener` | Opening → compliance screen (`POST /tenders/:id/ai/compliance-screen`) | chair / evaluator | `{items[{requirement, status PRESENT/MISSING/UNCLEAR, evidence, citation}]}` (no scores) |
 | 7 | `tenderflow_evaluation_narrator` | Evaluation/award → committee narrative (`POST /tenders/:id/ai/narrative`), saved to FileNet by the chair (`POST /ai-runs/:id/save-narrative`) | chair | `{narrativeEn, narrativeAr}` — rejected if it quotes any number that is not in the evaluation data |
 | 8 | `tenderflow_grade_reviewer` | Vendor grading → document checklist (`POST /vendors/:id/ai/grade-review {grade}`) | officer / admin | `{items[{requirement, status PRESENT/MISSING/UNCLEAR, evidence, citation}]}` against a configurable checklist (`WXO_GRADE_CRITERIA`) |
-| 9 | `tenderflow_assistant` (supervisor; collaborators 1-8) | Every signed-in page → assistant dock (`POST /assistant/chat`) | everyone | `{answer, notFound, citations[]}` from a role-scoped context built by TenderFlow (user, pending tasks, entity rules, the visible tender) — never bid contents or other vendors' data; thread id kept per user for follow-ups |
+| 9 | `tenderflow_document_intelligence` | Every upload (vendor documents, tender pack/addenda, GM letters; sealed bids only after opening) → document row "Data" panel, Procurement → Document intelligence (`POST /documents/:id/ai/classify`, automatic queue) | staff / vendor (own documents) | `{docType, language, fields[{key, value, citation{section, quote}}], summaryEn, summaryAr, citations[]}` — docType from the entity catalogue, keys defined for that type, every quote must occur in the sent text, dates → ISO, amounts → number + currency. See [docs/DOCUMENT-INTELLIGENCE.md](../docs/DOCUMENT-INTELLIGENCE.md) |
+| 10 | `tenderflow_assistant` (supervisor; collaborators 1-9) | Every signed-in page → assistant dock (`POST /assistant/chat`) | everyone | `{answer, notFound, citations[]}` from a role-scoped context built by TenderFlow (user, pending tasks, entity rules, the visible tender) — never bid contents or other vendors' data; thread id kept per user for follow-ups |
 
 **Supervisor and collaborators.** TenderFlow calls each specialist directly for its own screen (deterministic input,
 strict validation). The supervisor answers the chat itself from the context TenderFlow sends; its `collaborators:` list
 lets it delegate a full specialist task when someone uses it in the Orchestrate chat UI. Import order therefore matters:
-the eight collaborators first, the supervisor last (the scripts do this).
+the nine collaborators first, the supervisor last (the scripts do this).
 
 If the instance is not configured or a call fails, the API raises an error (`AI_NOT_CONFIGURED` / Orchestrate error /
 invalid-output error). It never returns canned output (AGENTS.md rules 9–11).
@@ -52,7 +53,7 @@ orchestrate --version
 #    optional: WXO_LLM=<model id from step 4>, WXO_TIMEOUT_MS=90000
 notepad .env
 
-# 3. Import the nine agents: 8 collaborators, then the supervisor (adds + activates env "techzone", imports, lists, verifies)
+# 3. Import the ten agents: 9 collaborators, then the supervisor (adds + activates env "techzone", imports, lists, verifies)
 powershell -ExecutionPolicy Bypass -File agents\import.ps1
 
 # 4. If an import fails because the model is not available on your tenant, pick one and re-run step 3:
@@ -65,13 +66,13 @@ npm run build
 npm run verify:ai
 
 # 6. Run the bilingual eval sets against the real agents; writes agents/evals/results.md (clarification)
-#    and agents/evals/agents/results.md (the six Phase 1 agents)
+#    and agents/evals/agents/results.md (the Phase 1 agents and document intelligence)
 npm run evals
 #    or one part only:  npm run evals -- agents      /  npm run evals -- clarification
 ```
 
 `import.ps1` stops on the first failing command, never prints the API key, answers the "update existing environment?"
-prompt so it can be re-run, and finishes by checking that all nine agent names exist on the instance.
+prompt so it can be re-run, and finishes by checking that all ten agent names exist on the instance.
 `agents/import.sh` does the same on Linux/macOS (`bash agents/import.sh`).
 
 Manual equivalent (what the scripts run):
@@ -87,6 +88,7 @@ orchestrate agents import -f agents\tenderflow_notice_drafter.yaml
 orchestrate agents import -f agents\tenderflow_relevance_matcher.yaml
 orchestrate agents import -f agents\tenderflow_evaluation_narrator.yaml
 orchestrate agents import -f agents\tenderflow_grade_reviewer.yaml
+orchestrate agents import -f agents\tenderflow_document_intelligence.yaml
 orchestrate agents import -f agents\tenderflow_assistant.yaml   # supervisor last: its collaborators must exist
 orchestrate agents list
 ```
@@ -120,6 +122,7 @@ re-run the import script (the repo YAML files are not modified; patched copies g
 | `WXO_AGENT_RELEVANCE_MATCHER` | `tenderflow_relevance_matcher` | same |
 | `WXO_AGENT_EVALUATION_NARRATOR` | `tenderflow_evaluation_narrator` | same |
 | `WXO_AGENT_GRADE_REVIEWER` | `tenderflow_grade_reviewer` | same |
+| `WXO_AGENT_DOCUMENT_INTELLIGENCE` | `tenderflow_document_intelligence` | same |
 | `WXO_AGENT_ASSISTANT` | `tenderflow_assistant` | same (the supervisor) |
 | `WXO_GRADE_CRITERIA` | built-in 6-item checklist | JSON checklist for the grade reviewer: `[{"key","nameEn","nameAr"}]` for all grades or `{"1":[...],"2":[...],"3":[...]}`. It is a configurable document checklist, not a statement of grading law |
 | `WXO_TIMEOUT_MS` | `60000` | Deadline for one agent call (create run + wait + read answer) |

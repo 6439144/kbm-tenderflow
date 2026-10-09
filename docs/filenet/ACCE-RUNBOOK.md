@@ -76,6 +76,33 @@ FILENET_RECORDS_MODE=property
 > `FILENET_RECORDS_MODE=retention` (with `FILENET_RETENTION_DAYS`) sets CmRetentionDate instead; it needs no
 > ACCE change but is **not verified live** — see `docs/filenet/SHOWCASE.md`.
 
+## 1c. Document-intelligence properties (only for `FILENET_AI_PROPERTIES=true`)
+
+Skip this section unless you want TenderFlow to write what watsonx Orchestrate read from a document — after a person
+accepted it — onto the FileNet document itself (see `docs/DOCUMENT-INTELLIGENCE.md`). `TF_DocType` already exists
+from §1 (String, 64). Create two more property templates the same way as in §1:
+
+| Display / symbolic name | Data type | Max length | Description |
+|---|---|---|---|
+| `TF_ExpiryDate` | **Date Time** | — | Expiry / valid-until date accepted by the reviewer (midnight UTC) |
+| `TF_AIReviewed` | **Boolean** | — | A person accepted (or corrected) the data Orchestrate extracted |
+
+Add both to `TF_Document` (§2 step 4, or later via **Property Definitions → Add**), then set in `.env`:
+
+```dotenv
+FILENET_DOC_CLASS=TF_Document
+FILENET_AI_PROPERTIES=true
+```
+
+On acceptance TenderFlow calls `updateDocument` (the same mutation as §1b) with
+`{TF_DocType: "<code, e.g. COMMERCIAL_REGISTRATION>"} {TF_ExpiryDate: "<YYYY-MM-DD>T00:00:00.000Z"} {TF_AIReviewed: true}`
+and reads the values back. On acceptance `TF_DocType` changes from the upload slot (e.g. `VENDOR`) to the
+classified type. If the Content Engine refuses (e.g. the templates are missing), the review still succeeds and the
+error is shown in the document's Data panel and audited as `DOCUMENT_PROPERTIES_FAILED`.
+
+> **Not verified live.** The Date Time literal and the Boolean literal are ASSUMED (same literal form as the String
+> properties that passed live); tested only against the local fake Content Services server.
+
 ## 2. Create document class `TF_Document`
 
 1. In the OS1 tab, expand **Data Design → Classes → Document**.

@@ -144,6 +144,12 @@ export function ClassificationsEditor({ vendorId, canEdit }: { vendorId: string;
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<unknown>(null);
   const today = new Date().toISOString().slice(0, 10);
+  // A classification created from an accepted MOCI certificate (document intelligence) refreshes this list.
+  useEffect(() => {
+    const on = () => list.reload();
+    window.addEventListener('tf:classifications-changed', on);
+    return () => window.removeEventListener('tf:classifications-changed', on);
+  }, [list.reload]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const save = async (e: FormEvent) => {
     e.preventDefault();

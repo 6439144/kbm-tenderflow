@@ -10,7 +10,7 @@ export interface CycleConfig {
   evaluation: { technicalPassMark: number | null; financialCriteria: string[] };
   eligibility: { activityCodes: string[]; minGrade: number | null };
   fees: { documentPrice: number; currency: string; exemptionAllowed: boolean };
-  ai: { packCheck: boolean; clarification: boolean; compliance: boolean; gazette: boolean; relevance: boolean; narrative: boolean; requestClassify: boolean };
+  ai: { packCheck: boolean; clarification: boolean; compliance: boolean; gazette: boolean; relevance: boolean; narrative: boolean; requestClassify: boolean; documentIntelligence: boolean };
 }
 export interface StageInfo { key: string; kind: 'FIXED' | 'CONFIGURED' | 'OPTIONAL'; enabled: boolean; detail?: string }
 export interface CycleTemplate {
@@ -20,6 +20,7 @@ export interface CycleTemplate {
 export interface EntityProfile {
   nameEn: string; nameAr: string; primaryColor: string; numberingPattern?: string; receiptPattern?: string;
   identityProvider?: 'LOCAL' | 'OIDC'; channels?: { knet?: boolean; gazette?: boolean; capt?: boolean }; fiscalYearStartMonth?: number; logoText?: string; sector?: string;
+  documentIntelligenceAuto?: boolean;
 }
 export interface ActivityCode { code: string; nameEn: string; nameAr: string }
 export interface Classification { activityCode: string; grade: number; validUntil: string | null; nameEn?: string; nameAr?: string }

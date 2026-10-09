@@ -24,6 +24,7 @@ import { useI18n } from '../../i18n';
 import { useSession } from '../../session';
 import { DocButton } from '../../components/Layout';
 import { CitationInline, Citations, Countdown, DocList } from '../../components/shared';
+import { DocInsightInline, ExtractedTotalsCard } from '../../features/docintel';
 import {
   AsyncView,
   Badge,
@@ -394,6 +395,7 @@ function Detail({
             <>
               <BidsTable bids={bids} canDownload={seesBids} two={two} />
               <Compliance td={td} bids={bids.data ?? []} canRun={hasRole('COMMITTEE_CHAIR', 'EVALUATOR')} onChange={refresh} />
+              {seesBids && <ExtractedTotalsCard tenderId={td.id} vendorName={vendorName} />}
               {isEvaluator && td.status !== 'AWARDED' && (
                 <Scoring td={td} bids={bids.data ?? []} evals={evals.data ?? []} userId={user?.id} onSaved={refresh} two={two} finKeys={finKeys} finOpen={finOpen} />
               )}
@@ -886,13 +888,15 @@ function BidsTable({ bids, canDownload, two }: { bids: Async<Bid[]>; canDownload
                   {canDownload && (b.documents?.length ?? 0) > 0 ? (
                     <div className="row wrap cyc-files">
                       {b.documents!.map((d) => (
-                        <DocButton
-                          key={d.id}
-                          path={api.bidDocumentPath(b.id, d.id)}
-                          name={d.title}
-                          label={d.ownerType ? te('doc.', d.ownerType) : d.title}
-                          variant="secondary"
-                        />
+                        <span key={d.id} className="di-bid-doc">
+                          <DocButton
+                            path={api.bidDocumentPath(b.id, d.id)}
+                            name={d.title}
+                            label={d.ownerType ? te('doc.', d.ownerType) : d.title}
+                            variant="secondary"
+                          />
+                          <DocInsightInline documentId={d.id} title={d.title} />
+                        </span>
                       ))}
                     </div>
                   ) : (

@@ -109,6 +109,7 @@ export const en = {
   'cycle.ai.relevance': 'Vendor relevance ranking',
   'cycle.ai.narrative': 'Evaluation narrative',
   'cycle.ai.requestClassify': 'Request classification',
+  'cycle.ai.documentIntelligence': 'Document intelligence (classify uploads, extract data)',
 
   // designer
   'cycle.d.title': 'Cycle Designer',
@@ -525,6 +526,7 @@ export const ar: Record<keyof typeof en, string> = {
   'cycle.ai.relevance': 'ترتيب ملاءمة الموردين',
   'cycle.ai.narrative': 'سرد التقييم',
   'cycle.ai.requestClassify': 'تصنيف الطلبات',
+  'cycle.ai.documentIntelligence': 'ذكاء المستندات (تصنيف المرفوعات واستخراج البيانات)',
 
   'cycle.d.title': 'مصمم الدورة',
   'cycle.d.subtitle': 'حدّد طريقة إدارة هذه الجهة لمناقصاتها. كل نموذج له إصدارات ويطبّقه الخادم؛ وقواعد النزاهة ثابتة.',
