@@ -7,12 +7,14 @@ import { registerAssistantRoutes } from './assistant.js';
 import { registerDocumentIntelligenceRoutes } from './document-intelligence.js';
 import { registerInsightRoutes, registerPublicBoardRoutes } from './insight.js';
 import { registerNotifyRoutes } from './notify.js';
+import { registerSecurityRoutes } from './security.js';
 
 export function registerFeatureRoutes(r: express.Router, ctx: Ctx) {
   registerDemoRoutes(r, ctx);
   registerFileNetShowcaseRoutes(r, ctx);
   registerAssistantRoutes(r, ctx);
   registerDocumentIntelligenceRoutes(r, ctx);
+  registerSecurityRoutes(r, ctx);
   registerNotifyRoutes(r, ctx);
   registerInsightRoutes(r, ctx);
 }

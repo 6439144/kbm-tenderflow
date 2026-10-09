@@ -169,7 +169,7 @@ export function EmptyState({ message, children }: { message: ReactNode; children
 }
 
 export function ErrorBox({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
-  const { t } = useI18n();
+  const { t, te } = useI18n();
   if (isAiNotConfigured(error)) return <AiNotConfiguredBanner />;
   if (isAgentNotImported(error)) return <AgentNotImportedBanner agent={agentNameOf(error)} />;
   if (isEmptyAiReply(error)) {
@@ -184,8 +184,9 @@ export function ErrorBox({ error, onRetry }: { error: unknown; onRetry?: () => v
     );
   }
   const code = error instanceof ApiError ? error.code : 'CLIENT_ERROR';
-  const message = error instanceof Error ? error.message : String(error);
-  const forbidden = error instanceof ApiError && error.status === 403;
+  const raw = error instanceof Error ? error.message : String(error);
+  const message = te('security.err.', code) !== code ? te('security.err.', code) : raw; // SEC: bilingual security refusals
+  const forbidden = error instanceof ApiError && error.status === 403 && message === raw;
   return (
     <div className="alert alert-danger" role="alert">
       <div>

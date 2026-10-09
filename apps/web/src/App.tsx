@@ -21,6 +21,7 @@ import { AssistantDock } from './features/assistant';
 import { DocumentQueuePage, DocumentTypesPage } from './features/docintel';
 import { AdminOverviewPage, AnalyticsPage, EvidencePackPage, PublicBoardPage } from './features/insight';
 import { DeliveryLogPage, JobsPage, NotificationTemplatesPage } from './features/notify';
+import { AdminAccountsPage, AdminIdentityPage, MyMfaPage } from './features/security';
 
 const LANG_KEY = 'tf.lang';
 
@@ -42,8 +43,9 @@ const PROCUREMENT_NAV: NavItem[] = [
   { to: '/procurement/vendors', label: 'nav.vendors', roles: ['PROCUREMENT_OFFICER', 'DIRECTOR'] },
   { to: '/procurement/documents', label: 'nav.documentIntelligence' },
   { to: '/procurement/analytics', label: 'insight.nav.analytics', roles: ['DIRECTOR', 'UNDERSECRETARY'] },
+  { to: '/procurement/security', label: 'security.nav.mfa' },
 ];
-const VENDOR_NAV: NavItem[] = [{ to: '/vendor', label: 'nav.myCompany', end: true }];
+const VENDOR_NAV: NavItem[] = [{ to: '/vendor', label: 'nav.myCompany', end: true }, { to: '/vendor/security', label: 'security.nav.mfa' }];
 const ADMIN_NAV: NavItem[] = [
   { to: '/admin', label: 'nav.users', end: true, roles: ['TENANT_ADMIN'] },
   { to: '/admin/cycle', label: 'nav.cycleDesigner', roles: ['TENANT_ADMIN'] },
@@ -59,6 +61,9 @@ const ADMIN_NAV: NavItem[] = [
   { to: '/admin/notifications', label: 'nav.notifications', end: true },
   { to: '/admin/notifications/log', label: 'nav.deliveryLog' },
   { to: '/admin/jobs', label: 'nav.jobs' },
+  { to: '/admin/identity', label: 'security.nav.identity', roles: ['TENANT_ADMIN'] },
+  { to: '/admin/accounts', label: 'security.nav.accounts', roles: ['TENANT_ADMIN'] },
+  { to: '/admin/security', label: 'security.nav.mfa' },
 ];
 
 function Home() {
@@ -103,6 +108,8 @@ export default function App() {
             <Route path="/vendor" element={<Portal roles={['VENDOR']} nav={VENDOR_NAV} />}>
               <Route index element={<VendorHome />} />
               <Route path="tenders/:id" element={<VendorTender />} />
+              {/* security routes */}
+              <Route path="security" element={<MyMfaPage />} />
             </Route>
             <Route
               path="/procurement"
@@ -119,6 +126,8 @@ export default function App() {
               <Route path="documents" element={<DocumentQueuePage />} />
               {/* insight routes */}
               <Route path="analytics" element={<AnalyticsPage />} />
+              {/* security routes */}
+              <Route path="security" element={<MyMfaPage />} />
             </Route>
             <Route path="/admin" element={<Portal roles={['TENANT_ADMIN', 'AUDITOR']} nav={ADMIN_NAV} />}>
               <Route index element={<AdminUsers />} />
@@ -137,6 +146,10 @@ export default function App() {
               <Route path="notifications" element={<NotificationTemplatesPage />} />
               <Route path="notifications/log" element={<DeliveryLogPage />} />
               <Route path="jobs" element={<JobsPage />} />
+              {/* security routes */}
+              <Route path="identity" element={<AdminIdentityPage />} />
+              <Route path="accounts" element={<AdminAccountsPage />} />
+              <Route path="security" element={<MyMfaPage />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>

@@ -160,6 +160,8 @@ const PUBLISHED_PLUS = ['PUBLISHED', 'CLOSED', 'OPENED', 'EVALUATION', 'AWARDED'
 /** GET /documents/:id — deny by default. BID_* documents are never served here. */
 export async function downloadDocument(ctx: Ctx, actor: Actor, id: string) {
   const d = await loadReadableDocument(ctx, actor, id);
+  // SEC: vendors never receive the original of a protected tender document (viewer / watermarked copy instead).
+  await (await import('../features/security/content.js')).assertOriginalDownloadAllowed(ctx, actor, d);
   return { doc: d, bytes: await readPlain(ctx, d) };
 }
 

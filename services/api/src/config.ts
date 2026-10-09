@@ -38,6 +38,13 @@ export interface Config {
   publicBoardRateLimit: number;
   /** Notifications (SMTP / SMS HTTP), background jobs and delivery retries — see loadNotifyConfig below. */
   notify: NotifyConfig;
+  // --- security (SEC workstream) ---
+  /** MFA_ENC_KEY — base64 of 32 bytes; encrypts TOTP secrets at rest. Unset → derived from AUDIT_SIGNING_KEY (HKDF). */
+  mfaEncKey?: string;
+  /** STAFF_NETWORK_BREAK_GLASS=true — emergency switch: the staff network allowlist is not enforced (shown on the admin page). */
+  staffNetworkBreakGlass: boolean;
+  /** OIDC_ALLOW_HTTP=true — allow a plain-http OIDC issuer other than localhost (never in production). */
+  oidcAllowHttp: boolean;
 }
 
 export class ConfigError extends Error {}
@@ -91,6 +98,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const audience = opt(env.EXTERNAL_OIDC_AUDIENCE);
   if (issuer && !audience) missing.push('EXTERNAL_OIDC_AUDIENCE (required because EXTERNAL_OIDC_ISSUER is set)');
 
+  // --- security (SEC workstream) ---
+  const mfaEncKey = opt(env.MFA_ENC_KEY);
+  if (mfaEncKey && Buffer.from(mfaEncKey, 'base64').length !== 32) problems.push('MFA_ENC_KEY must be base64 of exactly 32 bytes');
+
   if (missing.length || problems.length) {
     const lines = [
       ...missing.map((m) => `  - missing required environment variable: ${m}`),
@@ -122,6 +133,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     loginRateLimit: Number(opt(env.LOGIN_RATE_LIMIT_PER_MIN) ?? 30),
     docAiAuto: opt(env.DOC_AI_AUTO) === undefined ? null : ['true', '1', 'yes'].includes(opt(env.DOC_AI_AUTO)!.toLowerCase()),
     docAiProperties: ['true', '1', 'yes'].includes((opt(env.FILENET_AI_PROPERTIES) ?? 'false').toLowerCase()),
+    // --- security (SEC workstream) ---
+    mfaEncKey,
+    staffNetworkBreakGlass: (opt(env.STAFF_NETWORK_BREAK_GLASS) ?? 'false').toLowerCase() === 'true',
+    oidcAllowHttp: (opt(env.OIDC_ALLOW_HTTP) ?? 'false').toLowerCase() === 'true',
     // --- insight ---
     publicBoardRateLimit: Math.max(1, Number(opt(env.PUBLIC_BOARD_RATE_LIMIT_PER_MIN) ?? 60) || 60),
     notify: loadNotifyConfig(env),
