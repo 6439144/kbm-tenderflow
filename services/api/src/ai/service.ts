@@ -4,12 +4,17 @@
 
 import { AiNotConfiguredError, type AiResult, type AiService, type Citation, type DocText } from './types.js';
 import { type AgentRole, type AiConfig, isConfigComplete, missingSettings, readAiConfig } from './config.js';
-import { OrchestrateClient, OrchestrateError, type InvokeResult } from './orchestrate-client.js';
+import { OrchestrateClient, type InvokeResult } from './orchestrate-client.js';
 import {
-  buildClarificationPrompt, buildCompliancePrompt, buildPackCheckPrompt, buildRepairPrompt,
-  CLARIFICATION_SCHEMA, COMPLIANCE_SCHEMA, PACK_SCHEMA,
+  buildChatPrompt, buildClarificationPrompt, buildClassifyPrompt, buildCompliancePrompt, buildGradePrompt, buildNarrativePrompt,
+  buildNoticePrompt, buildPackCheckPrompt, buildRankingPrompt, buildRepairPrompt, chatInputText, documentsText, narrativeInputText,
+  noticeInputText, CHAT_SCHEMA, CLARIFICATION_SCHEMA, CLASSIFY_SCHEMA, COMPLIANCE_SCHEMA, NARRATIVE_SCHEMA, NOTICE_SCHEMA, PACK_SCHEMA,
+  RANKING_SCHEMA,
 } from './prompts.js';
-import { AiOutputError, extractJsonObject, validateClarification, validateCompliance, validatePackCheck, type Validated } from './parse.js';
+import {
+  AiOutputError, extractJsonObject, validateChat, validateClarification, validateClassification, validateCompliance, validateNarrative,
+  validateNotice, validatePackCheck, validateRanking, type Validated,
+} from './parse.js';
 import { detectLanguage } from './text-utils.js';
 
 export { OrchestrateError } from './orchestrate-client.js';
@@ -23,7 +28,10 @@ export interface CreateAiServiceOptions {
   retryDelayMs?: number;
 }
 
-interface RunMeta { runId: string; threadId: string; text: string; repaired: boolean; droppedCitations: number }
+/** Orchestrate metadata of a call, returned as AiResult.raw (recorded with the ai_run). */
+export interface RunMeta { runId: string; threadId: string; text: string; repaired: boolean; droppedCitations: number; durationMs: number }
+
+type TextValidator<T> = (text: string) => Validated<T>;
 
 export function createAiService(options: CreateAiServiceOptions = {}): AiService {
   const cfg: AiConfig = readAiConfig(options.env ?? process.env);
@@ -38,25 +46,28 @@ export function createAiService(options: CreateAiServiceOptions = {}): AiService
     return client;
   };
 
-  async function run<T>(role: AgentRole, prompt: string, schema: string, validate: (obj: unknown) => Validated<T>): Promise<AiResult<T>> {
+  /** One agent turn + at most one repair turn on the same thread; the validator sees the raw reply text. */
+  async function runText<T>(role: AgentRole, prompt: string, schema: string, validate: TextValidator<T>, threadId?: string): Promise<AiResult<T>> {
     const c = getClient();
     const agentRef = cfg.agents[role];
-    const first: InvokeResult = await c.invokeAgent(agentRef, prompt, { timeoutMs: cfg.timeoutMs });
-    let problems: string[];
-    let result = tryValidate(first.text, validate);
+    const t0 = Date.now();
+    const first: InvokeResult = await c.invokeAgent(agentRef, prompt, { timeoutMs: cfg.timeoutMs, threadId });
+    let result = validate(first.text);
     let last = first; let repaired = false;
     if (result.value === undefined) {
-      problems = result.problems;
       repaired = true;
-      last = await c.invokeAgent(agentRef, buildRepairPrompt(problems, schema), { timeoutMs: cfg.timeoutMs, threadId: first.threadId });
-      result = tryValidate(last.text, validate);
+      last = await c.invokeAgent(agentRef, buildRepairPrompt(result.problems, schema), { timeoutMs: cfg.timeoutMs, threadId: first.threadId });
+      result = validate(last.text);
       if (result.value === undefined) {
         throw new AiOutputError(`Agent "${first.agentName}" returned output that is not valid for this task after one repair attempt: ${result.problems.slice(0, 5).join('; ')}`, last.text.slice(0, 2000));
       }
     }
-    const meta: RunMeta = { runId: last.runId, threadId: last.threadId, text: last.text, repaired, droppedCitations: result.dropped };
+    const meta: RunMeta = { runId: last.runId, threadId: last.threadId, text: last.text, repaired, droppedCitations: result.dropped, durationMs: Date.now() - t0 };
     return { ok: true, agent: first.agentName, model: first.model, output: result.value as T, citations: dedupe(result.citations), raw: meta };
   }
+
+  const run = <T>(role: AgentRole, prompt: string, schema: string, validate: (obj: unknown) => Validated<T>) =>
+    runText(role, prompt, schema, (text) => jsonThen(text, validate));
 
   return {
     isConfigured: () => isConfigComplete(cfg),
@@ -68,8 +79,9 @@ export function createAiService(options: CreateAiServiceOptions = {}): AiService
         await c.getToken();
         const agents = await c.listAgents();
         const names = new Set(agents.flatMap((a) => [a.name, a.id]));
-        const status = (Object.keys(cfg.agents) as AgentRole[]).map((r) => `${cfg.agents[r]}=${names.has(cfg.agents[r]) ? 'found' : 'MISSING'}`);
-        const allFound = (Object.keys(cfg.agents) as AgentRole[]).every((r) => names.has(cfg.agents[r]));
+        const roles = Object.keys(cfg.agents) as AgentRole[];
+        const status = roles.map((r) => `${cfg.agents[r]}=${names.has(cfg.agents[r]) ? 'found' : 'MISSING'}`);
+        const allFound = roles.every((r) => names.has(cfg.agents[r]));
         return { ok: allFound, detail: `IAM token OK; ${agents.length} agent(s) on instance; ${status.join(', ')}` };
       } catch (e) {
         return { ok: false, detail: (e as Error).message };
@@ -92,10 +104,47 @@ export function createAiService(options: CreateAiServiceOptions = {}): AiService
       const prompt = buildCompliancePrompt(input, cfg.maxDocChars);
       return run('compliance', prompt, COMPLIANCE_SCHEMA, (o) => validateCompliance(o, input.bid.documents, keys));
     },
+
+    async classifyRequest(input) {
+      const prompt = buildClassifyPrompt(input, cfg.maxDocChars);
+      const r = input.request;
+      const inputText = `${r.requestNumber}\n${r.department}\n${r.subject}\n${r.sourceReference ?? ''}\n${documentsText(input.documents)}`;
+      return run('requestClassifier', prompt, CLASSIFY_SCHEMA, (o) => validateClassification(o, input.documents,
+        input.templates.map((t) => t.code), input.activityCodes.map((c) => c.code), inputText));
+    },
+
+    async draftNotice(input) {
+      const prompt = buildNoticePrompt(input, cfg.maxDocChars);
+      const inputText = noticeInputText(input);
+      return run('noticeDrafter', prompt, NOTICE_SCHEMA, (o) => validateNotice(o, input.documents, inputText));
+    },
+
+    async rankRelevance(input) {
+      const prompt = buildRankingPrompt(input);
+      return run('relevanceMatcher', prompt, RANKING_SCHEMA, (o) => validateRanking(o, input.candidates.map((c) => c.id)));
+    },
+
+    async narrateEvaluation(input) {
+      const prompt = buildNarrativePrompt(input);
+      const inputText = narrativeInputText(input);
+      return run('evaluationNarrator', prompt, NARRATIVE_SCHEMA, (o) => validateNarrative(o, inputText));
+    },
+
+    async reviewGrade(input) {
+      const keys = input.criteria.map((c) => c.key);
+      const prompt = buildGradePrompt(input, cfg.maxDocChars);
+      return run('gradeReviewer', prompt, COMPLIANCE_SCHEMA, (o) => validateCompliance(o, input.documents, keys));
+    },
+
+    async chat(input) {
+      const prompt = buildChatPrompt(input, Math.min(cfg.maxDocChars, 16000));
+      const inputText = chatInputText(input);
+      return runText('assistant', prompt, CHAT_SCHEMA, (text) => validateChat(text, input.context, inputText), input.threadId);
+    },
   };
 }
 
-function tryValidate<T>(text: string, validate: (obj: unknown) => Validated<T>): Validated<T> {
+function jsonThen<T>(text: string, validate: (obj: unknown) => Validated<T>): Validated<T> {
   let obj: unknown;
   try { obj = extractJsonObject(text); } catch { return { problems: ['the reply was not a valid JSON object'], citations: [], dropped: 0 }; }
   return validate(obj);

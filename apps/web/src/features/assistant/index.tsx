@@ -1,7 +1,9 @@
-// Orchestrate workstream: supervisor chat dock, new advisory agents on tender/request/vendor pages.
-import type { TenderDetail } from '../../api';
-
-export function AssistantDock() { return null; }
-export function TenderAiExtras(_: { td: TenderDetail; onChange: () => void }) { return null; }
-export function TendersForYou() { return null; }
-export function RequestAiExtras(_: { requestId: string; onChange: () => void }) { return null; }
+// Orchestrate workstream: the TenderFlow Assistant dock (supervisor agent) on every signed-in page and the specialist
+// watsonx Orchestrate agents on the tender, request, vendor-home and vendor-review screens. Every AI result is an
+// advisory run recorded by the API; people decide.
+export { AssistantDock } from './AssistantDock';
+export { TenderAiExtras } from './TenderAiExtras';
+export { TendersForYou } from './TendersForYou';
+export { RequestAiExtras } from './RequestAiExtras';
+export { VendorGradeReview } from './VendorGradeReview';
+export { AiInsightsCard } from './AiInsights';

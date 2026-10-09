@@ -1,6 +1,8 @@
 // npm run verify:ai — live check of the watsonx Orchestrate integration.
-// 1) config presence (no secret values printed) 2) IAM token 3) agents present 4) one real clarification
-// on an embedded bilingual sample, printing the parsed answer and citations. Exits non-zero on any failure.
+// 1) config presence (no secret values printed) 2) IAM token 3) all nine agents present 4) one real clarification
+// on an embedded bilingual sample, printing the parsed answer and citations 5) one real turn of the supervisor
+// tenderflow_assistant on a small role-scoped context. Exits non-zero on any failure.
+// Per-agent quality for the other specialists: `npm run evals -- agents`.
 import { loadRepoEnv, findRepoRoot } from '../ai/tools/env.js';
 import { readAiConfig, missingSettings, type AgentRole } from '../ai/config.js';
 import { OrchestrateClient } from '../ai/orchestrate-client.js';
@@ -71,6 +73,27 @@ async function main(): Promise<number> {
   } catch (e) {
     console.error(`\nFAIL: live clarification failed: ${(e as Error).message}`);
     return 7;
+  }
+  const context: DocText[] = [{ documentId: 'verify-context', title: 'TenderFlow context (verification sample)', sections: [
+    { section: 'Pending tasks / المهام المعلقة', text: 'Number of pending tasks: 1.\n1. Approve tender VER-2026-001 (approval level 1 of 2: Director) / اعتماد المناقصة VER-2026-001 (مستوى الاعتماد 1 من 2: مدير)' },
+  ] }];
+  const message = 'What is waiting for me?';
+  console.log(`\nLive supervisor turn (tenderflow_assistant): ${message}`);
+  const t1 = Date.now();
+  try {
+    const res = await ai.chat({ message, context });
+    const meta = res.raw as { runId?: string; threadId?: string; repaired?: boolean } | undefined;
+    line('agent / model', `${res.agent} / ${res.model ?? '(not reported)'}`);
+    line('run id / thread id', `${meta?.runId ?? '-'} / ${meta?.threadId ?? '-'}`);
+    line('elapsed', `${Date.now() - t1} ms`);
+    line('structured JSON reply', String(res.output.structured));
+    line('notFound', String(res.output.notFound));
+    console.log(`answer: ${res.output.answer}`);
+    for (const c of res.citations) console.log(`  - [${c.documentId} | ${c.section}]`);
+    if (res.output.notFound || !/VER-2026-001/.test(res.output.answer)) { console.error('\nFAIL: the supervisor did not answer from the supplied context (expected the task on VER-2026-001).'); return 8; }
+  } catch (e) {
+    console.error(`\nFAIL: live supervisor turn failed: ${(e as Error).message}`);
+    return 9;
   }
   console.log('\nOK: watsonx Orchestrate integration verified.');
   return 0;

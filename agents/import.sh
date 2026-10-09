@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# TenderFlow - import the three advisory agents into a watsonx Orchestrate (IBM Cloud) instance.
+# TenderFlow - import the nine watsonx Orchestrate agents into an Orchestrate (IBM Cloud) instance:
+# the eight specialist (collaborator) agents first, then the supervisor tenderflow_assistant, whose
+# `collaborators:` list refers to them by name.
 # Usage (repo root): bash agents/import.sh
 # Reads WXO_INSTANCE_URL / WXO_API_KEY from the repo .env (process environment wins).
 # Optional: WXO_LLM (model id from `orchestrate models list`), WXO_ENV_NAME (default techzone),
@@ -10,8 +12,10 @@ set -euo pipefail
 AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(dirname "$AGENTS_DIR")"
 ENV_FILE="$REPO_ROOT/.env"
-AGENT_FILES=(tenderflow_pack_checker.yaml tenderflow_clarification_assistant.yaml tenderflow_compliance_screener.yaml)
-AGENT_NAMES=(tenderflow_pack_checker tenderflow_clarification_assistant tenderflow_compliance_screener)
+# Order matters: collaborators first, supervisor (tenderflow_assistant) last.
+AGENT_NAMES=(tenderflow_pack_checker tenderflow_clarification_assistant tenderflow_compliance_screener tenderflow_request_classifier tenderflow_notice_drafter tenderflow_relevance_matcher tenderflow_evaluation_narrator tenderflow_grade_reviewer tenderflow_assistant)
+AGENT_FILES=()
+for n in "${AGENT_NAMES[@]}"; do AGENT_FILES+=("$n.yaml"); done
 
 # Read one KEY from .env without sourcing it (no code execution); process env wins.
 setting() {
@@ -74,5 +78,5 @@ for n in "${AGENT_NAMES[@]}"; do
 done
 
 echo
-echo "OK: imported ${AGENT_NAMES[*]}"
+echo "OK: imported ${#AGENT_NAMES[@]} agents: ${AGENT_NAMES[*]}"
 echo "Next: npm run build && npm run verify:ai"

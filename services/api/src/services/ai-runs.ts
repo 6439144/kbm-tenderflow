@@ -10,9 +10,10 @@ import { extractText } from '../content/extract.js';
 import { loadClarification, loadTender, type TenderRow } from './tenders.js';
 import { decryptBidDocuments, financialSealed, type BidRow } from './bids.js';
 
-type Kind = 'PACK_CHECK' | 'CLARIFICATION_DRAFT' | 'COMPLIANCE_SCREEN';
+export type Kind = 'PACK_CHECK' | 'CLARIFICATION_DRAFT' | 'COMPLIANCE_SCREEN' | 'REQUEST_CLASSIFY' | 'GAZETTE_NOTICE' | 'RELEVANCE_MATCH'
+  | 'EVALUATION_NARRATIVE' | 'GRADE_REVIEW' | 'ASSISTANT_CHAT';
 
-async function packDocTexts(ctx: Ctx, t: TenderRow): Promise<DocText[]> {
+export async function packDocTexts(ctx: Ctx, t: TenderRow): Promise<DocText[]> {
   const docs = await ctx.db.query<DocumentRow>(
     `SELECT * FROM documents WHERE tender_id=$1 AND owner_type IN ('TENDER_PACK','ADDENDUM') ORDER BY created_at`, [t.id]);
   const out: DocText[] = [];
@@ -20,34 +21,49 @@ async function packDocTexts(ctx: Ctx, t: TenderRow): Promise<DocText[]> {
   return out;
 }
 
-const docSummary = (docs: DocText[]) => docs.map((d) => ({ documentId: d.documentId, title: d.title, sections: d.sections.length }));
+export const docSummary = (docs: DocText[]) => docs.map((d) => ({ documentId: d.documentId, title: d.title, sections: d.sections.length }));
 
-async function recordRun<T extends { agent: string; model?: string; output: unknown; citations: unknown[] }>(
-  ctx: Ctx, actor: Actor, tenderId: string, kind: Kind, request: Record<string, unknown>, call: () => Promise<T>,
+/** Orchestrate metadata kept with the run (no prompt text, no secrets): run/thread ids, repair turn, duration. */
+function orchestrateMeta(raw: unknown, durationMs: number) {
+  const m = (raw && typeof raw === 'object' ? raw : {}) as { runId?: string; threadId?: string; repaired?: boolean; droppedCitations?: number; durationMs?: number };
+  return { runId: m.runId ?? null, threadId: m.threadId ?? null, repaired: m.repaired ?? null, droppedCitations: m.droppedCitations ?? null, durationMs: m.durationMs ?? durationMs };
+}
+
+/**
+ * Calls the AI service and records the run (OK or ERROR) in ai_runs + audit. tenderId may be null (request intake,
+ * vendor-side ranking, grade review, chat); subjectId names the request/vendor the run is about.
+ */
+export async function recordRun<T extends { agent: string; model?: string; output: unknown; citations: unknown[]; raw?: unknown }>(
+  ctx: Ctx, actor: Actor, tenderId: string | null, kind: Kind, request: Record<string, unknown>, call: () => Promise<T>,
+  opts: { subjectId?: string | null } = {},
 ) {
   const id = uuid();
+  const subjectId = opts.subjectId ?? null;
+  const t0 = Date.now();
   try {
     const res = await call();
+    const req = { ...request, orchestrate: orchestrateMeta(res.raw, Date.now() - t0) };
     const rows = await ctx.db.tx(async (q) => {
       const r = await q.query(
-        `INSERT INTO ai_runs (id, tenant_id, tender_id, kind, agent, model, request, response, citations, status, requested_by, created_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9::jsonb,'OK',$10,$11) RETURNING *`,
-        [id, actor.tenantId, tenderId, kind, res.agent, res.model ?? null, JSON.stringify(request), JSON.stringify(res.output ?? null),
-          JSON.stringify(res.citations ?? []), actor.id, now()]);
+        `INSERT INTO ai_runs (id, tenant_id, tender_id, kind, agent, model, request, response, citations, status, requested_by, created_at, subject_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9::jsonb,'OK',$10,$11,$12) RETURNING *`,
+        [id, actor.tenantId, tenderId, kind, res.agent, res.model ?? null, JSON.stringify(req), JSON.stringify(res.output ?? null),
+          JSON.stringify(res.citations ?? []), actor.id, now(), subjectId]);
       await auditTx(ctx, q, { tenantId: actor.tenantId, actor, action: 'AI_ADVISORY_GENERATED', resourceType: 'AI_RUN', resourceId: id,
-        details: { kind, tenderId, agent: res.agent, citations: (res.citations ?? []).length } });
+        details: { kind, tenderId, subjectId, agent: res.agent, citations: (res.citations ?? []).length, orchestrateRunId: req.orchestrate.runId } });
       return r;
     });
     return camel(rows[0]);
   } catch (err) {
     const notConfigured = err instanceof AiNotConfiguredError || (err as any)?.code === 'AI_NOT_CONFIGURED';
     const message = (err as Error).message ?? String(err);
+    const req = { ...request, orchestrate: { durationMs: Date.now() - t0 } };
     await ctx.db.tx(async (q) => {
       await q.query(
-        `INSERT INTO ai_runs (id, tenant_id, tender_id, kind, request, status, error, requested_by, created_at)
-         VALUES ($1,$2,$3,$4,$5::jsonb,'ERROR',$6,$7,$8)`, [id, actor.tenantId, tenderId, kind, JSON.stringify(request), message, actor.id, now()]);
+        `INSERT INTO ai_runs (id, tenant_id, tender_id, kind, request, status, error, requested_by, created_at, subject_id)
+         VALUES ($1,$2,$3,$4,$5::jsonb,'ERROR',$6,$7,$8,$9)`, [id, actor.tenantId, tenderId, kind, JSON.stringify(req), message, actor.id, now(), subjectId]);
       await auditTx(ctx, q, { tenantId: actor.tenantId, actor, action: 'AI_ADVISORY_FAILED', resourceType: 'AI_RUN', resourceId: id,
-        details: { kind, tenderId, error: message.slice(0, 500) } });
+        details: { kind, tenderId, subjectId, error: message.slice(0, 500) } });
     });
     if (notConfigured) throw new ApiError(503, 'AI_NOT_CONFIGURED', message, { aiRunId: id });
     if (err instanceof ApiError) throw err;

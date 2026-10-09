@@ -1,0 +1,148 @@
+# OPTIONAL read-only tool pack for watsonx Orchestrate. NOT wired by default: TenderFlow's runtime flow sends the
+# role-scoped context to the agents itself and needs no inbound calls. Importing this pack lets the supervisor agent
+# (or a test agent in the Orchestrate UI) read TenderFlow live, as the user whose bearer token the connection holds.
+# Requires TenderFlow on a public HTTPS URL — replace the server URL below. See agents/tools/README.md.
+openapi: 3.0.3
+info:
+  title: TenderFlow read-only API (watsonx Orchestrate tool pack)
+  version: 1.0.0
+  description: >
+    Read-only TenderFlow endpoints. Every call is authorised with a TenderFlow bearer token (RS256 JWT issued by
+    TenderFlow); the tenant and the role scope come only from that token, exactly as in the web app.
+servers:
+  - url: https://tenderflow.example.com/api/v1
+    description: Replace with the public HTTPS URL of your TenderFlow deployment (path /api/v1).
+security:
+  - bearerAuth: []
+paths:
+  /assistant/my-tasks:
+    get:
+      operationId: tenderflow_my_tasks
+      summary: List what is waiting for the signed-in user
+      description: >
+        Returns the caller's pending TenderFlow tasks computed from the current records (approvals waiting at the
+        caller's approval level, open clarifications for officers, tenders to open for the committee chair, bids to
+        score for evaluators; for vendors, tenders closing soon and document purchases needed). No AI involved.
+      responses:
+        '200':
+          description: Pending tasks of the caller
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Task'
+        '401':
+          $ref: '#/components/responses/Error'
+  /tenders:
+    get:
+      operationId: tenderflow_list_tenders
+      summary: List tenders visible to the signed-in user
+      description: >
+        Staff see the tenders of their entity; vendors see only published (and later) tenders in their business
+        categories. Optional filter by status.
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: Filter by tender status
+          schema:
+            $ref: '#/components/schemas/TenderStatus'
+      responses:
+        '200':
+          description: Tenders visible to the caller
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Tender'
+        '401':
+          $ref: '#/components/responses/Error'
+  /tenders/{id}:
+    get:
+      operationId: tenderflow_get_tender
+      summary: Get one tender visible to the signed-in user
+      description: >
+        Tender details, cycle stages and approval chain as TenderFlow shows them to the caller. Sealed bid contents
+        are never returned; a vendor never sees other vendors' bids.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Tender id (UUID) from tenderflow_list_tenders
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The tender
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tender'
+        '404':
+          $ref: '#/components/responses/Error'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  responses:
+    Error:
+      description: Error (401 not signed in, 404 not found or not visible to the caller)
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              code: { type: string }
+              message: { type: string }
+  schemas:
+    TenderStatus:
+      type: string
+      enum: [DRAFT, PENDING_APPROVAL, APPROVED, PUBLISHED, CLOSED, OPENED, EVALUATION, AWARDED, CANCELLED]
+    Task:
+      type: object
+      properties:
+        kind: { type: string, description: 'e.g. APPROVE_TENDER, ANSWER_CLARIFICATIONS, OPEN_BIDS, SCORE_BIDS, BID_CLOSING_SOON' }
+        titleEn: { type: string }
+        titleAr: { type: string }
+        link: { type: string, description: Web route in TenderFlow that performs the step }
+        tenderId: { type: string }
+        tenderNumber: { type: string }
+        requestId: { type: string }
+        dueAt: { type: string, format: date-time, nullable: true }
+        count: { type: integer }
+    Tender:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        tenderNumber: { type: string }
+        titleEn: { type: string }
+        titleAr: { type: string }
+        descriptionEn: { type: string, nullable: true }
+        descriptionAr: { type: string, nullable: true }
+        category: { type: string }
+        status: { $ref: '#/components/schemas/TenderStatus' }
+        estimatedBudget: { type: number, nullable: true }
+        currency: { type: string }
+        submissionDeadline: { type: string, format: date-time }
+        criteria:
+          type: array
+          items:
+            type: object
+            properties:
+              key: { type: string }
+              nameEn: { type: string }
+              nameAr: { type: string }
+              weight: { type: number }
+        requiredDocuments:
+          type: array
+          items:
+            type: object
+            properties:
+              key: { type: string }
+              nameEn: { type: string }
+              nameAr: { type: string }
