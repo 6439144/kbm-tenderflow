@@ -31,4 +31,5 @@ tenderflow-sbom.json
 deploy/backups/
 deploy/proxy/certs/*.key
 deploy/proxy/certs/*.crt
+*.tsbuildinfo
 

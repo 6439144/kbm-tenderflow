@@ -24,6 +24,12 @@ export interface TranslationDictionary {
   askQuestion: string;
   switchLanguage: string;
   auditTrail: string;
+  auditLedger: string;
+  sealedBidSubmitted: string;
+  receiptHash: string;
+  submitSealedBid: string;
+  technicalEnvelope: string;
+  financialEnvelope: string;
   aiAdvisor: string;
   aiAdvisoryNotice: string;
 }
@@ -53,6 +59,12 @@ export const translations: Record<Locale, TranslationDictionary> = {
     askQuestion: 'تقديم استفسار',
     switchLanguage: 'English',
     auditTrail: 'سجل التدقيق الرقمي',
+    auditLedger: 'سجل التدقيق المشفر',
+    sealedBidSubmitted: 'تم تقديم العطاء وتشفيره بنجاح',
+    receiptHash: 'البصمة الرقمية للإيصال',
+    submitSealedBid: 'تقديم العطاء بالمظاريف المختومة',
+    technicalEnvelope: 'المظروف الفني',
+    financialEnvelope: 'المظروف المالي',
     aiAdvisor: 'المستشار الذكي للمشتريات',
     aiAdvisoryNotice: 'ملاحظة استشارية: توصيات الذكاء الاصطناعي استشارية وتتطلب اعتماداً بشرياً رسمياً.'
   },
@@ -80,6 +92,12 @@ export const translations: Record<Locale, TranslationDictionary> = {
     askQuestion: 'Submit Clarification',
     switchLanguage: 'العربية',
     auditTrail: 'Audit Trail Ledger',
+    auditLedger: 'Cryptographic Audit Ledger',
+    sealedBidSubmitted: 'Sealed Bid Successfully Submitted',
+    receiptHash: 'Digital Receipt Hash',
+    submitSealedBid: 'Submit Sealed Bid',
+    technicalEnvelope: 'Technical Envelope',
+    financialEnvelope: 'Financial Envelope',
     aiAdvisor: 'Procurement AI Advisor',
     aiAdvisoryNotice: 'Advisory Notice: AI outputs are recommendations only and require human approval.'
   }

@@ -8,10 +8,35 @@ export default function ProcurementAppPage() {
   const t = translations[locale];
   const isRtl = locale === 'ar';
 
+  const [selectedTenant, setSelectedTenant] = useState<'kea' | 'ministry_a' | 'ministry_b'>('kea');
   const [aiReport, setAiReport] = useState<{ score: number; text: string } | null>(null);
-  const [tenderStatus, setTenderStatus] = useState<string>('PUBLISHED');
+  const [tenderStatus, setTenderStatus] = useState<string>('DRAFT');
   const [bidsOpened, setBidsOpened] = useState<boolean>(false);
   const [awarded, setAwarded] = useState<boolean>(false);
+  const [directorApproved, setDirectorApproved] = useState<boolean>(false);
+
+  const tenantConfig = {
+    kea: {
+      nameAr: 'هيئة الطاقة الكويتية',
+      nameEn: 'Kuwait Energy Authority (KEA)',
+      color: '#0B4F6C',
+      tenderNumber: 'KEA-TND-2026-088'
+    },
+    ministry_a: {
+      nameAr: 'الوزارة أ (الأشغال العامة والبنية التحتية)',
+      nameEn: 'Ministry A (Public Works & Infrastructure)',
+      color: '#1A365D',
+      tenderNumber: 'MNA-TND-2026-104'
+    },
+    ministry_b: {
+      nameAr: 'الوزارة ب (المواصلات والخدمات الرقمية)',
+      nameEn: 'Ministry B (Communications & Digital Services)',
+      color: '#007A78',
+      tenderNumber: 'MNB-TND-2026-042'
+    }
+  };
+
+  const currentTenant = tenantConfig[selectedTenant];
 
   const toggleLanguage = () => {
     const next = locale === 'ar' ? 'en' : 'ar';
@@ -24,9 +49,18 @@ export default function ProcurementAppPage() {
     setAiReport({
       score: 95,
       text: isRtl
-        ? 'تم التحقق: نطاق العمل ثنائي اللغة مكتمل، الميزانية معتمدة (250,000 د.ك)، وكراسة الشروط مرفقة. يوصى بالاعتماد.'
-        : 'Scope verified: Bilingual titles complete, budget verified (250,000 KWD), specifications attached. Recommended for approval.'
+        ? 'تم التحقق: نطاق العمل ثنائي اللغة مكتمل، الميزانية معتمدة (250,000 د.ك)، وكراسة الشروط مرفقة. يوصى باعتماد الطرح من قبل المدير.'
+        : 'Scope verified: Bilingual titles complete, budget verified (250,000 KWD), specifications attached. Recommended for Director approval.'
     });
+  };
+
+  const handleDirectorApprove = () => {
+    setDirectorApproved(true);
+    setTenderStatus('APPROVED_FOR_PUBLICATION');
+  };
+
+  const handlePublish = () => {
+    setTenderStatus('PUBLISHED');
   };
 
   const handleOpeningCeremony = () => {
@@ -40,19 +74,64 @@ export default function ProcurementAppPage() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <header style={{
-        backgroundColor: '#0B4F6C',
-        color: '#FFFFFF',
-        padding: '1rem 2rem',
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#F8FAFC' }}>
+      {/* Platform Multi-App Navigation Bar */}
+      <div style={{
+        backgroundColor: '#1E293B',
+        color: '#E2E8F0',
+        padding: '0.4rem 2rem',
+        fontSize: '0.85rem',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center'
       }}>
+        <div style={{ display: 'flex', gap: '1.2rem', alignItems: 'center' }}>
+          <span style={{ fontWeight: 700, color: '#38BDF8' }}>TenderFlow Suite:</span>
+          <a href="http://localhost:3000" style={{ color: '#94A3B8', textDecoration: 'none' }}>
+            {isRtl ? 'بوابة الموردين' : 'Vendor Portal (Port 3000)'}
+          </a>
+          <a href="http://localhost:3001" style={{ color: '#FFFFFF', fontWeight: 600, textDecoration: 'none' }}>
+            ● {isRtl ? 'تطبيق المشتريات' : 'Procurement App (Port 3001)'}
+          </a>
+          <a href="http://localhost:3002" style={{ color: '#94A3B8', textDecoration: 'none' }}>
+            {isRtl ? 'لوحة التحكم' : 'Control Panel (Port 3002)'}
+          </a>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+          <span>{isRtl ? 'المستأجر النشط:' : 'Active Tenant:'}</span>
+          <select
+            value={selectedTenant}
+            onChange={(e) => setSelectedTenant(e.target.value as any)}
+            style={{
+              backgroundColor: '#334155',
+              color: '#FFFFFF',
+              border: '1px solid #475569',
+              borderRadius: '4px',
+              padding: '0.2rem 0.5rem',
+              fontSize: '0.8rem'
+            }}
+          >
+            <option value="kea">KEA (Kuwait Energy Authority)</option>
+            <option value="ministry_a">Ministry A (Public Works)</option>
+            <option value="ministry_b">Ministry B (Digital Services)</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Main Tenant Branded Header */}
+      <header style={{
+        backgroundColor: currentTenant.color,
+        color: '#FFFFFF',
+        padding: '1rem 2rem',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+      }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <h1 style={{ margin: 0, fontSize: '1.4rem' }}>{t.brandName} — {t.procurement}</h1>
-          <span style={{ fontSize: '0.85rem', backgroundColor: '#E2E8F0', color: '#1A202C', padding: '0.2rem 0.6rem', borderRadius: '4px' }}>
-            {isRtl ? 'هيئة الطاقة الكويتية' : 'Kuwait Energy Authority'}
+          <h1 style={{ margin: 0, fontSize: '1.35rem' }}>{t.brandName} — {t.procurement}</h1>
+          <span style={{ fontSize: '0.85rem', backgroundColor: 'rgba(255,255,255,0.2)', color: '#FFFFFF', padding: '0.2rem 0.6rem', borderRadius: '4px' }}>
+            {isRtl ? currentTenant.nameAr : currentTenant.nameEn}
           </span>
         </div>
         <button
@@ -77,7 +156,7 @@ export default function ProcurementAppPage() {
           backgroundColor: '#FFFFFF',
           borderRadius: '8px',
           padding: '1.5rem',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
           marginBottom: '2rem',
           border: '1px solid #E2E8F0',
           display: 'flex',
@@ -86,12 +165,12 @@ export default function ProcurementAppPage() {
         }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              <span style={{ backgroundColor: '#0B4F6C', color: '#FFFFFF', padding: '0.2rem 0.6rem', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 600 }}>
-                KEA-TND-2026-088
+              <span style={{ backgroundColor: currentTenant.color, color: '#FFFFFF', padding: '0.2rem 0.6rem', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 600 }}>
+                {currentTenant.tenderNumber}
               </span>
               <span style={{
-                backgroundColor: tenderStatus === 'AWARDED' ? '#DEF7EC' : '#EBF5FF',
-                color: tenderStatus === 'AWARDED' ? '#03543F' : '#1E429F',
+                backgroundColor: tenderStatus === 'AWARDED' ? '#DEF7EC' : tenderStatus === 'PUBLISHED' ? '#EBF5FF' : '#FEF3C7',
+                color: tenderStatus === 'AWARDED' ? '#03543F' : tenderStatus === 'PUBLISHED' ? '#1E429F' : '#92400E',
                 padding: '0.2rem 0.6rem',
                 borderRadius: '4px',
                 fontSize: '0.85rem',
@@ -100,28 +179,66 @@ export default function ProcurementAppPage() {
                 {tenderStatus}
               </span>
             </div>
-            <h2 style={{ margin: '0.8rem 0 0.4rem 0', color: '#1A202C', fontSize: '1.3rem' }}>
+            <h2 style={{ margin: '0.8rem 0 0.4rem 0', color: '#1E293B', fontSize: '1.3rem' }}>
               {isRtl ? 'تحديث مركز البيانات والمحفظة الشبكية عالية التوافر' : 'Enterprise Data Center Modernization & Network'}
             </h2>
-            <div style={{ color: '#718096', fontSize: '0.9rem' }}>
+            <div style={{ color: '#64748B', fontSize: '0.9rem' }}>
               {t.budget}: 250,000 KWD • {t.deadline}: 14 Oct 2026
             </div>
           </div>
 
-          <button
-            onClick={handleRunAiCheck}
-            style={{
-              backgroundColor: '#01BAEF',
-              color: '#0B4F6C',
-              border: 'none',
-              padding: '0.6rem 1.2rem',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontWeight: 700
-            }}
-          >
-            🤖 {isRtl ? 'فحص الاكتمال بالذكاء الاصطناعي' : 'Run AI Completeness Check'}
-          </button>
+          <div style={{ display: 'flex', gap: '0.8rem' }}>
+            {!aiReport && (
+              <button
+                onClick={handleRunAiCheck}
+                style={{
+                  backgroundColor: '#01BAEF',
+                  color: '#0B4F6C',
+                  border: 'none',
+                  padding: '0.6rem 1.2rem',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontWeight: 700
+                }}
+              >
+                🤖 {isRtl ? 'فحص الاكتمال بالذكاء الاصطناعي' : 'Run AI Completeness Check'}
+              </button>
+            )}
+
+            {aiReport && !directorApproved && (
+              <button
+                onClick={handleDirectorApprove}
+                style={{
+                  backgroundColor: '#20BF55',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  padding: '0.6rem 1.2rem',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontWeight: 700
+                }}
+              >
+                ✍️ {isRtl ? 'اعتماد المدير للطرح (Rule 7 Gate)' : 'Director Sign-Off (Rule 7)'}
+              </button>
+            )}
+
+            {directorApproved && tenderStatus === 'APPROVED_FOR_PUBLICATION' && (
+              <button
+                onClick={handlePublish}
+                style={{
+                  backgroundColor: currentTenant.color,
+                  color: '#FFFFFF',
+                  border: 'none',
+                  padding: '0.6rem 1.2rem',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontWeight: 700
+                }}
+              >
+                🚀 {isRtl ? 'طرح المناقصة للبوابة' : 'Publish to Vendor Portal'}
+              </button>
+            )}
+          </div>
         </div>
 
         {/* AI Advisory Box (Rule 7) */}
@@ -140,7 +257,7 @@ export default function ProcurementAppPage() {
               <span style={{ fontSize: '0.8rem', color: '#6B7280' }}>Rule 7: Advisory Only</span>
             </div>
             <p style={{ margin: '0.5rem 0', color: '#1E3A8A', fontSize: '0.95rem' }}>{aiReport.text}</p>
-            <div style={{ fontSize: '0.8rem', color: '#9CA3AF', fontStyle: 'italic' }}>
+            <div style={{ fontSize: '0.8rem', color: '#64748B', fontStyle: 'italic' }}>
               {t.aiAdvisoryNotice}
             </div>
           </div>
@@ -151,12 +268,12 @@ export default function ProcurementAppPage() {
           backgroundColor: '#FFFFFF',
           borderRadius: '8px',
           padding: '1.5rem',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
           marginBottom: '2rem',
           border: '1px solid #E2E8F0'
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-            <h3 style={{ margin: 0, color: '#0B4F6C' }}>{t.sealedBids} & {t.bidOpening}</h3>
+            <h3 style={{ margin: 0, color: currentTenant.color }}>{t.sealedBids} & {t.bidOpening}</h3>
             {!bidsOpened ? (
               <button
                 onClick={handleOpeningCeremony}
@@ -202,7 +319,7 @@ export default function ProcurementAppPage() {
                   </span>
                 </td>
                 <td style={{ padding: '0.8rem', fontSize: '0.85rem', fontFamily: 'monospace' }}>e3b0c442...855</td>
-                <td style={{ padding: '0.8rem', fontWeight: 700, color: '#0B4F6C' }}>{bidsOpened ? '93.2 / 100' : '—'}</td>
+                <td style={{ padding: '0.8rem', fontWeight: 700, color: currentTenant.color }}>{bidsOpened ? '93.2 / 100' : '—'}</td>
               </tr>
               <tr style={{ borderBottom: '1px solid #EDF2F7' }}>
                 <td style={{ padding: '0.8rem', fontWeight: 600 }}>National Smart Systems</td>
@@ -219,7 +336,7 @@ export default function ProcurementAppPage() {
                   </span>
                 </td>
                 <td style={{ padding: '0.8rem', fontSize: '0.85rem', fontFamily: 'monospace' }}>ca978112...8bb</td>
-                <td style={{ padding: '0.8rem', fontWeight: 700, color: '#0B4F6C' }}>{bidsOpened ? '82.5 / 100' : '—'}</td>
+                <td style={{ padding: '0.8rem', fontWeight: 700, color: currentTenant.color }}>{bidsOpened ? '82.5 / 100' : '—'}</td>
               </tr>
             </tbody>
           </table>
