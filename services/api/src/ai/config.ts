@@ -12,6 +12,7 @@ export const DEFAULT_AGENT_NAMES = {
   relevanceMatcher: 'tenderflow_relevance_matcher',
   evaluationNarrator: 'tenderflow_evaluation_narrator',
   gradeReviewer: 'tenderflow_grade_reviewer',
+  documentIntelligence: 'tenderflow_document_intelligence',
   assistant: 'tenderflow_assistant',
 } as const;
 
@@ -25,6 +26,7 @@ export const AGENT_ENV: Record<keyof typeof DEFAULT_AGENT_NAMES, string> = {
   relevanceMatcher: 'WXO_AGENT_RELEVANCE_MATCHER',
   evaluationNarrator: 'WXO_AGENT_EVALUATION_NARRATOR',
   gradeReviewer: 'WXO_AGENT_GRADE_REVIEWER',
+  documentIntelligence: 'WXO_AGENT_DOCUMENT_INTELLIGENCE',
   assistant: 'WXO_AGENT_ASSISTANT',
 };
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# TenderFlow - import the nine watsonx Orchestrate agents into an Orchestrate (IBM Cloud) instance:
-# the eight specialist (collaborator) agents first, then the supervisor tenderflow_assistant, whose
+# TenderFlow - import the ten watsonx Orchestrate agents into an Orchestrate (IBM Cloud) instance:
+# the nine specialist (collaborator) agents first, then the supervisor tenderflow_assistant, whose
 # `collaborators:` list refers to them by name.
 # Usage (repo root): bash agents/import.sh
 # Reads WXO_INSTANCE_URL / WXO_API_KEY from the repo .env (process environment wins).
@@ -13,7 +13,7 @@ AGENTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(dirname "$AGENTS_DIR")"
 ENV_FILE="$REPO_ROOT/.env"
 # Order matters: collaborators first, supervisor (tenderflow_assistant) last.
-AGENT_NAMES=(tenderflow_pack_checker tenderflow_clarification_assistant tenderflow_compliance_screener tenderflow_request_classifier tenderflow_notice_drafter tenderflow_relevance_matcher tenderflow_evaluation_narrator tenderflow_grade_reviewer tenderflow_assistant)
+AGENT_NAMES=(tenderflow_pack_checker tenderflow_clarification_assistant tenderflow_compliance_screener tenderflow_request_classifier tenderflow_notice_drafter tenderflow_relevance_matcher tenderflow_evaluation_narrator tenderflow_grade_reviewer tenderflow_document_intelligence tenderflow_assistant)
 AGENT_FILES=()
 for n in "${AGENT_NAMES[@]}"; do AGENT_FILES+=("$n.yaml"); done
 

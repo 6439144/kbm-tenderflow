@@ -11,6 +11,7 @@ import { openingRecordHtml, type OpeningBidSummary } from './reports.js';
 import { assertEligible, assertPurchased } from './eligibility.js';
 import { configOf } from './templates.js';
 import { escapeHtml } from '../util.js';
+import { emitDocumentEvent } from './document-events.js';
 
 export interface BidRow {
   id: string; tenant_id: string; tender_id: string; vendor_id: string; status: string; wrapped_key: string; wrap_iv: string;
@@ -23,7 +24,7 @@ export function financialSealed(t: TenderRow, bid: BidRow): boolean {
   return configOf(t).envelopes === 'TWO' && !bid.financial_opened_at;
 }
 
-const BID_READERS = ['COMMITTEE_CHAIR', 'EVALUATOR', 'DIRECTOR', 'UNDERSECRETARY'];
+export const BID_READERS = ['COMMITTEE_CHAIR', 'EVALUATOR', 'DIRECTOR', 'UNDERSECRETARY'];
 
 function receiptOf(bid: { id: string; tender_id: string; vendor_id: string; submitted_at: Date }, files: { title: string; sha256: string; type: string }[]) {
   return sha256Hex(canonicalJson({ bidId: bid.id, tenderId: bid.tender_id, vendorId: bid.vendor_id, submittedAt: bid.submitted_at, files }));
@@ -182,7 +183,7 @@ export async function openTender(ctx: Ctx, actor: Actor, tenderId: string, b: an
     title: `Opening record ${t.tender_number}`, fileName: `opening-record-${t.tender_number}.html`, mimeType: 'text/html',
     bytes: Buffer.from(html, 'utf8'), uploadedBy: actor.id,
   });
-  return ctx.db.tx(async (q) => {
+  const opened = await ctx.db.tx(async (q) => {
     const upd = await q.query(`UPDATE tenders SET status='OPENED', opened_at=$1, updated_at=$1 WHERE id=$2 AND status='CLOSED' RETURNING id`, [openedAt, t.id]);
     if (!upd.length) throw conflict('INVALID_STATE', 'Tender state changed concurrently');
     const doc = await insertDocument(q, prepared);
@@ -196,6 +197,9 @@ export async function openTender(ctx: Ctx, actor: Actor, tenderId: string, b: an
         integrity: bidSummaries.map((s) => ({ bidId: s.bidId, integrity: s.integrity })) } });
     return { opening: camel(rows[0]), recordDocumentId: doc.id, bids: bidSummaries };
   });
+  // Bid documents become readable now (financial envelopes of two-envelope tenders stay sealed).
+  emitDocumentEvent(ctx, { type: 'BIDS_OPENED', tenantId: actor.tenantId, tenderId: t.id, actor });
+  return opened;
 }
 
 
@@ -239,7 +243,7 @@ export async function openFinancial(ctx: Ctx, actor: Actor, tenderId: string, b:
     title: `Financial opening record ${t.tender_number}`, fileName: `financial-opening-${t.tender_number}.html`, mimeType: 'text/html',
     bytes: Buffer.from(html, 'utf8'), uploadedBy: actor.id,
   });
-  return ctx.db.tx(async (q) => {
+  const out = await ctx.db.tx(async (q) => {
     const upd = await q.query(`UPDATE tenders SET financial_opened_at=$1, updated_at=$1 WHERE id=$2 AND financial_opened_at IS NULL RETURNING id`, [openedAt, t.id]);
     if (!upd.length) throw conflict('INVALID_STATE', 'Financial envelopes are already opened');
     const doc = await insertDocument(q, prepared);
@@ -250,4 +254,6 @@ export async function openFinancial(ctx: Ctx, actor: Actor, tenderId: string, b:
       details: { passMark: pass, recordDocumentId: doc.id, results: results.map((r) => ({ bidId: r.bid.id, score: r.score, result: r.result })) } });
     return { recordDocumentId: doc.id, passMark: pass, results: results.map((r) => ({ bidId: r.bid.id, vendorNameEn: r.bid.legal_name_en, vendorNameAr: r.bid.legal_name_ar, technicalScore: r.score, result: r.result })) };
   });
+  emitDocumentEvent(ctx, { type: 'FINANCIAL_OPENED', tenantId: actor.tenantId, tenderId: t.id, actor });
+  return out;
 }

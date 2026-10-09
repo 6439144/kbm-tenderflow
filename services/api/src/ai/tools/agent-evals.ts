@@ -2,12 +2,15 @@
 // AiService (so prompts, validation and the repair turn are the production ones) and scoring. Used by
 // src/tools/run-evals.ts and by the unit tests (with the fake Orchestrate server).
 import type {
-  AiResult, AiService, ChatInput, ClassifyRequestInput, DraftNoticeInput, NarrateEvaluationInput, RankRelevanceInput, ReviewGradeInput,
+  AiResult, AiService, ChatInput, ClassifyDocumentInput, ClassifyRequestInput, DraftNoticeInput, NarrateEvaluationInput, RankRelevanceInput, ReviewGradeInput,
 } from '../types.js';
 import { normalizeText } from '../text-utils.js';
 
-export type AgentEvalKind = 'requestClassifier' | 'noticeDrafter' | 'relevanceMatcher' | 'evaluationNarrator' | 'gradeReviewer' | 'assistant';
-const KINDS: AgentEvalKind[] = ['requestClassifier', 'noticeDrafter', 'relevanceMatcher', 'evaluationNarrator', 'gradeReviewer', 'assistant'];
+export type AgentEvalKind = 'requestClassifier' | 'noticeDrafter' | 'relevanceMatcher' | 'evaluationNarrator' | 'gradeReviewer' | 'assistant' | 'documentIntelligence';
+const KINDS: AgentEvalKind[] = ['requestClassifier', 'noticeDrafter', 'relevanceMatcher', 'evaluationNarrator', 'gradeReviewer', 'assistant', 'documentIntelligence'];
+
+/** Expected extracted field: the normalised value TenderFlow should produce, and where it is written (section + quote). */
+export interface ExpectedField { value: string | number; section: string; quote: string; raw?: string }
 
 export interface AgentEvalExpect {
   tenderType?: string[];                 // any of
@@ -20,6 +23,9 @@ export interface AgentEvalExpect {
   topId?: string;
   status?: Record<string, 'PRESENT' | 'MISSING' | 'UNCLEAR'>;
   notFound?: boolean;
+  docType?: string;                      // document intelligence
+  fields?: Record<string, ExpectedField>;
+  noFields?: boolean;
 }
 export interface AgentEvalCase { id: string; agent: AgentEvalKind; language: string; input: unknown; expect: AgentEvalExpect }
 export interface AgentEvalFile { kind: 'agent-evals'; description?: string; cases: AgentEvalCase[] }
@@ -48,6 +54,7 @@ export function runAgentCase(ai: AiService, c: AgentEvalCase): Promise<AiResult<
     case 'evaluationNarrator': return ai.narrateEvaluation(c.input as NarrateEvaluationInput);
     case 'gradeReviewer': return ai.reviewGrade(c.input as ReviewGradeInput);
     case 'assistant': return ai.chat(c.input as ChatInput);
+    case 'documentIntelligence': return ai.classifyDocument(c.input as ClassifyDocumentInput);
   }
 }
 
@@ -75,5 +82,13 @@ export function scoreAgentCase(c: AgentEvalCase, output: any): AgentEvalScore {
     }
   }
   if (e.notFound !== undefined) add(`notFound=${e.notFound}`, output.notFound === e.notFound, `got ${output.notFound}`);
+  if (e.docType) add(`docType=${e.docType}`, output.docType === e.docType, `got ${output.docType}`);
+  for (const [key, exp] of Object.entries(e.fields ?? {})) {
+    const got = (output.fields ?? []).find((f: any) => f.key === key)?.value;
+    const v = got && typeof got === 'object' && !Array.isArray(got) ? got.amount : Array.isArray(got) ? got.join(', ') : got;
+    const ok = typeof exp.value === 'number' ? Number(v) === exp.value : typeof v === 'string' && normalizeText(v).includes(normalizeText(String(exp.value)));
+    add(`field ${key}=${exp.value}`, ok, `got ${JSON.stringify(got)}`);
+  }
+  if (e.noFields) add('no fields', (output.fields ?? []).length === 0, `got ${(output.fields ?? []).length}`);
   return { pass: checks.every((x) => x.ok), checks };
 }

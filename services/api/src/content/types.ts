@@ -43,7 +43,7 @@ export interface FolderNode {
 }
 
 export interface TelemetryEntry {
-  op: 'put' | 'get' | 'describe' | 'declareRecord';
+  op: 'put' | 'get' | 'describe' | 'declareRecord' | 'setProperties';
   ok: boolean;
   ms: number;
   at: string;
@@ -64,6 +64,11 @@ export interface ContentStore {
   describe?(storeRef: string): Promise<RepositoryDescription>;
   /** Optional: declare the object a record / lock it against change. Must not fake success. */
   declareRecord?(storeRef: string, info: { reason: string }): Promise<{ ok: boolean; detail: string }>;
+  /**
+   * Optional: write custom properties on a stored object (document intelligence on acceptance). Returns ok:false with a
+   * reason when the feature is not enabled for this store; throws when the repository refuses. Never fakes success.
+   */
+  setProperties?(storeRef: string, props: Record<string, string | boolean>): Promise<{ ok: boolean; detail: string; readBack?: Record<string, unknown> }>;
   /** Optional: folder tree (bounded depth) under a TenderFlow-relative folder, with document counts. */
   folderTree?(folderPath: string, depth: number): Promise<FolderNode | null>;
   /** Optional: last operations recorded by the telemetry wrapper (newest first). */

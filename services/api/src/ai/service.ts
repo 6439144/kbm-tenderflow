@@ -7,12 +7,12 @@ import { type AgentRole, type AiConfig, isConfigComplete, missingSettings, readA
 import { OrchestrateClient, type InvokeResult } from './orchestrate-client.js';
 import {
   buildChatPrompt, buildClarificationPrompt, buildClassifyPrompt, buildCompliancePrompt, buildGradePrompt, buildNarrativePrompt,
-  buildNoticePrompt, buildPackCheckPrompt, buildRankingPrompt, buildRepairPrompt, chatInputText, documentsText, narrativeInputText,
-  noticeInputText, CHAT_SCHEMA, CLARIFICATION_SCHEMA, CLASSIFY_SCHEMA, COMPLIANCE_SCHEMA, NARRATIVE_SCHEMA, NOTICE_SCHEMA, PACK_SCHEMA,
+  buildDocumentIntelligencePrompt, buildNoticePrompt, buildPackCheckPrompt, buildRankingPrompt, buildRepairPrompt, chatInputText, documentsText, narrativeInputText,
+  noticeInputText, CHAT_SCHEMA, DOCINTEL_SCHEMA, CLARIFICATION_SCHEMA, CLASSIFY_SCHEMA, COMPLIANCE_SCHEMA, NARRATIVE_SCHEMA, NOTICE_SCHEMA, PACK_SCHEMA,
   RANKING_SCHEMA,
 } from './prompts.js';
 import {
-  AiOutputError, extractJsonObject, validateChat, validateClarification, validateClassification, validateCompliance, validateNarrative,
+  AiOutputError, extractJsonObject, validateChat, validateClarification, validateDocumentInsight, validateClassification, validateCompliance, validateNarrative,
   validateNotice, validatePackCheck, validateRanking, type Validated,
 } from './parse.js';
 import { detectLanguage } from './text-utils.js';
@@ -134,6 +134,11 @@ export function createAiService(options: CreateAiServiceOptions = {}): AiService
       const keys = input.criteria.map((c) => c.key);
       const prompt = buildGradePrompt(input, cfg.maxDocChars);
       return run('gradeReviewer', prompt, COMPLIANCE_SCHEMA, (o) => validateCompliance(o, input.documents, keys));
+    },
+
+    async classifyDocument(input) {
+      const prompt = buildDocumentIntelligencePrompt(input, cfg.maxDocChars);
+      return run('documentIntelligence', prompt, DOCINTEL_SCHEMA, (o) => validateDocumentInsight(o, input.document, input.catalogue));
     },
 
     async chat(input) {

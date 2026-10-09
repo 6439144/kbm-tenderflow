@@ -24,7 +24,9 @@ export interface CycleConfig {
   evaluation: { technicalPassMark: number | null; financialCriteria: string[] };
   eligibility: { activityCodes: string[]; minGrade: number | null };
   fees: { documentPrice: number; currency: string; exemptionAllowed: boolean };
-  ai: { packCheck: boolean; clarification: boolean; compliance: boolean; gazette: boolean; relevance: boolean; narrative: boolean; requestClassify: boolean };
+  ai: { packCheck: boolean; clarification: boolean; compliance: boolean; gazette: boolean; relevance: boolean; narrative: boolean; requestClassify: boolean;
+    /** Classify + extract data from documents of this tender automatically after upload / opening (watsonx Orchestrate). */
+    documentIntelligence: boolean };
 }
 
 export interface TemplateRow {
@@ -44,7 +46,7 @@ export const DEFAULT_CONFIG: CycleConfig = {
   evaluation: { technicalPassMark: null, financialCriteria: [] },
   eligibility: { activityCodes: [], minGrade: null },
   fees: { documentPrice: 0, currency: 'KWD', exemptionAllowed: false },
-  ai: { packCheck: true, clarification: true, compliance: true, gazette: true, relevance: true, narrative: true, requestClassify: true },
+  ai: { packCheck: true, clarification: true, compliance: true, gazette: true, relevance: true, narrative: true, requestClassify: true, documentIntelligence: true },
 };
 
 export const STARTER_TEMPLATES: { code: string; nameEn: string; nameAr: string; description: string; config: CycleConfig }[] = [
@@ -307,6 +309,8 @@ export interface EntityProfile {
   fiscalYearStartMonth?: number;
   logoText?: string;
   sector?: string;
+  /** Classify vendor and request-letter uploads automatically with Orchestrate (unset → env DOC_AI_AUTO). */
+  documentIntelligenceAuto?: boolean;
 }
 
 export function parseProfile(b: any): EntityProfile {
@@ -325,6 +329,7 @@ export function parseProfile(b: any): EntityProfile {
     fiscalYearStartMonth: fy,
     logoText: str(b?.logoText, 'logoText', { max: 12 }),
     sector: str(b?.sector, 'sector', { max: 100 }),
+    documentIntelligenceAuto: typeof b?.documentIntelligenceAuto === 'boolean' ? b.documentIntelligenceAuto : undefined,
   };
 }
 

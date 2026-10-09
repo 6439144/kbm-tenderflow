@@ -53,6 +53,8 @@ export type FileNetRecordsMode = 'none' | 'property' | 'retention';
 export const RECORDS_MODES: FileNetRecordsMode[] = ['none', 'property', 'retention'];
 /** Record-declaration properties (property mode; created in ACCE, see docs/filenet/ACCE-RUNBOOK.md §1b). */
 export const TF_RECORD_PROPERTY_NAMES = ['TF_RecordDeclared', 'TF_RecordDeclaredAt'] as const;
+/** Document-intelligence properties (FILENET_AI_PROPERTIES; created in ACCE, see docs/filenet/ACCE-RUNBOOK.md §1c). */
+export const TF_AI_PROPERTY_NAMES = ['TF_DocType', 'TF_ExpiryDate', 'TF_AIReviewed'] as const;
 
 export interface FileNetConfig {
   graphqlUrl: string;
@@ -69,6 +71,8 @@ export interface FileNetConfig {
   recordsMode: FileNetRecordsMode;
   /** FILENET_RETENTION_DAYS (retention mode): CmRetentionDate = now + days. */
   retentionDays: number | null;
+  /** FILENET_AI_PROPERTIES: write TF_DocType / TF_ExpiryDate / TF_AIReviewed when a document insight is accepted. */
+  aiProperties: boolean;
 }
 
 export interface FileNetDocumentInfo {
@@ -136,6 +140,7 @@ export function loadFileNetConfig(env: NodeJS.ProcessEnv = process.env): FileNet
     versioning,
     recordsMode,
     retentionDays,
+    aiProperties: parseBool(env, 'FILENET_AI_PROPERTIES'),
   };
 }
 
@@ -557,6 +562,7 @@ export class FileNetStore implements ContentStore {
     const names: string[] = ['DocumentTitle'];
     if (this.config.setCustomProperties) names.push(...TF_PROPERTY_NAMES);
     if (this.config.recordsMode === 'property') names.push(...TF_RECORD_PROPERTY_NAMES);
+    if (this.config.aiProperties) for (const n of TF_AI_PROPERTY_NAMES) if (!names.includes(n)) names.push(n);
     return names;
   }
 
@@ -642,6 +648,39 @@ export class FileNetStore implements ContentStore {
     const got = data.updateDocument?.cmRetentionDate;
     if (!got) throw new FileNetError(`FileNet declareRecord: CmRetentionDate on ${id} reads back empty after the update`);
     return { ok: true, detail: `CmRetentionDate set to ${got} on ${id} (${this.config.retentionDays} days) — the Content Engine refuses deletion before that date` };
+  }
+
+  /**
+   * Writes custom properties on an existing document (document intelligence: TF_DocType string, TF_ExpiryDate DateTime,
+   * TF_AIReviewed Boolean) with updateDocument, the same mutation the records `property` mode uses, and reads them back.
+   * Only when FILENET_AI_PROPERTIES=true and FILENET_DOC_CLASS=TF_Document (the templates exist only on that class).
+   * NOT verified against a live Content Engine (TechZone not reachable from the build sandbox).
+   */
+  async setProperties(storeRef: string, props: Record<string, string | boolean>): Promise<{ ok: boolean; detail: string; readBack?: Record<string, unknown> }> {
+    if (!this.config.aiProperties) return { ok: false, detail: 'FILENET_AI_PROPERTIES is not enabled' };
+    if (this.config.docClass !== 'TF_Document') return { ok: false, detail: `FILENET_DOC_CLASS is ${this.config.docClass}; TF_DocType / TF_ExpiryDate / TF_AIReviewed exist only on TF_Document` };
+    const entries = Object.entries(props).filter(([k]) => /^TF_[A-Za-z0-9]{1,60}$/.test(k));
+    if (!entries.length) return { ok: false, detail: 'no properties to write' };
+    const { id } = this.parseStoreRef(storeRef);
+    const literal = entries.map(([k, v]) => `{${k}: ${typeof v === 'boolean' ? String(v) : gqlString(String(v).slice(0, TF_PROPERTY_MAX_LENGTH))}}`).join(' ');
+    const names = entries.map(([k]) => gqlString(k)).join(', ');
+    const data = await this.graphql<{ updateDocument: { id: string; properties: { id: string; value: unknown }[] } | null }>(
+      `mutation TfSetProperties($os: String!, $id: String!) {
+        updateDocument(
+          repositoryIdentifier: $os
+          identifier: $id
+          documentProperties: { properties: [${literal}] }
+        ) { id properties(includes: [${names}]) { id value } }
+      }`,
+      { os: this.config.objectStore, id },
+    );
+    const readBack = Object.fromEntries((data.updateDocument?.properties ?? []).map((p) => [p.id, p.value]));
+    for (const [k, v] of entries) {
+      const got = readBack[k];
+      const same = typeof v === 'boolean' ? got === v || String(got).toLowerCase() === String(v) : got !== null && got !== undefined && String(got).startsWith(String(v).slice(0, 10));
+      if (!same) throw new FileNetError(`FileNet setProperties: ${k} on ${id} reads back as ${JSON.stringify(got ?? null)}`);
+    }
+    return { ok: true, detail: `wrote ${entries.map(([k]) => k).join(', ')} on ${id}`, readBack };
   }
 
   /** Folder tree under a TenderFlow-relative folder (0–2 levels below it), with per-folder document counts. */

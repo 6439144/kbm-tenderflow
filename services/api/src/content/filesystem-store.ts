@@ -61,6 +61,18 @@ export class FilesystemStore implements ContentStore {
     return { type: 'filesystem', byteSize: bytes.length, storedSha256: createHash('sha256').update(bytes).digest('hex'), dateCreated: storedAt, mimeType };
   }
 
+  /** Records the properties in the object's sidecar (development stand-in for repository properties). */
+  async setProperties(storeRef: string, props: Record<string, string | boolean>): Promise<{ ok: boolean; detail: string; readBack?: Record<string, unknown> }> {
+    const abs = this.resolve(storeRef);
+    if (!fs.existsSync(abs)) throw new Error(`filesystem store: ${storeRef} not found`);
+    let meta: Record<string, any> = {};
+    try { meta = JSON.parse(await fs.promises.readFile(`${abs}${META_SUFFIX}`, 'utf8')); } catch { /* sidecar is optional */ }
+    meta.properties = { ...(meta.properties ?? {}), ...props };
+    meta.propertiesUpdatedAt = new Date().toISOString();
+    await fs.promises.writeFile(`${abs}${META_SUFFIX}`, JSON.stringify(meta, null, 2));
+    return { ok: true, detail: `recorded ${Object.keys(props).join(', ')} in the local store sidecar (not a repository)`, readBack: { ...meta.properties } };
+  }
+
   /** Folder tree below a relative folder, `depth` levels deep, counting stored files (not sidecars). */
   async folderTree(folderPath: string, depth: number): Promise<FolderNode | null> {
     const segments = folderPath.split('/').filter(Boolean).map(safeSegment);

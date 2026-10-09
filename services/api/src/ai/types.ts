@@ -74,6 +74,30 @@ export interface ChatInput {
   context: DocText[];
 }
 
+// ---- Document intelligence (classification + cited field extraction of any uploaded document) ----
+export type DocFieldType = 'text' | 'date' | 'amount' | 'number' | 'list';
+export interface DocTypeField { key: string; labelEn: string; labelAr: string; type: DocFieldType; required: boolean }
+/** One entry of the entity's document-type catalogue (only the types allowed for the upload context are sent). */
+export interface DocTypeDef { code: string; nameEn: string; nameAr: string; fields: DocTypeField[] }
+export interface AmountValue { amount: number; currency: string | null }
+export type DocFieldValue = string | number | string[] | AmountValue;
+/** An extracted field: value normalised by TenderFlow (ISO date, numeric amount) + the cited section and exact quote. */
+export interface ExtractedField { key: string; value: DocFieldValue; raw: string; citation: Citation & { quote: string } }
+export interface DocumentInsight {
+  docType: string;                 // a catalogue code, or "OTHER"
+  language: 'ar' | 'en' | 'mixed';
+  fields: ExtractedField[];
+  summaryEn: string;
+  summaryAr: string;
+  citations: Citation[];
+}
+export interface ClassifyDocumentInput {
+  document: DocText;
+  /** Upload context from TenderFlow (never personal data beyond what the document itself contains). */
+  context: { ownerType: string; uploaderRole: string; slotTitle: string; fileName?: string | null };
+  catalogue: DocTypeDef[];
+}
+
 export interface AiService {
   isConfigured(): boolean;
   ping(): Promise<{ ok: boolean; detail: string }>;
@@ -86,5 +110,6 @@ export interface AiService {
   narrateEvaluation(input: NarrateEvaluationInput): Promise<AiResult<EvaluationNarrative>>;
   reviewGrade(input: ReviewGradeInput): Promise<AiResult<{ items: ComplianceItem[] }>>;
   chat(input: ChatInput): Promise<AiResult<ChatAnswer>>;
+  classifyDocument(input: ClassifyDocumentInput): Promise<AiResult<DocumentInsight>>;
 }
 export class AiNotConfiguredError extends Error { code = 'AI_NOT_CONFIGURED'; constructor(msg = 'watsonx Orchestrate is not configured (WXO_INSTANCE_URL / WXO_API_KEY).') { super(msg); } }

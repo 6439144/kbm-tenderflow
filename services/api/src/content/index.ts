@@ -63,6 +63,10 @@ export function withTelemetry(inner: ContentStore, telemetry = new ContentTeleme
     wrapped.declareRecord = (ref, info) => timed('declareRecord', ref, null, () => inner.declareRecord!(ref, info), undefined,
       (r) => (r.ok ? { ok: true } : { ok: false, error: r.detail.slice(0, 500) }));
   }
+  if (inner.setProperties) {
+    wrapped.setProperties = (ref, props) => timed('setProperties', ref, null, () => inner.setProperties!(ref, props), undefined,
+      (r) => (r.ok ? { ok: true } : { ok: false, error: r.detail.slice(0, 500) }));
+  }
   if (inner.folderTree) wrapped.folderTree = (p, d) => inner.folderTree!(p, d);
   return wrapped;
 }

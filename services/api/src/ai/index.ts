@@ -5,6 +5,7 @@ export type {
   DocText, Citation, AiResult, PackFinding, ClarificationDraft, ComplianceItem, AiService, CodeName, RequestClassification, ClassifyRequestInput,
   NoticeChannel, NoticeDraft, DraftNoticeInput, RelevanceCandidate, RankedItem, RankRelevanceInput, EvaluationNarrative, NarrateEvaluationInput,
   GradeCriterion, ReviewGradeInput, ChatAnswer, ChatInput,
+  DocFieldType, DocTypeField, DocTypeDef, AmountValue, DocFieldValue, ExtractedField, DocumentInsight, ClassifyDocumentInput,
 } from './types.js';
 export { gradeCriteria, DEFAULT_GRADE_CRITERIA } from './grade-criteria.js';
 export { AiNotConfiguredError } from './types.js';

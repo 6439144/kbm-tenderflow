@@ -25,6 +25,14 @@ export interface Config {
   webDistDir: string;
   closeJobIntervalMs: number;
   loginRateLimit: number;
+  /**
+   * DOC_AI_AUTO — automatic document intelligence after upload/opening (when Orchestrate is configured):
+   * true → also vendor and request-letter uploads (unless the entity setting says otherwise); false → never automatic
+   * (manual "Classify with Orchestrate" only); unset → tender documents per template, vendor/letters per entity setting.
+   */
+  docAiAuto: boolean | null;
+  /** FILENET_AI_PROPERTIES — write TF_DocType / TF_ExpiryDate / TF_AIReviewed to the stored document on acceptance. */
+  docAiProperties: boolean;
 }
 
 export class ConfigError extends Error {}
@@ -107,5 +115,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     webDistDir: path.resolve(REPO_ROOT, opt(env.WEB_DIST_DIR) ?? path.join('apps', 'web', 'dist')),
     closeJobIntervalMs: Number(opt(env.CLOSE_JOB_INTERVAL_MS) ?? 60_000),
     loginRateLimit: Number(opt(env.LOGIN_RATE_LIMIT_PER_MIN) ?? 30),
+    docAiAuto: opt(env.DOC_AI_AUTO) === undefined ? null : ['true', '1', 'yes'].includes(opt(env.DOC_AI_AUTO)!.toLowerCase()),
+    docAiProperties: ['true', '1', 'yes'].includes((opt(env.FILENET_AI_PROPERTIES) ?? 'false').toLowerCase()),
   };
 }

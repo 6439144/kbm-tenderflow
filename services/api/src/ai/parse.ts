@@ -3,7 +3,7 @@
 // point at a provided document section are dropped.
 
 import type {
-  ChatAnswer, Citation, ClarificationDraft, ComplianceItem, DocText, EvaluationNarrative, NoticeDraft, PackFinding, RankedItem, RequestClassification,
+  AmountValue, ChatAnswer, Citation, ClarificationDraft, ComplianceItem, DocFieldValue, DocText, DocTypeDef, DocumentInsight, ExtractedField, EvaluationNarrative, NoticeDraft, PackFinding, RankedItem, RequestClassification,
 } from './types.js';
 import { normalizeText } from './text-utils.js';
 
@@ -334,4 +334,176 @@ export function validateChat(text: string, docs: DocText[], inputText: string): 
   if (bad.length) problems.push(numberProblem('"answer"', bad));
   const value: ChatAnswer = { answer, notFound, structured, citations: notFound ? [] : cites.citations };
   return { value: problems.length ? undefined : value, problems, citations: value.citations, dropped: cites.dropped };
+}
+
+// ---------------------------------------------------------------- document intelligence
+
+const EN_MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+const AR_MONTHS: Record<string, number> = {
+  يناير: 1, فبراير: 2, مارس: 3, ابريل: 4, مايو: 5, يونيو: 6, يوليو: 7, اغسطس: 8, سبتمبر: 9, اكتوبر: 10, نوفمبر: 11, ديسمبر: 12,
+  'كانون الثاني': 1, شباط: 2, اذار: 3, نيسان: 4, ايار: 5, حزيران: 6, تموز: 7, اب: 8, ايلول: 9, 'تشرين الاول': 10, 'تشرين الثاني': 11, 'كانون الاول': 12,
+};
+
+function isoOf(y: number, m: number, d: number): string | null {
+  if (!(y >= 1900 && y <= 2200 && m >= 1 && m <= 12 && d >= 1 && d <= 31)) return null;
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== d) return null;
+  return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
+/**
+ * Gregorian date as written in a document → ISO YYYY-MM-DD, or null. Accepts YYYY-MM-DD / YYYY/MM/DD, day-first
+ * DD/MM/YYYY (Kuwait convention), "15 March 2027", "March 15, 2027", Arabic month names and Arabic-Indic digits.
+ * Hijri dates and ambiguous text return null (never guessed).
+ */
+export function normaliseDate(raw: string): string | null {
+  const t = normalizeText(String(raw ?? '')).replace(/[٫]/g, '.');
+  let m = t.match(/\b(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})\b/);
+  if (m) return isoOf(+m[1], +m[2], +m[3]);
+  m = t.match(/\b(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})\b/);
+  if (m) return isoOf(+m[3], +m[2], +m[1]);
+  for (let i = 0; i < EN_MONTHS.length; i++) {
+    const name = EN_MONTHS[i]; const short = name.slice(0, 3);
+    const re1 = new RegExp(`\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+(?:${name}|${short})\\.?,?\\s+(\\d{4})\\b`);
+    const re2 = new RegExp(`\\b(?:${name}|${short})\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?,?\\s+(\\d{4})\\b`);
+    const a = t.match(re1); if (a) return isoOf(+a[2], i + 1, +a[1]);
+    const b = t.match(re2); if (b) return isoOf(+b[2], i + 1, +b[1]);
+  }
+  for (const [name, mon] of Object.entries(AR_MONTHS)) {
+    const n = normalizeText(name);
+    const re = new RegExp(`(\\d{1,2})\\s+${n}\\s+(\\d{4})`);
+    const a = t.match(re); if (a) return isoOf(+a[2], mon, +a[1]);
+  }
+  return null;
+}
+
+const CURRENCIES: [RegExp, string][] = [
+  [/\bkwd\b|\bk\.?d\.?\b|د\.?\s?ك|دينار/, 'KWD'],
+  [/\busd\b|us\$|\$|دولار/, 'USD'],
+  [/\bsar\b|ريال سعودي|ر\.?\s?س/, 'SAR'],
+  [/\beur\b|€|يورو/, 'EUR'],
+  [/\baed\b|درهم/, 'AED'],
+  [/\bbhd\b|دينار بحريني/, 'BHD'],
+  [/\bqar\b|ريال قطري/, 'QAR'],
+  [/\bomr\b|ريال عماني/, 'OMR'],
+  [/\bgbp\b|£|جنيه استرليني/, 'GBP'],
+];
+/** ISO currency named in a text (most specific first: Bahraini dinar before generic dinar), or null. */
+export function currencyIn(text: string): string | null {
+  const t = normalizeText(String(text ?? ''));
+  for (const code of ['BHD', 'QAR', 'OMR', 'SAR']) {
+    const re = CURRENCIES.find(([, c]) => c === code)![0];
+    if (re.test(t)) return code;
+  }
+  for (const [re, code] of CURRENCIES) if (re.test(t)) return code;
+  return null;
+}
+
+const rawString = (v: unknown): string => {
+  if (typeof v === 'string') return v.trim();
+  if (typeof v === 'number' && Number.isFinite(v)) return String(v);
+  if (Array.isArray(v)) return v.map((x) => rawString(x)).filter(Boolean).join(', ');
+  if (isObj(v)) {
+    const amount = v.amount ?? v.value;
+    const cur = v.currency;
+    return [rawString(amount), typeof cur === 'string' ? cur : ''].filter(Boolean).join(' ');
+  }
+  return '';
+};
+
+/** Normalises one field value by its catalogue type and checks it is grounded in the quote / section. */
+export function normaliseFieldValue(type: string, rawValue: unknown, quote: string, sectionText: string): { value?: DocFieldValue; raw: string; problem?: string } {
+  const raw = rawString(rawValue);
+  if (!raw) return { raw, problem: 'is empty (leave a field out when it is not in the document)' };
+  const inQuote = new Set(numbersIn(quote));
+  switch (type) {
+    case 'date': {
+      const iso = normaliseDate(raw) ?? normaliseDate(quote);
+      if (!iso) return { raw, problem: `date "${raw.slice(0, 40)}" is not a recognisable Gregorian date` };
+      const [y, , d] = iso.split('-').map(Number);
+      if (!inQuote.has(String(y)) || !inQuote.has(String(d))) return { raw, problem: `date ${iso} does not appear in the quoted text` };
+      return { value: iso, raw };
+    }
+    case 'amount': {
+      const nums = numbersIn(raw);
+      const n = nums.length ? Number(nums[0]) : NaN;
+      if (!Number.isFinite(n)) return { raw, problem: `amount "${raw.slice(0, 40)}" has no number` };
+      if (!inQuote.has(String(n))) return { raw, problem: `amount ${n} does not appear in the quoted text` };
+      const currency = currencyIn(raw) ?? currencyIn(quote);
+      return { value: { amount: n, currency } as AmountValue, raw };
+    }
+    case 'number': {
+      const nums = numbersIn(raw);
+      const n = nums.length ? Number(nums[0]) : NaN;
+      if (!Number.isFinite(n)) return { raw, problem: `"${raw.slice(0, 40)}" is not a number` };
+      if (!inQuote.has(String(n))) return { raw, problem: `number ${n} does not appear in the quoted text` };
+      return { value: n, raw };
+    }
+    case 'list': {
+      const items = (Array.isArray(rawValue) ? rawValue.map((x) => rawString(x)) : raw.split(/[,;،؛\n]+/)).map((x) => x.trim()).filter(Boolean);
+      if (!items.length) return { raw, problem: 'list is empty' };
+      const sec = normalizeText(sectionText);
+      const missing = items.filter((x) => !sec.includes(normalizeText(x)));
+      if (missing.length) return { raw, problem: `list item(s) not found in the cited section: ${missing.slice(0, 3).join(' | ')}` };
+      return { value: items.slice(0, 50), raw };
+    }
+    default: {
+      const sec = normalizeText(sectionText);
+      if (!sec.includes(normalizeText(raw))) return { raw, problem: `value "${raw.slice(0, 60)}" does not appear in the cited section (copy it as written)` };
+      return { value: raw.slice(0, 1000), raw };
+    }
+  }
+}
+
+/**
+ * Validates the document-intelligence agent output against the document that was sent and the entity catalogue:
+ * docType ∈ catalogue (or OTHER); every field key defined for that type; every field cites a section of this
+ * document with a quote that appears in it; dates → ISO, amounts → number + currency; numbers in the summaries
+ * must appear in the document. Anything else is a problem (one repair turn, then the run fails).
+ */
+export function validateDocumentInsight(obj: unknown, doc: DocText, catalogue: DocTypeDef[]): Validated<DocumentInsight> {
+  const problems: string[] = [];
+  if (!isObj(obj)) return { problems: ['top-level value is not a JSON object'], citations: [], dropped: 0 };
+  const codes = new Map(catalogue.map((t) => [t.code.toUpperCase(), t]));
+  const rawType = str(obj.docType).toUpperCase();
+  const type = codes.get(rawType);
+  let docType = type?.code ?? (rawType === 'OTHER' ? 'OTHER' : '');
+  if (!docType) problems.push(`"docType" must be one of: ${[...catalogue.map((t) => t.code), 'OTHER'].filter((v, i, a) => a.indexOf(v) === i).join(', ')}`);
+  const lang = str(obj.language).toLowerCase();
+  const language: DocumentInsight['language'] = lang === 'ar' || lang === 'en' || lang === 'mixed' ? lang
+    : (() => { const all = doc.sections.map((s) => s.text).join('\n'); const ar = (all.match(/[؀-ۿ]/g) ?? []).length; const en = (all.match(/[A-Za-z]/g) ?? []).length; return ar && en && Math.min(ar, en) / Math.max(ar, en) > 0.25 ? 'mixed' : ar > en ? 'ar' : 'en'; })();
+  const defs = new Map((type?.fields ?? []).map((f) => [f.key.toLowerCase(), f]));
+  const fields: ExtractedField[] = [];
+  const citations: Citation[] = [];
+  if (obj.fields != null && !Array.isArray(obj.fields)) problems.push('"fields" must be an array');
+  (Array.isArray(obj.fields) ? obj.fields : []).forEach((f, i) => {
+    if (!isObj(f)) { problems.push(`fields[${i}] is not an object`); return; }
+    const key = str(f.key);
+    const def = defs.get(key.toLowerCase());
+    if (!def) { problems.push(`fields[${i}].key "${key}" is not defined for docType ${docType || '(invalid)'}${docType === 'OTHER' ? ' (OTHER has no fields)' : ''}`); return; }
+    if (fields.some((x) => x.key === def.key)) return; // first value wins
+    const c = isObj(f.citation) ? f.citation : null;
+    if (!c) { problems.push(`fields[${i}] (${def.key}) has no citation`); return; }
+    const resolved = resolveCitation({ documentId: doc.documentId, title: doc.title, section: c.section, quote: c.quote }, [doc]);
+    if (!resolved) { problems.push(`fields[${i}] (${def.key}) cites section "${str(c.section).slice(0, 60)}" which is not a section of the document`); return; }
+    if (!resolved.quote) { problems.push(`fields[${i}] (${def.key}) quote does not appear in section "${resolved.section}" (copy an exact excerpt)`); return; }
+    const sectionText = doc.sections.find((s) => s.section === resolved.section)?.text ?? '';
+    const nv = normaliseFieldValue(def.type, f.value, resolved.quote, sectionText);
+    if (nv.problem || nv.value === undefined) { problems.push(`fields[${i}] (${def.key}) ${nv.problem ?? 'has no value'}`); return; }
+    fields.push({ key: def.key, value: nv.value, raw: nv.raw.slice(0, 500), citation: { ...resolved, quote: resolved.quote } });
+    citations.push(resolved);
+  });
+  const summaryEn = str(obj.summaryEn); const summaryAr = str(obj.summaryAr);
+  if (!summaryEn) problems.push('"summaryEn" must be a non-empty English string');
+  if (!summaryAr) problems.push('"summaryAr" must be a non-empty Arabic string');
+  else if (!hasArabic(summaryAr)) problems.push('"summaryAr" must be written in Arabic');
+  const inputText = `${doc.title}\n${doc.sections.map((s) => `${s.section}\n${s.text}`).join('\n')}`;
+  for (const [f, v] of [['summaryEn', summaryEn], ['summaryAr', summaryAr]] as const) {
+    const bad = numbersNotInInput(v, inputText); if (bad.length) problems.push(numberProblem(`"${f}"`, bad));
+  }
+  const top = citationsOf(obj.citations, [doc]);
+  for (const c of top.citations) if (!citations.some((x) => x.section === c.section)) citations.push(c);
+  if (!docType) docType = '';
+  const value: DocumentInsight = { docType, language, fields, summaryEn, summaryAr, citations };
+  return { value: problems.length ? undefined : value, problems, citations, dropped: top.dropped };
 }

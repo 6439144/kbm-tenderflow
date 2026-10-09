@@ -1,13 +1,31 @@
 // npm run verify:ai — live check of the watsonx Orchestrate integration.
-// 1) config presence (no secret values printed) 2) IAM token 3) all nine agents present 4) one real clarification
+// 1) config presence (no secret values printed) 2) IAM token 3) all ten agents present 4) one real clarification
 // on an embedded bilingual sample, printing the parsed answer and citations 5) one real turn of the supervisor
-// tenderflow_assistant on a small role-scoped context. Exits non-zero on any failure.
+// tenderflow_assistant on a small role-scoped context 6) one real document-intelligence run on an embedded bilingual
+// commercial registration (classification + cited fields, validated). Exits non-zero on any failure.
 // Per-agent quality for the other specialists: `npm run evals -- agents`.
 import { loadRepoEnv, findRepoRoot } from '../ai/tools/env.js';
 import { readAiConfig, missingSettings, type AgentRole } from '../ai/config.js';
 import { OrchestrateClient } from '../ai/orchestrate-client.js';
 import { createAiService } from '../ai/index.js';
-import type { DocText } from '../ai/types.js';
+import type { DocText, DocTypeDef } from '../ai/types.js';
+
+const CR_SAMPLE: DocText = {
+  documentId: 'verify-cr', title: 'Commercial registration (fictitious) / سجل تجاري (وهمي)',
+  sections: [
+    { section: 'Registration / بيانات السجل', text: 'Commercial registration No. CR-900001\nCompany: Verification Sample Trading W.L.L. (fictitious)\nرقم السجل التجاري: CR-900001' },
+    { section: 'Validity / الصلاحية', text: 'Issue date: 01/02/2024\nExpiry date: 31/01/2029\nتاريخ الانتهاء: 31/01/2029' },
+  ],
+};
+const CR_CATALOGUE: DocTypeDef[] = [
+  { code: 'COMMERCIAL_REGISTRATION', nameEn: 'Commercial registration', nameAr: 'السجل التجاري', fields: [
+    { key: 'crNumber', labelEn: 'CR number', labelAr: 'رقم السجل التجاري', type: 'text', required: true },
+    { key: 'companyName', labelEn: 'Company name', labelAr: 'اسم الشركة', type: 'text', required: true },
+    { key: 'expiryDate', labelEn: 'Expiry date', labelAr: 'تاريخ الانتهاء', type: 'date', required: true }] },
+  { code: 'BANK_GUARANTEE', nameEn: 'Bank guarantee', nameAr: 'كفالة بنكية', fields: [
+    { key: 'amount', labelEn: 'Amount', labelAr: 'المبلغ', type: 'amount', required: true }] },
+  { code: 'OTHER', nameEn: 'Other document', nameAr: 'مستند آخر', fields: [] },
+];
 
 const SAMPLE: DocText = {
   documentId: 'verify-sample',
@@ -94,6 +112,25 @@ async function main(): Promise<number> {
   } catch (e) {
     console.error(`\nFAIL: live supervisor turn failed: ${(e as Error).message}`);
     return 9;
+  }
+  console.log('\nLive document intelligence (tenderflow_document_intelligence) on a bilingual CR sample');
+  const t2 = Date.now();
+  try {
+    const res = await ai.classifyDocument({ document: CR_SAMPLE, catalogue: CR_CATALOGUE, context: { ownerType: 'VENDOR', uploaderRole: 'VENDOR', slotTitle: 'Commercial registration' } });
+    const meta = res.raw as { runId?: string; repaired?: boolean } | undefined;
+    line('agent / model', `${res.agent} / ${res.model ?? '(not reported)'}`);
+    line('run id', meta?.runId ?? '-');
+    line('elapsed', `${Date.now() - t2} ms`);
+    line('repair turn used', String(meta?.repaired ?? false));
+    line('docType / language', `${res.output.docType} / ${res.output.language}`);
+    for (const f of res.output.fields) console.log(`  - ${f.key} = ${JSON.stringify(f.value)}  [${f.citation.section}] "${f.citation.quote}"`);
+    const exp = res.output.fields.find((f) => f.key === 'expiryDate')?.value;
+    if (res.output.docType !== 'COMMERCIAL_REGISTRATION' || exp !== '2029-01-31') {
+      console.error('\nFAIL: expected COMMERCIAL_REGISTRATION with expiryDate 2029-01-31 (validated by TenderFlow).'); return 10;
+    }
+  } catch (e) {
+    console.error(`\nFAIL: live document intelligence failed: ${(e as Error).message}`);
+    return 11;
   }
   console.log('\nOK: watsonx Orchestrate integration verified.');
   return 0;

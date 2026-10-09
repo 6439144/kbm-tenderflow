@@ -7,6 +7,7 @@ import { ROLES, unauthorized } from '../auth/tokens.js';
 import { SYSTEM_ACTOR } from './audit.js';
 import { ApiError, badRequest, camel, conflict, now, reqStr, uuid } from '../util.js';
 import type { Queryable } from '../db.js';
+import { installDefaultDocumentTypes } from './doc-catalogue.js';
 
 export interface UserRow {
   id: string; tenant_id: string; username: string; password_hash: string; display_name: string;
@@ -23,6 +24,7 @@ export async function createTenant(ctx: Ctx, t: { id: string; nameEn: string; na
   return ctx.db.tx(async (q) => {
     await q.query('INSERT INTO tenants (id, name_en, name_ar, primary_color) VALUES ($1,$2,$3,$4)',
       [t.id, t.nameEn, t.nameAr, t.primaryColor ?? '#0B4F6C']);
+    await installDefaultDocumentTypes(q, t.id); // document-intelligence catalogue (editable by TENANT_ADMIN)
     await auditTx(ctx, q, { tenantId: t.id, actor: SYSTEM_ACTOR, action: 'TENANT_CREATED', resourceType: 'TENANT', resourceId: t.id, newState: 'ACTIVE' });
   });
 }

@@ -1,0 +1,1595 @@
+{
+  "kind": "agent-evals",
+  "description": "tenderflow_document_intelligence: classification + cited field extraction (EN/AR): CR certificate, MOCI classification certificate, bank guarantee, financial proposal, GM letter, and OTHER (nothing to extract). All documents are fictitious. Expected values are the TenderFlow-normalised values (ISO dates, numeric amounts).",
+  "cases": [
+    {
+      "id": "DI-EN-CR",
+      "agent": "documentIntelligence",
+      "language": "en",
+      "input": {
+        "document": {
+          "documentId": "eval-di-en-cr",
+          "title": "CR certificate (fictitious)",
+          "sections": [
+            {
+              "section": "Commercial Registration Certificate",
+              "text": "State of Kuwait — Ministry of Commerce and Industry (fictitious sample)"
+            },
+            {
+              "section": "Registration details",
+              "text": "CR No: CR-310245\nCompany: Falcon Desert Trading W.L.L. (fictitious)\nLegal form: With limited liability"
+            },
+            {
+              "section": "Validity",
+              "text": "Issue date: 12/04/2023\nExpiry date: 11/04/2028"
+            },
+            {
+              "section": "Activities",
+              "text": "Activities: Import of computer equipment, IT consultancy"
+            }
+          ]
+        },
+        "context": {
+          "ownerType": "VENDOR",
+          "uploaderRole": "VENDOR",
+          "slotTitle": "Company registration"
+        },
+        "catalogue": [
+          {
+            "code": "COMMERCIAL_REGISTRATION",
+            "nameEn": "Commercial registration",
+            "nameAr": "السجل التجاري",
+            "fields": [
+              {
+                "key": "crNumber",
+                "labelEn": "CR number",
+                "labelAr": "رقم السجل التجاري",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "companyName",
+                "labelEn": "Company name",
+                "labelAr": "اسم الشركة",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "issueDate",
+                "labelEn": "Issue date",
+                "labelAr": "تاريخ الإصدار",
+                "type": "date",
+                "required": false
+              },
+              {
+                "key": "expiryDate",
+                "labelEn": "Expiry date",
+                "labelAr": "تاريخ الانتهاء",
+                "type": "date",
+                "required": true
+              },
+              {
+                "key": "activities",
+                "labelEn": "Activities",
+                "labelAr": "الأنشطة",
+                "type": "list",
+                "required": false
+              }
+            ]
+          },
+          {
+            "code": "MOCI_CLASSIFICATION_CERT",
+            "nameEn": "MOCI classification certificate",
+            "nameAr": "شهادة تصنيف وزارة التجارة",
+            "fields": [
+              {
+                "key": "activityCodes",
+                "labelEn": "Activity codes",
+                "labelAr": "رموز الأنشطة",
+                "type": "list",
+                "required": true
+              },
+              {
+                "key": "grade",
+                "labelEn": "Grade",
+                "labelAr": "الدرجة",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "expiryDate",
+                "labelEn": "Expiry date",
+                "labelAr": "تاريخ الانتهاء",
+                "type": "date",
+                "required": true
+              }
+            ]
+          },
+          {
+            "code": "CHAMBER_OF_COMMERCE_CERT",
+            "nameEn": "Chamber of Commerce certificate",
+            "nameAr": "شهادة غرفة التجارة",
+            "fields": [
+              {
+                "key": "membershipNumber",
+                "labelEn": "Membership number",
+                "labelAr": "رقم العضوية",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "expiryDate",
+                "labelEn": "Expiry date",
+                "labelAr": "تاريخ الانتهاء",
+                "type": "date",
+                "required": true
+              }
+            ]
+          },
+          {
+            "code": "BANK_GUARANTEE",
+            "nameEn": "Bank guarantee",
+            "nameAr": "كفالة بنكية",
+            "fields": [
+              {
+                "key": "bank",
+                "labelEn": "Issuing bank",
+                "labelAr": "البنك المصدر",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "amount",
+                "labelEn": "Amount",
+                "labelAr": "المبلغ",
+                "type": "amount",
+                "required": true
+              },
+              {
+                "key": "currency",
+                "labelEn": "Currency",
+                "labelAr": "العملة",
+                "type": "text",
+                "required": false
+              },
+              {
+                "key": "validUntil",
+                "labelEn": "Valid until",
+                "labelAr": "سارية حتى",
+                "type": "date",
+                "required": true
+              },
+              {
+                "key": "beneficiary",
+                "labelEn": "Beneficiary",
+                "labelAr": "المستفيد",
+                "type": "text",
+                "required": false
+              }
+            ]
+          },
+          {
+            "code": "ISO_CERTIFICATE",
+            "nameEn": "ISO certificate",
+            "nameAr": "شهادة آيزو",
+            "fields": [
+              {
+                "key": "standard",
+                "labelEn": "Standard",
+                "labelAr": "المعيار",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "certificationBody",
+                "labelEn": "Certification body",
+                "labelAr": "جهة الإصدار",
+                "type": "text",
+                "required": false
+              },
+              {
+                "key": "expiryDate",
+                "labelEn": "Expiry date",
+                "labelAr": "تاريخ الانتهاء",
+                "type": "date",
+                "required": true
+              }
+            ]
+          },
+          {
+            "code": "COMPANY_PROFILE",
+            "nameEn": "Company profile",
+            "nameAr": "نبذة عن الشركة",
+            "fields": [
+              {
+                "key": "yearsInBusiness",
+                "labelEn": "Years in business",
+                "labelAr": "سنوات الخبرة",
+                "type": "number",
+                "required": false
+              },
+              {
+                "key": "keyClients",
+                "labelEn": "Key clients",
+                "labelAr": "أبرز العملاء",
+                "type": "list",
+                "required": false
+              }
+            ]
+          },
+          {
+            "code": "OTHER",
+            "nameEn": "Other document",
+            "nameAr": "مستند آخر",
+            "fields": []
+          }
+        ]
+      },
+      "expect": {
+        "docType": "COMMERCIAL_REGISTRATION",
+        "fields": {
+          "crNumber": {
+            "value": "CR-310245",
+            "section": "Registration details",
+            "quote": "CR No: CR-310245",
+            "raw": "CR-310245"
+          },
+          "expiryDate": {
+            "value": "2028-04-11",
+            "section": "Validity",
+            "quote": "Expiry date: 11/04/2028",
+            "raw": "11/04/2028"
+          }
+        }
+      }
+    },
+    {
+      "id": "DI-AR-CR",
+      "agent": "documentIntelligence",
+      "language": "ar",
+      "input": {
+        "document": {
+          "documentId": "eval-di-ar-cr",
+          "title": "شهادة سجل تجاري (وهمية)",
+          "sections": [
+            {
+              "section": "بيانات السجل",
+              "text": "رقم السجل التجاري: CR-552310\nاسم الشركة: شركة الصقر للتجارة العامة ذ.م.م (وهمية)"
+            },
+            {
+              "section": "الصلاحية",
+              "text": "تاريخ الإصدار: 05/01/2024\nتاريخ الانتهاء: 04/01/2029"
+            }
+          ]
+        },
+        "context": {
+          "ownerType": "VENDOR",
+          "uploaderRole": "VENDOR",
+          "slotTitle": "السجل التجاري"
+        },
+        "catalogue": [
+          {
+            "code": "COMMERCIAL_REGISTRATION",
+            "nameEn": "Commercial registration",
+            "nameAr": "السجل التجاري",
+            "fields": [
+              {
+                "key": "crNumber",
+                "labelEn": "CR number",
+                "labelAr": "رقم السجل التجاري",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "companyName",
+                "labelEn": "Company name",
+                "labelAr": "اسم الشركة",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "issueDate",
+                "labelEn": "Issue date",
+                "labelAr": "تاريخ الإصدار",
+                "type": "date",
+                "required": false
+              },
+              {
+                "key": "expiryDate",
+                "labelEn": "Expiry date",
+                "labelAr": "تاريخ الانتهاء",
+                "type": "date",
+                "required": true
+              },
+              {
+                "key": "activities",
+                "labelEn": "Activities",
+                "labelAr": "الأنشطة",
+                "type": "list",
+                "required": false
+              }
+            ]
+          },
+          {
+            "code": "MOCI_CLASSIFICATION_CERT",
+            "nameEn": "MOCI classification certificate",
+            "nameAr": "شهادة تصنيف وزارة التجارة",
+            "fields": [
+              {
+                "key": "activityCodes",
+                "labelEn": "Activity codes",
+                "labelAr": "رموز الأنشطة",
+                "type": "list",
+                "required": true
+              },
+              {
+                "key": "grade",
+                "labelEn": "Grade",
+                "labelAr": "الدرجة",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "expiryDate",
+                "labelEn": "Expiry date",
+                "labelAr": "تاريخ الانتهاء",
+                "type": "date",
+                "required": true
+              }
+            ]
+          },
+          {
+            "code": "CHAMBER_OF_COMMERCE_CERT",
+            "nameEn": "Chamber of Commerce certificate",
+            "nameAr": "شهادة غرفة التجارة",
+            "fields": [
+              {
+                "key": "membershipNumber",
+                "labelEn": "Membership number",
+                "labelAr": "رقم العضوية",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "expiryDate",
+                "labelEn": "Expiry date",
+                "labelAr": "تاريخ الانتهاء",
+                "type": "date",
+                "required": true
+              }
+            ]
+          },
+          {
+            "code": "BANK_GUARANTEE",
+            "nameEn": "Bank guarantee",
+            "nameAr": "كفالة بنكية",
+            "fields": [
+              {
+                "key": "bank",
+                "labelEn": "Issuing bank",
+                "labelAr": "البنك المصدر",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "amount",
+                "labelEn": "Amount",
+                "labelAr": "المبلغ",
+                "type": "amount",
+                "required": true
+              },
+              {
+                "key": "currency",
+                "labelEn": "Currency",
+                "labelAr": "العملة",
+                "type": "text",
+                "required": false
+              },
+              {
+                "key": "validUntil",
+                "labelEn": "Valid until",
+                "labelAr": "سارية حتى",
+                "type": "date",
+                "required": true
+              },
+              {
+                "key": "beneficiary",
+                "labelEn": "Beneficiary",
+                "labelAr": "المستفيد",
+                "type": "text",
+                "required": false
+              }
+            ]
+          },
+          {
+            "code": "ISO_CERTIFICATE",
+            "nameEn": "ISO certificate",
+            "nameAr": "شهادة آيزو",
+            "fields": [
+              {
+                "key": "standard",
+                "labelEn": "Standard",
+                "labelAr": "المعيار",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "certificationBody",
+                "labelEn": "Certification body",
+                "labelAr": "جهة الإصدار",
+                "type": "text",
+                "required": false
+              },
+              {
+                "key": "expiryDate",
+                "labelEn": "Expiry date",
+                "labelAr": "تاريخ الانتهاء",
+                "type": "date",
+                "required": true
+              }
+            ]
+          },
+          {
+            "code": "COMPANY_PROFILE",
+            "nameEn": "Company profile",
+            "nameAr": "نبذة عن الشركة",
+            "fields": [
+              {
+                "key": "yearsInBusiness",
+                "labelEn": "Years in business",
+                "labelAr": "سنوات الخبرة",
+                "type": "number",
+                "required": false
+              },
+              {
+                "key": "keyClients",
+                "labelEn": "Key clients",
+                "labelAr": "أبرز العملاء",
+                "type": "list",
+                "required": false
+              }
+            ]
+          },
+          {
+            "code": "OTHER",
+            "nameEn": "Other document",
+            "nameAr": "مستند آخر",
+            "fields": []
+          }
+        ]
+      },
+      "expect": {
+        "docType": "COMMERCIAL_REGISTRATION",
+        "fields": {
+          "crNumber": {
+            "value": "CR-552310",
+            "section": "بيانات السجل",
+            "quote": "رقم السجل التجاري: CR-552310",
+            "raw": "CR-552310"
+          },
+          "expiryDate": {
+            "value": "2029-01-04",
+            "section": "الصلاحية",
+            "quote": "تاريخ الانتهاء: 04/01/2029",
+            "raw": "04/01/2029"
+          }
+        }
+      }
+    },
+    {
+      "id": "DI-AR-CLASS",
+      "agent": "documentIntelligence",
+      "language": "ar",
+      "input": {
+        "document": {
+          "documentId": "eval-di-ar-class",
+          "title": "شهادة تصنيف (وهمية)",
+          "sections": [
+            {
+              "section": "شهادة تصنيف المقاولين والموردين",
+              "text": "وزارة التجارة والصناعة (نموذج وهمي)"
+            },
+            {
+              "section": "التصنيف",
+              "text": "الأنشطة: IT-01, IT-02\nالدرجة: الدرجة الأولى"
+            },
+            {
+              "section": "الصلاحية",
+              "text": "صالحة حتى: 30/06/2027"
+            }
+          ]
+        },
+        "context": {
+          "ownerType": "VENDOR",
+          "uploaderRole": "VENDOR",
+          "slotTitle": "شهادة التصنيف"
+        },
+        "catalogue": [
+          {
+            "code": "COMMERCIAL_REGISTRATION",
+            "nameEn": "Commercial registration",
+            "nameAr": "السجل التجاري",
+            "fields": [
+              {
+                "key": "crNumber",
+                "labelEn": "CR number",
+                "labelAr": "رقم السجل التجاري",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "companyName",
+                "labelEn": "Company name",
+                "labelAr": "اسم الشركة",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "issueDate",
+                "labelEn": "Issue date",
+                "labelAr": "تاريخ الإصدار",
+                "type": "date",
+                "required": false
+              },
+              {
+                "key": "expiryDate",
+                "labelEn": "Expiry date",
+                "labelAr": "تاريخ الانتهاء",
+                "type": "date",
+                "required": true
+              },
+              {
+                "key": "activities",
+                "labelEn": "Activities",
+                "labelAr": "الأنشطة",
+                "type": "list",
+                "required": false
+              }
+            ]
+          },
+          {
+            "code": "MOCI_CLASSIFICATION_CERT",
+            "nameEn": "MOCI classification certificate",
+            "nameAr": "شهادة تصنيف وزارة التجارة",
+            "fields": [
+              {
+                "key": "activityCodes",
+                "labelEn": "Activity codes",
+                "labelAr": "رموز الأنشطة",
+                "type": "list",
+                "required": true
+              },
+              {
+                "key": "grade",
+                "labelEn": "Grade",
+                "labelAr": "الدرجة",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "expiryDate",
+                "labelEn": "Expiry date",
+                "labelAr": "تاريخ الانتهاء",
+                "type": "date",
+                "required": true
+              }
+            ]
+          },
+          {
+            "code": "CHAMBER_OF_COMMERCE_CERT",
+            "nameEn": "Chamber of Commerce certificate",
+            "nameAr": "شهادة غرفة التجارة",
+            "fields": [
+              {
+                "key": "membershipNumber",
+                "labelEn": "Membership number",
+                "labelAr": "رقم العضوية",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "expiryDate",
+                "labelEn": "Expiry date",
+                "labelAr": "تاريخ الانتهاء",
+                "type": "date",
+                "required": true
+              }
+            ]
+          },
+          {
+            "code": "BANK_GUARANTEE",
+            "nameEn": "Bank guarantee",
+            "nameAr": "كفالة بنكية",
+            "fields": [
+              {
+                "key": "bank",
+                "labelEn": "Issuing bank",
+                "labelAr": "البنك المصدر",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "amount",
+                "labelEn": "Amount",
+                "labelAr": "المبلغ",
+                "type": "amount",
+                "required": true
+              },
+              {
+                "key": "currency",
+                "labelEn": "Currency",
+                "labelAr": "العملة",
+                "type": "text",
+                "required": false
+              },
+              {
+                "key": "validUntil",
+                "labelEn": "Valid until",
+                "labelAr": "سارية حتى",
+                "type": "date",
+                "required": true
+              },
+              {
+                "key": "beneficiary",
+                "labelEn": "Beneficiary",
+                "labelAr": "المستفيد",
+                "type": "text",
+                "required": false
+              }
+            ]
+          },
+          {
+            "code": "ISO_CERTIFICATE",
+            "nameEn": "ISO certificate",
+            "nameAr": "شهادة آيزو",
+            "fields": [
+              {
+                "key": "standard",
+                "labelEn": "Standard",
+                "labelAr": "المعيار",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "certificationBody",
+                "labelEn": "Certification body",
+                "labelAr": "جهة الإصدار",
+                "type": "text",
+                "required": false
+              },
+              {
+                "key": "expiryDate",
+                "labelEn": "Expiry date",
+                "labelAr": "تاريخ الانتهاء",
+                "type": "date",
+                "required": true
+              }
+            ]
+          },
+          {
+            "code": "COMPANY_PROFILE",
+            "nameEn": "Company profile",
+            "nameAr": "نبذة عن الشركة",
+            "fields": [
+              {
+                "key": "yearsInBusiness",
+                "labelEn": "Years in business",
+                "labelAr": "سنوات الخبرة",
+                "type": "number",
+                "required": false
+              },
+              {
+                "key": "keyClients",
+                "labelEn": "Key clients",
+                "labelAr": "أبرز العملاء",
+                "type": "list",
+                "required": false
+              }
+            ]
+          },
+          {
+            "code": "OTHER",
+            "nameEn": "Other document",
+            "nameAr": "مستند آخر",
+            "fields": []
+          }
+        ]
+      },
+      "expect": {
+        "docType": "MOCI_CLASSIFICATION_CERT",
+        "fields": {
+          "expiryDate": {
+            "value": "2027-06-30",
+            "section": "الصلاحية",
+            "quote": "صالحة حتى: 30/06/2027",
+            "raw": "30/06/2027"
+          }
+        }
+      }
+    },
+    {
+      "id": "DI-EN-BG",
+      "agent": "documentIntelligence",
+      "language": "en",
+      "input": {
+        "document": {
+          "documentId": "eval-di-en-bg",
+          "title": "Bank guarantee (fictitious)",
+          "sections": [
+            {
+              "section": "Guarantee",
+              "text": "Fictitious Gulf Bank K.S.C.P. hereby guarantees the payment of KWD 9,000.000 (nine thousand Kuwaiti Dinars) to the Kuwait Energy Authority (fictitious)."
+            },
+            {
+              "section": "Validity",
+              "text": "This guarantee is valid until 31 December 2026."
+            }
+          ]
+        },
+        "context": {
+          "ownerType": "VENDOR",
+          "uploaderRole": "VENDOR",
+          "slotTitle": "Bid bond"
+        },
+        "catalogue": [
+          {
+            "code": "COMMERCIAL_REGISTRATION",
+            "nameEn": "Commercial registration",
+            "nameAr": "السجل التجاري",
+            "fields": [
+              {
+                "key": "crNumber",
+                "labelEn": "CR number",
+                "labelAr": "رقم السجل التجاري",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "companyName",
+                "labelEn": "Company name",
+                "labelAr": "اسم الشركة",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "issueDate",
+                "labelEn": "Issue date",
+                "labelAr": "تاريخ الإصدار",
+                "type": "date",
+                "required": false
+              },
+              {
+                "key": "expiryDate",
+                "labelEn": "Expiry date",
+                "labelAr": "تاريخ الانتهاء",
+                "type": "date",
+                "required": true
+              },
+              {
+                "key": "activities",
+                "labelEn": "Activities",
+                "labelAr": "الأنشطة",
+                "type": "list",
+                "required": false
+              }
+            ]
+          },
+          {
+            "code": "MOCI_CLASSIFICATION_CERT",
+            "nameEn": "MOCI classification certificate",
+            "nameAr": "شهادة تصنيف وزارة التجارة",
+            "fields": [
+              {
+                "key": "activityCodes",
+                "labelEn": "Activity codes",
+                "labelAr": "رموز الأنشطة",
+                "type": "list",
+                "required": true
+              },
+              {
+                "key": "grade",
+                "labelEn": "Grade",
+                "labelAr": "الدرجة",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "expiryDate",
+                "labelEn": "Expiry date",
+                "labelAr": "تاريخ الانتهاء",
+                "type": "date",
+                "required": true
+              }
+            ]
+          },
+          {
+            "code": "CHAMBER_OF_COMMERCE_CERT",
+            "nameEn": "Chamber of Commerce certificate",
+            "nameAr": "شهادة غرفة التجارة",
+            "fields": [
+              {
+                "key": "membershipNumber",
+                "labelEn": "Membership number",
+                "labelAr": "رقم العضوية",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "expiryDate",
+                "labelEn": "Expiry date",
+                "labelAr": "تاريخ الانتهاء",
+                "type": "date",
+                "required": true
+              }
+            ]
+          },
+          {
+            "code": "BANK_GUARANTEE",
+            "nameEn": "Bank guarantee",
+            "nameAr": "كفالة بنكية",
+            "fields": [
+              {
+                "key": "bank",
+                "labelEn": "Issuing bank",
+                "labelAr": "البنك المصدر",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "amount",
+                "labelEn": "Amount",
+                "labelAr": "المبلغ",
+                "type": "amount",
+                "required": true
+              },
+              {
+                "key": "currency",
+                "labelEn": "Currency",
+                "labelAr": "العملة",
+                "type": "text",
+                "required": false
+              },
+              {
+                "key": "validUntil",
+                "labelEn": "Valid until",
+                "labelAr": "سارية حتى",
+                "type": "date",
+                "required": true
+              },
+              {
+                "key": "beneficiary",
+                "labelEn": "Beneficiary",
+                "labelAr": "المستفيد",
+                "type": "text",
+                "required": false
+              }
+            ]
+          },
+          {
+            "code": "ISO_CERTIFICATE",
+            "nameEn": "ISO certificate",
+            "nameAr": "شهادة آيزو",
+            "fields": [
+              {
+                "key": "standard",
+                "labelEn": "Standard",
+                "labelAr": "المعيار",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "certificationBody",
+                "labelEn": "Certification body",
+                "labelAr": "جهة الإصدار",
+                "type": "text",
+                "required": false
+              },
+              {
+                "key": "expiryDate",
+                "labelEn": "Expiry date",
+                "labelAr": "تاريخ الانتهاء",
+                "type": "date",
+                "required": true
+              }
+            ]
+          },
+          {
+            "code": "COMPANY_PROFILE",
+            "nameEn": "Company profile",
+            "nameAr": "نبذة عن الشركة",
+            "fields": [
+              {
+                "key": "yearsInBusiness",
+                "labelEn": "Years in business",
+                "labelAr": "سنوات الخبرة",
+                "type": "number",
+                "required": false
+              },
+              {
+                "key": "keyClients",
+                "labelEn": "Key clients",
+                "labelAr": "أبرز العملاء",
+                "type": "list",
+                "required": false
+              }
+            ]
+          },
+          {
+            "code": "OTHER",
+            "nameEn": "Other document",
+            "nameAr": "مستند آخر",
+            "fields": []
+          }
+        ]
+      },
+      "expect": {
+        "docType": "BANK_GUARANTEE",
+        "fields": {
+          "amount": {
+            "value": 9000,
+            "section": "Guarantee",
+            "quote": "payment of KWD 9,000.000",
+            "raw": "KWD 9,000.000"
+          },
+          "validUntil": {
+            "value": "2026-12-31",
+            "section": "Validity",
+            "quote": "valid until 31 December 2026",
+            "raw": "31 December 2026"
+          }
+        }
+      }
+    },
+    {
+      "id": "DI-AR-FIN",
+      "agent": "documentIntelligence",
+      "language": "ar",
+      "input": {
+        "document": {
+          "documentId": "eval-di-ar-fin",
+          "title": "العرض المالي (وهمي)",
+          "sections": [
+            {
+              "section": "جدول الكميات المسعر",
+              "text": "البند | المبلغ\nتوريد الأجهزة | 120,000.000\nالتركيب والتدريب | 35,500.000"
+            },
+            {
+              "section": "الإجمالي",
+              "text": "إجمالي قيمة العطاء: 155,500.000 دينار كويتي\nالأسعار ثابتة لمدة 90 يوماً"
+            }
+          ]
+        },
+        "context": {
+          "ownerType": "BID_FINANCIAL",
+          "uploaderRole": "VENDOR",
+          "slotTitle": "العرض المالي"
+        },
+        "catalogue": [
+          {
+            "code": "BANK_GUARANTEE",
+            "nameEn": "Bank guarantee",
+            "nameAr": "كفالة بنكية",
+            "fields": [
+              {
+                "key": "bank",
+                "labelEn": "Issuing bank",
+                "labelAr": "البنك المصدر",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "amount",
+                "labelEn": "Amount",
+                "labelAr": "المبلغ",
+                "type": "amount",
+                "required": true
+              },
+              {
+                "key": "currency",
+                "labelEn": "Currency",
+                "labelAr": "العملة",
+                "type": "text",
+                "required": false
+              },
+              {
+                "key": "validUntil",
+                "labelEn": "Valid until",
+                "labelAr": "سارية حتى",
+                "type": "date",
+                "required": true
+              },
+              {
+                "key": "beneficiary",
+                "labelEn": "Beneficiary",
+                "labelAr": "المستفيد",
+                "type": "text",
+                "required": false
+              }
+            ]
+          },
+          {
+            "code": "FINANCIAL_PROPOSAL",
+            "nameEn": "Financial proposal",
+            "nameAr": "العرض المالي",
+            "fields": [
+              {
+                "key": "totalAmount",
+                "labelEn": "Total amount",
+                "labelAr": "المبلغ الإجمالي",
+                "type": "amount",
+                "required": true
+              },
+              {
+                "key": "currency",
+                "labelEn": "Currency",
+                "labelAr": "العملة",
+                "type": "text",
+                "required": false
+              },
+              {
+                "key": "validityDays",
+                "labelEn": "Validity (days)",
+                "labelAr": "مدة السريان (أيام)",
+                "type": "number",
+                "required": false
+              },
+              {
+                "key": "paymentTerms",
+                "labelEn": "Payment terms",
+                "labelAr": "شروط الدفع",
+                "type": "text",
+                "required": false
+              }
+            ]
+          },
+          {
+            "code": "OTHER",
+            "nameEn": "Other document",
+            "nameAr": "مستند آخر",
+            "fields": []
+          }
+        ]
+      },
+      "expect": {
+        "docType": "FINANCIAL_PROPOSAL",
+        "fields": {
+          "totalAmount": {
+            "value": 155500,
+            "section": "الإجمالي",
+            "quote": "إجمالي قيمة العطاء: 155,500.000 دينار كويتي",
+            "raw": "155,500.000 دينار كويتي"
+          }
+        }
+      }
+    },
+    {
+      "id": "DI-EN-GM",
+      "agent": "documentIntelligence",
+      "language": "en",
+      "input": {
+        "document": {
+          "documentId": "eval-di-en-gm",
+          "title": "Letter from the General Manager (fictitious)",
+          "sections": [
+            {
+              "section": "Header",
+              "text": "Ref: KEA/GM/2026/114\nDate: 14 September 2026\nTo: Procurement Department"
+            },
+            {
+              "section": "Subject",
+              "text": "Subject: Replacement of the call-centre telephony platform"
+            },
+            {
+              "section": "Request",
+              "text": "The Customer Services Department requests the replacement of the call-centre telephony platform. The estimated budget is KWD 210,000."
+            }
+          ]
+        },
+        "context": {
+          "ownerType": "REQUEST_LETTER",
+          "uploaderRole": "PROCUREMENT_OFFICER",
+          "slotTitle": "GM letter"
+        },
+        "catalogue": [
+          {
+            "code": "GM_LETTER",
+            "nameEn": "GM letter",
+            "nameAr": "كتاب المدير العام",
+            "fields": [
+              {
+                "key": "department",
+                "labelEn": "Department",
+                "labelAr": "الإدارة",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "subject",
+                "labelEn": "Subject",
+                "labelAr": "الموضوع",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "estimatedBudget",
+                "labelEn": "Estimated budget",
+                "labelAr": "الميزانية التقديرية",
+                "type": "amount",
+                "required": false
+              },
+              {
+                "key": "letterDate",
+                "labelEn": "Letter date",
+                "labelAr": "تاريخ الكتاب",
+                "type": "date",
+                "required": false
+              },
+              {
+                "key": "referenceNumber",
+                "labelEn": "Reference number",
+                "labelAr": "الرقم المرجعي",
+                "type": "text",
+                "required": false
+              }
+            ]
+          },
+          {
+            "code": "OTHER",
+            "nameEn": "Other document",
+            "nameAr": "مستند آخر",
+            "fields": []
+          }
+        ]
+      },
+      "expect": {
+        "docType": "GM_LETTER",
+        "fields": {
+          "estimatedBudget": {
+            "value": 210000,
+            "section": "Request",
+            "quote": "The estimated budget is KWD 210,000",
+            "raw": "KWD 210,000"
+          },
+          "letterDate": {
+            "value": "2026-09-14",
+            "section": "Header",
+            "quote": "Date: 14 September 2026",
+            "raw": "14 September 2026"
+          }
+        }
+      }
+    },
+    {
+      "id": "DI-EN-OTHER",
+      "agent": "documentIntelligence",
+      "language": "en",
+      "input": {
+        "document": {
+          "documentId": "eval-di-en-other",
+          "title": "Canteen menu (fictitious)",
+          "sections": [
+            {
+              "section": "Menu",
+              "text": "Monday: lentil soup and grilled chicken. Tuesday: machboos. Wednesday: vegetable curry."
+            }
+          ]
+        },
+        "context": {
+          "ownerType": "VENDOR",
+          "uploaderRole": "VENDOR",
+          "slotTitle": "Company document"
+        },
+        "catalogue": [
+          {
+            "code": "COMMERCIAL_REGISTRATION",
+            "nameEn": "Commercial registration",
+            "nameAr": "السجل التجاري",
+            "fields": [
+              {
+                "key": "crNumber",
+                "labelEn": "CR number",
+                "labelAr": "رقم السجل التجاري",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "companyName",
+                "labelEn": "Company name",
+                "labelAr": "اسم الشركة",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "issueDate",
+                "labelEn": "Issue date",
+                "labelAr": "تاريخ الإصدار",
+                "type": "date",
+                "required": false
+              },
+              {
+                "key": "expiryDate",
+                "labelEn": "Expiry date",
+                "labelAr": "تاريخ الانتهاء",
+                "type": "date",
+                "required": true
+              },
+              {
+                "key": "activities",
+                "labelEn": "Activities",
+                "labelAr": "الأنشطة",
+                "type": "list",
+                "required": false
+              }
+            ]
+          },
+          {
+            "code": "MOCI_CLASSIFICATION_CERT",
+            "nameEn": "MOCI classification certificate",
+            "nameAr": "شهادة تصنيف وزارة التجارة",
+            "fields": [
+              {
+                "key": "activityCodes",
+                "labelEn": "Activity codes",
+                "labelAr": "رموز الأنشطة",
+                "type": "list",
+                "required": true
+              },
+              {
+                "key": "grade",
+                "labelEn": "Grade",
+                "labelAr": "الدرجة",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "expiryDate",
+                "labelEn": "Expiry date",
+                "labelAr": "تاريخ الانتهاء",
+                "type": "date",
+                "required": true
+              }
+            ]
+          },
+          {
+            "code": "CHAMBER_OF_COMMERCE_CERT",
+            "nameEn": "Chamber of Commerce certificate",
+            "nameAr": "شهادة غرفة التجارة",
+            "fields": [
+              {
+                "key": "membershipNumber",
+                "labelEn": "Membership number",
+                "labelAr": "رقم العضوية",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "expiryDate",
+                "labelEn": "Expiry date",
+                "labelAr": "تاريخ الانتهاء",
+                "type": "date",
+                "required": true
+              }
+            ]
+          },
+          {
+            "code": "BANK_GUARANTEE",
+            "nameEn": "Bank guarantee",
+            "nameAr": "كفالة بنكية",
+            "fields": [
+              {
+                "key": "bank",
+                "labelEn": "Issuing bank",
+                "labelAr": "البنك المصدر",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "amount",
+                "labelEn": "Amount",
+                "labelAr": "المبلغ",
+                "type": "amount",
+                "required": true
+              },
+              {
+                "key": "currency",
+                "labelEn": "Currency",
+                "labelAr": "العملة",
+                "type": "text",
+                "required": false
+              },
+              {
+                "key": "validUntil",
+                "labelEn": "Valid until",
+                "labelAr": "سارية حتى",
+                "type": "date",
+                "required": true
+              },
+              {
+                "key": "beneficiary",
+                "labelEn": "Beneficiary",
+                "labelAr": "المستفيد",
+                "type": "text",
+                "required": false
+              }
+            ]
+          },
+          {
+            "code": "ISO_CERTIFICATE",
+            "nameEn": "ISO certificate",
+            "nameAr": "شهادة آيزو",
+            "fields": [
+              {
+                "key": "standard",
+                "labelEn": "Standard",
+                "labelAr": "المعيار",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "certificationBody",
+                "labelEn": "Certification body",
+                "labelAr": "جهة الإصدار",
+                "type": "text",
+                "required": false
+              },
+              {
+                "key": "expiryDate",
+                "labelEn": "Expiry date",
+                "labelAr": "تاريخ الانتهاء",
+                "type": "date",
+                "required": true
+              }
+            ]
+          },
+          {
+            "code": "COMPANY_PROFILE",
+            "nameEn": "Company profile",
+            "nameAr": "نبذة عن الشركة",
+            "fields": [
+              {
+                "key": "yearsInBusiness",
+                "labelEn": "Years in business",
+                "labelAr": "سنوات الخبرة",
+                "type": "number",
+                "required": false
+              },
+              {
+                "key": "keyClients",
+                "labelEn": "Key clients",
+                "labelAr": "أبرز العملاء",
+                "type": "list",
+                "required": false
+              }
+            ]
+          },
+          {
+            "code": "OTHER",
+            "nameEn": "Other document",
+            "nameAr": "مستند آخر",
+            "fields": []
+          }
+        ]
+      },
+      "expect": {
+        "docType": "OTHER",
+        "noFields": true
+      }
+    },
+    {
+      "id": "DI-AR-OTHER",
+      "agent": "documentIntelligence",
+      "language": "ar",
+      "input": {
+        "document": {
+          "documentId": "eval-di-ar-other",
+          "title": "محضر اجتماع داخلي (وهمي)",
+          "sections": [
+            {
+              "section": "المحضر",
+              "text": "ناقش الفريق خطة التدريب الداخلية وتوزيع المهام بين الأقسام دون اتخاذ قرارات مالية."
+            }
+          ]
+        },
+        "context": {
+          "ownerType": "VENDOR",
+          "uploaderRole": "VENDOR",
+          "slotTitle": "مستند"
+        },
+        "catalogue": [
+          {
+            "code": "COMMERCIAL_REGISTRATION",
+            "nameEn": "Commercial registration",
+            "nameAr": "السجل التجاري",
+            "fields": [
+              {
+                "key": "crNumber",
+                "labelEn": "CR number",
+                "labelAr": "رقم السجل التجاري",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "companyName",
+                "labelEn": "Company name",
+                "labelAr": "اسم الشركة",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "issueDate",
+                "labelEn": "Issue date",
+                "labelAr": "تاريخ الإصدار",
+                "type": "date",
+                "required": false
+              },
+              {
+                "key": "expiryDate",
+                "labelEn": "Expiry date",
+                "labelAr": "تاريخ الانتهاء",
+                "type": "date",
+                "required": true
+              },
+              {
+                "key": "activities",
+                "labelEn": "Activities",
+                "labelAr": "الأنشطة",
+                "type": "list",
+                "required": false
+              }
+            ]
+          },
+          {
+            "code": "MOCI_CLASSIFICATION_CERT",
+            "nameEn": "MOCI classification certificate",
+            "nameAr": "شهادة تصنيف وزارة التجارة",
+            "fields": [
+              {
+                "key": "activityCodes",
+                "labelEn": "Activity codes",
+                "labelAr": "رموز الأنشطة",
+                "type": "list",
+                "required": true
+              },
+              {
+                "key": "grade",
+                "labelEn": "Grade",
+                "labelAr": "الدرجة",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "expiryDate",
+                "labelEn": "Expiry date",
+                "labelAr": "تاريخ الانتهاء",
+                "type": "date",
+                "required": true
+              }
+            ]
+          },
+          {
+            "code": "CHAMBER_OF_COMMERCE_CERT",
+            "nameEn": "Chamber of Commerce certificate",
+            "nameAr": "شهادة غرفة التجارة",
+            "fields": [
+              {
+                "key": "membershipNumber",
+                "labelEn": "Membership number",
+                "labelAr": "رقم العضوية",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "expiryDate",
+                "labelEn": "Expiry date",
+                "labelAr": "تاريخ الانتهاء",
+                "type": "date",
+                "required": true
+              }
+            ]
+          },
+          {
+            "code": "BANK_GUARANTEE",
+            "nameEn": "Bank guarantee",
+            "nameAr": "كفالة بنكية",
+            "fields": [
+              {
+                "key": "bank",
+                "labelEn": "Issuing bank",
+                "labelAr": "البنك المصدر",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "amount",
+                "labelEn": "Amount",
+                "labelAr": "المبلغ",
+                "type": "amount",
+                "required": true
+              },
+              {
+                "key": "currency",
+                "labelEn": "Currency",
+                "labelAr": "العملة",
+                "type": "text",
+                "required": false
+              },
+              {
+                "key": "validUntil",
+                "labelEn": "Valid until",
+                "labelAr": "سارية حتى",
+                "type": "date",
+                "required": true
+              },
+              {
+                "key": "beneficiary",
+                "labelEn": "Beneficiary",
+                "labelAr": "المستفيد",
+                "type": "text",
+                "required": false
+              }
+            ]
+          },
+          {
+            "code": "ISO_CERTIFICATE",
+            "nameEn": "ISO certificate",
+            "nameAr": "شهادة آيزو",
+            "fields": [
+              {
+                "key": "standard",
+                "labelEn": "Standard",
+                "labelAr": "المعيار",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "certificationBody",
+                "labelEn": "Certification body",
+                "labelAr": "جهة الإصدار",
+                "type": "text",
+                "required": false
+              },
+              {
+                "key": "expiryDate",
+                "labelEn": "Expiry date",
+                "labelAr": "تاريخ الانتهاء",
+                "type": "date",
+                "required": true
+              }
+            ]
+          },
+          {
+            "code": "COMPANY_PROFILE",
+            "nameEn": "Company profile",
+            "nameAr": "نبذة عن الشركة",
+            "fields": [
+              {
+                "key": "yearsInBusiness",
+                "labelEn": "Years in business",
+                "labelAr": "سنوات الخبرة",
+                "type": "number",
+                "required": false
+              },
+              {
+                "key": "keyClients",
+                "labelEn": "Key clients",
+                "labelAr": "أبرز العملاء",
+                "type": "list",
+                "required": false
+              }
+            ]
+          },
+          {
+            "code": "OTHER",
+            "nameEn": "Other document",
+            "nameAr": "مستند آخر",
+            "fields": []
+          }
+        ]
+      },
+      "expect": {
+        "docType": "OTHER",
+        "noFields": true
+      }
+    }
+  ]
+}

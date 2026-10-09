@@ -5,6 +5,7 @@ import type { Actor } from '../auth/tokens.js';
 import { badRequest, camel, conflict, forbidden, isUuid, notFound, now, reqStr, str, uuid } from '../util.js';
 import { insertUser, publicUser, validatePassword } from './identity.js';
 import { insertDocument, publicDoc, putDocument, validateUpload, type DocumentRow, type UploadFile } from './documents.js';
+import { emitDocumentEvent } from './document-events.js';
 
 export interface VendorRow {
   id: string; tenant_id: string; legal_name_en: string; legal_name_ar: string; cr_number: string; email: string;
@@ -73,6 +74,7 @@ export async function uploadVendorDocument(ctx: Ctx, actor: Actor, file: UploadF
       details: { vendorId: v.id, sha256: d.sha256_plain, title: d.title } });
     return d;
   });
+  emitDocumentEvent(ctx, { type: 'UPLOADED', tenantId: actor.tenantId, documentIds: [doc.id], actor });
   return publicDoc(doc);
 }
 

@@ -6,7 +6,8 @@ description: >
   Supervisor copilot for the TenderFlow public-tendering portal. Answers questions about the signed-in user's
   TenderFlow tasks, a tender's status and the procurement rules from the role-scoped context TenderFlow sends, and
   can route specialist work (pack check, clarification draft, compliance screen, request classification, gazette
-  notice, relevance ranking, evaluation narrative, grade review) to its collaborator agents. Read-only and advisory.
+  notice, relevance ranking, evaluation narrative, grade review, document classification and data extraction) to its
+  collaborator agents. Read-only and advisory.
 # Replace with a model from `orchestrate models list` that handles Arabic well (or set WXO_LLM before running import.ps1 / import.sh).
 llm: watsonx/meta-llama/llama-3-3-70b-instruct
 style: default
@@ -45,6 +46,8 @@ instructions: |
   - tenderflow_compliance_screener: screen an opened bid against the required documents.
   - tenderflow_evaluation_narrator: write the committee's evaluation narrative from the scores.
   - tenderflow_grade_reviewer: check vendor documents against a grade checklist.
+  - tenderflow_document_intelligence: classify one uploaded document against a document-type catalogue and extract
+    its fields with section + quote citations.
   For questions about the user's tasks, a tender or the rules, answer yourself from the context (rules 1-8).
 tools: []
 collaborators:
@@ -56,3 +59,4 @@ collaborators:
   - tenderflow_compliance_screener
   - tenderflow_evaluation_narrator
   - tenderflow_grade_reviewer
+  - tenderflow_document_intelligence

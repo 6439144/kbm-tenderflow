@@ -3,7 +3,7 @@
 // The same contracts are repeated in the agent instructions (agents/*.yaml) so both sides agree.
 
 import type {
-  ChatInput, ClassifyRequestInput, DocText, DraftNoticeInput, NarrateEvaluationInput, RankRelevanceInput, ReviewGradeInput,
+  ChatInput, ClassifyDocumentInput, ClassifyRequestInput, DocText, DraftNoticeInput, NarrateEvaluationInput, RankRelevanceInput, ReviewGradeInput,
 } from './types.js';
 import { detectLanguage, keyTerms, normalizeText } from './text-utils.js';
 
@@ -401,6 +401,65 @@ RULES (mandatory):
 
 OUTPUT SCHEMA:
 ${CHAT_SCHEMA}`;
+}
+
+// ================================================================ Document intelligence
+
+export const DOCINTEL_SCHEMA = `{
+  "docType": "<one CODE from DOCUMENT TYPES, or \"OTHER\">",
+  "language": "ar" | "en" | "mixed",
+  "fields": [
+    { "key": "<a field key defined for the chosen docType>", "value": "<the value exactly as written in the document>",
+      "citation": { "section": "<section from the DOC marker>", "quote": "<short exact quote from that section that contains the value>" } }
+  ],
+  "summaryEn": "<1-2 sentence English description of the document>",
+  "summaryAr": "<the same description in Arabic>",
+  "citations": [ { "documentId": "<id from the DOC marker>", "section": "<section from the DOC marker>", "quote": "<short exact quote>" } ]
+}`;
+
+const FIELD_TYPE_HELP: Record<string, string> = {
+  text: 'text', date: 'date (copy it as written; TenderFlow normalises it)', amount: 'amount with currency (copy figure and currency as written)',
+  number: 'number', list: 'list (comma-separated as written)',
+};
+
+export function buildDocumentIntelligencePrompt(input: ClassifyDocumentInput, maxChars: number): string {
+  const c = input.context;
+  const terms = keyTerms(c.slotTitle, ...input.catalogue.flatMap((t) => [t.nameEn, t.nameAr, ...t.fields.flatMap((f) => [f.labelEn, f.labelAr])]),
+    'expiry valid until issued amount total currency registration certificate guarantee', 'انتهاء صالح حتى تاريخ الإصدار مبلغ إجمالي عملة سجل شهادة ضمان');
+  const docs = renderDocuments([input.document], terms, maxChars);
+  const types = input.catalogue.map((t) => {
+    const fields = t.fields.length
+      ? t.fields.map((f) => `    - ${f.key} (${FIELD_TYPE_HELP[f.type] ?? f.type}${f.required ? ', required' : ''}) — ${f.labelEn} — ${f.labelAr}`).join('\n')
+      : '    (no fields)';
+    return `- ${t.code} — ${t.nameEn} — ${t.nameAr}\n${fields}`;
+  }).join('\n');
+  return `TASK: DOCUMENT CLASSIFICATION AND DATA EXTRACTION (advisory; a person reviews every result).
+A user uploaded the document below to TenderFlow. Decide which DOCUMENT TYPE it is and extract the fields defined for that type.
+- "docType": exactly one CODE from DOCUMENT TYPES. Use "OTHER" when none fits or the text is too unclear to decide.
+- "fields": only keys defined for the chosen docType; include a field ONLY when its value is written in the document, and give the
+  section and an exact quote that contains it. If a field is not in the text, leave it out (never guess, never compute, never translate
+  numbers). For "OTHER" return an empty fields array.
+- Never extract personal identity numbers (civil ID, passport, national ID) even if they appear in the text.
+- "language": the language of the document text ("mixed" when it has substantial Arabic and English).
+
+UPLOAD CONTEXT (from the system, not the document; do not cite it):
+- Uploaded as: ${c.ownerType}
+- Uploader role: ${c.uploaderRole}
+- Title / slot given by the uploader: ${oneLine(c.slotTitle)}${c.fileName ? `\n- File name: ${oneLine(c.fileName)}` : ''}
+(The title may be wrong: classify by the document text, not by the title.)
+
+DOCUMENT TYPES (CODE — English — Arabic, then its fields: key (type) — English — Arabic):
+${types || '(none)'}
+
+${docsBlock(docs)}
+
+${COMMON_RULES('en')}
+6. "summaryEn" in English and "summaryAr" in Arabic. ${NUMBERS_RULE}
+7. Each field "citation.section" must be copied exactly from the [DOC ...] marker of the section that contains the value, and
+   "citation.quote" must be an exact excerpt of that section (same digits and spelling) that contains the value.
+
+OUTPUT SCHEMA:
+${DOCINTEL_SCHEMA}`;
 }
 
 export function buildRepairPrompt(problems: string[], schema: string): string {

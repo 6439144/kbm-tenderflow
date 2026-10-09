@@ -11,7 +11,7 @@ import { loadClarification, loadTender, type TenderRow } from './tenders.js';
 import { decryptBidDocuments, financialSealed, type BidRow } from './bids.js';
 
 export type Kind = 'PACK_CHECK' | 'CLARIFICATION_DRAFT' | 'COMPLIANCE_SCREEN' | 'REQUEST_CLASSIFY' | 'GAZETTE_NOTICE' | 'RELEVANCE_MATCH'
-  | 'EVALUATION_NARRATIVE' | 'GRADE_REVIEW' | 'ASSISTANT_CHAT';
+  | 'EVALUATION_NARRATIVE' | 'GRADE_REVIEW' | 'ASSISTANT_CHAT' | 'DOCUMENT_INTELLIGENCE';
 
 export async function packDocTexts(ctx: Ctx, t: TenderRow): Promise<DocText[]> {
   const docs = await ctx.db.query<DocumentRow>(
@@ -76,11 +76,30 @@ export async function packCheck(ctx: Ctx, actor: Actor, tenderId: string, b: any
   const language = b?.language === 'ar' ? 'ar' : 'en';
   const documents = await packDocTexts(ctx, t);
   if (!documents.length) throw conflict('PACK_MISSING', 'The tender has no pack documents to check');
+  // Pack data the officer accepted from document intelligence (deadline, bid bond, validity, criteria) as extra context.
+  const reviewed = await reviewedDocumentData(ctx, t.id);
+  if (reviewed) documents.push(reviewed);
   return recordRun(ctx, actor, t.id, 'PACK_CHECK', { language, documents: docSummary(documents) }, () => ctx.ai.checkTenderPack({
     tender: { titleEn: t.title_en, titleAr: t.title_ar, category: t.category, deadline: new Date(t.submission_deadline).toISOString(),
       criteria: t.criteria, requiredDocuments: t.required_documents },
     documents, language,
   }));
+}
+
+/** Accepted document-intelligence data of the tender's pack/addendum files (null when none was accepted). */
+async function reviewedDocumentData(ctx: Ctx, tenderId: string): Promise<DocText | null> {
+  const rows = await ctx.db.query<any>(
+    `SELECT DISTINCT ON (i.document_id) i.doc_type, i.corrected_doc_type, i.fields, i.corrected_fields, d.title
+       FROM document_insights i JOIN documents d ON d.id=i.document_id
+      WHERE d.tender_id=$1 AND d.owner_type IN ('TENDER_PACK','ADDENDUM') AND i.status IN ('ACCEPTED','CORRECTED')
+      ORDER BY i.document_id, i.reviewed_at DESC`, [tenderId]);
+  if (!rows.length) return null;
+  const fmt = (v: any) => (Array.isArray(v) ? v.join('; ') : v && typeof v === 'object' ? `${v.amount} ${v.currency ?? ''}`.trim() : String(v));
+  return {
+    documentId: 'tenderflow-reviewed-document-data', title: 'Document data reviewed by the procurement officer (TenderFlow)',
+    sections: rows.map((r) => ({ section: r.title, text: [`Document type: ${r.corrected_doc_type ?? r.doc_type}`,
+      ...((r.corrected_fields ?? r.fields ?? []) as { key: string; value: unknown }[]).map((f) => `${f.key}: ${fmt(f.value)}`)].join('\n') })),
+  };
 }
 
 export async function clarificationDraft(ctx: Ctx, actor: Actor, clarificationId: string) {

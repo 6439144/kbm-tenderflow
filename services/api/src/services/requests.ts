@@ -6,6 +6,7 @@ import { auditTx } from '../ctx.js';
 import type { Actor } from '../auth/tokens.js';
 import { badRequest, camel, conflict, isUuid, notFound, now, reqStr, str, uuid } from '../util.js';
 import { insertDocument, putDocument, validateUpload, type UploadFile } from './documents.js';
+import { emitDocumentEvent } from './document-events.js';
 import { DEFAULT_CONFIG, applyPattern, type CycleConfig } from './templates.js';
 import { approvalChainView, createTender, currentRound, nextLevel } from './tenders.js';
 import { notifyRole } from './notifications.js';
@@ -44,7 +45,7 @@ export async function createRequest(ctx: Ctx, actor: Actor, b: any, file: Upload
     title: str(b?.letterTitle, 'letterTitle', { max: 300 }) ?? `GM letter ${number}`, fileName: f.originalname, mimeType: f.detectedMime,
     bytes: f.buffer, uploadedBy: actor.id,
   }) : null;
-  return ctx.db.tx(async (q) => {
+  const out = await ctx.db.tx(async (q) => {
     const doc = prepared ? await insertDocument(q, prepared) : null;
     const rows = await q.query<RequestRow>(
       `INSERT INTO procurement_requests (id, tenant_id, request_number, department, subject, description, source, source_reference,
@@ -57,6 +58,8 @@ export async function createRequest(ctx: Ctx, actor: Actor, b: any, file: Upload
       newState: 'SUBMITTED', details: { requestNumber: number, source, sourceReference, letterDocumentId: doc?.id ?? null, storeRef: doc?.store_ref ?? null } });
     return pub(rows[0]);
   });
+  if (out.letterDocumentId) emitDocumentEvent(ctx, { type: 'UPLOADED', tenantId: actor.tenantId, documentIds: [out.letterDocumentId], actor });
+  return out;
 }
 
 export async function loadRequest(ctx: Ctx, actor: Actor, id: string): Promise<RequestRow> {

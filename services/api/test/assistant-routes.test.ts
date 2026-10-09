@@ -85,7 +85,8 @@ const lastPrompt = (agent: string) => callsTo(agent).at(-1)?.prompt ?? '';
 
 test('seeded app with Orchestrate configured: logins and ids', async () => {
   Object.assign(process.env, fake.env); // createAiService() reads process.env when the app is created
-  run = await startApp(undefined, { SEED_DEMO: 'true', DEMO_PASSWORD });
+  // Document intelligence auto-runs are covered by document-intelligence.test.ts; here they would consume scripted replies.
+  run = await startApp(undefined, { SEED_DEMO: 'true', DEMO_PASSWORD, DOC_AI_AUTO: 'false' });
   for (const u of ['officer', 'director', 'chair', 'evaluator1', 'admin', 'auditor', 'vendor1', 'vendor2']) tok[u] = await login(run, 'kea', u, DEMO_PASSWORD);
   tok.gciaVendor3 = await login(run, 'gcia', 'vendor3', DEMO_PASSWORD);
   const list = await api(run, 'GET', '/api/v1/tenders', { token: tok.officer });

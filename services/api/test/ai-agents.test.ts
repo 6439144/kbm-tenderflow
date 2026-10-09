@@ -294,6 +294,8 @@ describe('Phase 1 agent eval set (agents/evals/agents)', () => {
               return { requirement: k.key, status: st, evidence: 'e', citation: st === 'PRESENT' ? m[0] : null };
             }) });
             case 'assistant': return J({ answer: e.notFound ? 'Not in the context.' : (e.contains ?? []).map((k) => k.split('|')[0]).join(' '), notFound: e.notFound ?? false, citations: e.notFound ? [] : m.slice(0, 1) });
+            case 'documentIntelligence': return J({ docType: e.docType, language: c.language, summaryEn: 'A document.', summaryAr: 'مستند.', citations: m.slice(0, 1),
+              fields: Object.entries(e.fields ?? {}).map(([key, f]) => ({ key, value: f.raw ?? String(f.value), citation: { section: f.section, quote: f.quote } })) });
           }
         };
         const res = await runAgentCase(ai, c);
@@ -302,7 +304,7 @@ describe('Phase 1 agent eval set (agents/evals/agents)', () => {
       }
     }
     assert.ok(n >= 12);
-    assert.deepEqual([...agents].sort(), ['assistant', 'evaluationNarrator', 'gradeReviewer', 'noticeDrafter', 'relevanceMatcher', 'requestClassifier']);
+    assert.deepEqual([...agents].sort(), ['assistant', 'documentIntelligence', 'evaluationNarrator', 'gradeReviewer', 'noticeDrafter', 'relevanceMatcher', 'requestClassifier']);
     assert.ok(langs.has('ar') && langs.has('en'));
   });
 

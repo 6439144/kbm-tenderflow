@@ -6,6 +6,7 @@ import type { Queryable } from '../db.js';
 import { SYSTEM_ACTOR } from './audit.js';
 import { ApiError, badRequest, camel, conflict, forbidden, isUuid, notFound, now, reqStr, str, uuid } from '../util.js';
 import { insertDocument, publicDoc, putDocument, validateUpload, type DocumentRow, type UploadFile } from './documents.js';
+import { emitDocumentEvent } from './document-events.js';
 import { applyPattern, configOf, getProfile, resolveTemplate, snapshotOf, stageList, type ApprovalLevel } from './templates.js';
 import { checkEligibility, purchaseOf, ruleOf } from './eligibility.js';
 import { notifyRole, notifyVendorsOfTender } from './notifications.js';
@@ -231,6 +232,7 @@ export async function uploadTenderDocument(ctx: Ctx, actor: Actor, id: string, f
         storeRef: d.store_ref, version: d.version_no, supersedesId: supersedes?.id ?? null } });
     return d;
   });
+  emitDocumentEvent(ctx, { type: 'UPLOADED', tenantId: actor.tenantId, documentIds: [d.id], actor });
   return publicDoc(d);
 }
 

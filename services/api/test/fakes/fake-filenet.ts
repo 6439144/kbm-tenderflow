@@ -26,6 +26,8 @@ export class FakeFileNet {
   classes = new Set<string>(['Document']);
   /** Property templates added to TF_Document by the ACCE runbook §1b (record declaration). */
   recordProperties = false;
+  /** Property templates TF_ExpiryDate / TF_AIReviewed added to TF_Document (ACCE runbook §1c, document intelligence). */
+  aiProperties = false;
   /** When set, the next createDocument returns this GraphQL error. */
   failCreateDocument: string | null = null;
   /** When set, the next checkinDocument returns this GraphQL error. */
@@ -44,7 +46,7 @@ export class FakeFileNet {
   }
   async stop() { await new Promise<void>((r) => this.server.close(() => r())); }
   reset() {
-    this.folders = new Set(['/']); this.docs.clear(); this.log = []; this.classes = new Set(['Document']); this.recordProperties = false;
+    this.folders = new Set(['/']); this.docs.clear(); this.log = []; this.classes = new Set(['Document']); this.recordProperties = false; this.aiProperties = false;
     this.failCreateDocument = null; this.failCheckin = null; this.omitDownloadUrl = false; this.downloadUrlWithoutContext = false; this.folderCreateDelayMs = 0; this.http500Once = false;
   }
   graphqlOps(op?: string) { return this.log.filter((l) => l.kind === 'graphql' && (!op || l.op === op)); }
@@ -219,8 +221,14 @@ export class FakeFileNet {
       if ('TF_RecordDeclared' in props && !(this.recordProperties && d.cls === 'TF_Document')) {
         return this.json(res, 200, { data: { updateDocument: null }, errors: [{ message: `FNRCE0051E: E_OBJECT_NOT_FOUND: property TF_RecordDeclared not found in class ${d.cls}` }] });
       }
+      // Document-intelligence properties (ACCE runbook §1c): only on TF_Document once the templates exist.
+      const ai = Object.keys(props).filter((k) => ['TF_ExpiryDate', 'TF_AIReviewed'].includes(k));
+      if (ai.length && !(this.aiProperties && d.cls === 'TF_Document')) {
+        return this.json(res, 200, { data: { updateDocument: null }, errors: [{ message: `FNRCE0051E: E_OBJECT_NOT_FOUND: property ${ai[0]} not found in class ${d.cls}` }] });
+      }
       Object.assign(d.props, props);
-      return this.json(res, 200, { data: { updateDocument: { id: d.id, properties: ['TF_RecordDeclared', 'TF_RecordDeclaredAt'].map((p) => ({ id: p, value: d.props[p] ?? null })) } } });
+      const back = /properties\(includes: \[([^\]]*)\]\)/.exec(q)?.[1]?.match(/"(\w+)"/g)?.map((x) => x.slice(1, -1)) ?? ['TF_RecordDeclared', 'TF_RecordDeclaredAt'];
+      return this.json(res, 200, { data: { updateDocument: { id: d.id, properties: back.map((p) => ({ id: p, value: d.props[p] ?? null })) } } });
     }
     if (q.includes('document(repositoryIdentifier: $os, identifier: $id)')) {
       const d = this.docs.get(v.id);
