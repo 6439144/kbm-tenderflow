@@ -5,10 +5,17 @@ import { registerDemoRoutes } from './demo.js';
 import { registerFileNetShowcaseRoutes } from './filenet-showcase.js';
 import { registerAssistantRoutes } from './assistant.js';
 import { registerDocumentIntelligenceRoutes } from './document-intelligence.js';
+import { registerInsightRoutes, registerPublicBoardRoutes } from './insight.js';
 
 export function registerFeatureRoutes(r: express.Router, ctx: Ctx) {
   registerDemoRoutes(r, ctx);
   registerFileNetShowcaseRoutes(r, ctx);
   registerAssistantRoutes(r, ctx);
   registerDocumentIntelligenceRoutes(r, ctx);
+  registerInsightRoutes(r, ctx);
+}
+
+/** Routes that need no login (registered before the authentication middleware in routes.ts). */
+export function registerPublicFeatureRoutes(r: express.Router, ctx: Ctx) {
+  registerPublicBoardRoutes(r, ctx);
 }
