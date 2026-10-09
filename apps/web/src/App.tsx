@@ -22,6 +22,7 @@ import { DocumentQueuePage, DocumentTypesPage } from './features/docintel';
 import { AdminOverviewPage, AnalyticsPage, EvidencePackPage, PublicBoardPage } from './features/insight';
 import { DeliveryLogPage, JobsPage, NotificationTemplatesPage } from './features/notify';
 import { AdminAccountsPage, AdminIdentityPage, MyMfaPage } from './features/security';
+import { EntityPoliciesPage, GradingQueuePage, GradingVendorPage, ReceiptPage, UpgradeRequestPage, VendorLifecycleAdminPage, VendorSubscriptionPage } from './features/moi';
 
 const LANG_KEY = 'tf.lang';
 
@@ -43,9 +44,14 @@ const PROCUREMENT_NAV: NavItem[] = [
   { to: '/procurement/vendors', label: 'nav.vendors', roles: ['PROCUREMENT_OFFICER', 'DIRECTOR'] },
   { to: '/procurement/documents', label: 'nav.documentIntelligence' },
   { to: '/procurement/analytics', label: 'insight.nav.analytics', roles: ['DIRECTOR', 'UNDERSECRETARY'] },
+  { to: '/procurement/grading', label: 'moi.nav.grading', roles: ['GRADING_AUTHORITY'] },
   { to: '/procurement/security', label: 'security.nav.mfa' },
 ];
-const VENDOR_NAV: NavItem[] = [{ to: '/vendor', label: 'nav.myCompany', end: true }, { to: '/vendor/security', label: 'security.nav.mfa' }];
+const VENDOR_NAV: NavItem[] = [
+  { to: '/vendor', label: 'nav.myCompany', end: true },
+  { to: '/vendor/subscription', label: 'moi.nav.subscription' },
+  { to: '/vendor/security', label: 'security.nav.mfa' },
+];
 const ADMIN_NAV: NavItem[] = [
   { to: '/admin', label: 'nav.users', end: true, roles: ['TENANT_ADMIN'] },
   { to: '/admin/cycle', label: 'nav.cycleDesigner', roles: ['TENANT_ADMIN'] },
@@ -64,6 +70,8 @@ const ADMIN_NAV: NavItem[] = [
   { to: '/admin/identity', label: 'security.nav.identity', roles: ['TENANT_ADMIN'] },
   { to: '/admin/accounts', label: 'security.nav.accounts', roles: ['TENANT_ADMIN'] },
   { to: '/admin/security', label: 'security.nav.mfa' },
+  { to: '/admin/policies', label: 'moi.nav.policies' },
+  { to: '/admin/vendor-lifecycle', label: 'moi.nav.vendorLifecycle' },
 ];
 
 function Home() {
@@ -110,10 +118,12 @@ export default function App() {
               <Route path="tenders/:id" element={<VendorTender />} />
               {/* security routes */}
               <Route path="security" element={<MyMfaPage />} />
+              {/* moi routes */}
+              <Route path="subscription" element={<VendorSubscriptionPage />} />
             </Route>
             <Route
               path="/procurement"
-              element={<Portal roles={['PROCUREMENT_OFFICER', 'DIRECTOR', 'UNDERSECRETARY', 'COMMITTEE_CHAIR', 'EVALUATOR']} nav={PROCUREMENT_NAV} />}
+              element={<Portal roles={['PROCUREMENT_OFFICER', 'DIRECTOR', 'UNDERSECRETARY', 'COMMITTEE_CHAIR', 'EVALUATOR', 'GRADING_AUTHORITY']} nav={PROCUREMENT_NAV} />}
             >
               <Route index element={<Dashboard />} />
               <Route path="vendors" element={<VendorsQueue />} />
@@ -128,6 +138,10 @@ export default function App() {
               <Route path="analytics" element={<AnalyticsPage />} />
               {/* security routes */}
               <Route path="security" element={<MyMfaPage />} />
+              {/* moi routes */}
+              <Route path="grading" element={<GradingQueuePage />} />
+              <Route path="grading/vendors/:id" element={<GradingVendorPage />} />
+              <Route path="grading/upgrades/:id" element={<UpgradeRequestPage />} />
             </Route>
             <Route path="/admin" element={<Portal roles={['TENANT_ADMIN', 'AUDITOR']} nav={ADMIN_NAV} />}>
               <Route index element={<AdminUsers />} />
@@ -150,7 +164,12 @@ export default function App() {
               <Route path="identity" element={<AdminIdentityPage />} />
               <Route path="accounts" element={<AdminAccountsPage />} />
               <Route path="security" element={<MyMfaPage />} />
+              {/* moi routes */}
+              <Route path="policies" element={<EntityPoliciesPage />} />
+              <Route path="vendor-lifecycle" element={<VendorLifecycleAdminPage />} />
             </Route>
+            {/* moi routes */}
+            <Route path="/receipt/:number" element={<ReceiptPage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
           <DemoOverlay />

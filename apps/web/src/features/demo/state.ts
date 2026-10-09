@@ -17,7 +17,7 @@ export interface DemoState {
 }
 
 const KEY = 'tf.demo.story.v1';
-const DEFAULT: DemoState = { open: false, collapsed: false, track: 'kea', chapter: { kea: 0, gcia: 0 }, spot: null, tour: null };
+const DEFAULT: DemoState = { open: false, collapsed: false, track: 'kea', chapter: { kea: 0, gcia: 0, moi: 0 }, spot: null, tour: null };
 
 export function lsGet(key: string): string | null {
   try {
@@ -44,8 +44,8 @@ function restore(): DemoState {
       ...DEFAULT,
       open: Boolean(p.open),
       collapsed: Boolean(p.collapsed),
-      track: p.track === 'gcia' ? 'gcia' : 'kea',
-      chapter: { kea: Number(p.chapter?.kea) || 0, gcia: Number(p.chapter?.gcia) || 0 },
+      track: p.track === 'gcia' || p.track === 'moi' ? p.track : 'kea',
+      chapter: { kea: Number(p.chapter?.kea) || 0, gcia: Number(p.chapter?.gcia) || 0, moi: Number(p.chapter?.moi) || 0 },
       spot: p.spot && typeof p.spot.path === 'string' && Array.isArray(p.spot.selectors) ? p.spot : null,
     };
   } catch {

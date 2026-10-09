@@ -6,6 +6,7 @@ import { applyTheme, homeFor, useSession } from '../session';
 import { Header } from '../components/Layout';
 import { Button, ErrorBox, Field, Spinner, useAsync, useToast } from '../components/ui';
 import { Enrolment, RecoveryCodes, secApi, VerifyStep, type LoginResult } from '../features/security';
+import { isSuspendedError, SuspendedNotice } from '../features/moi';
 
 type TenantWithSso = Tenant & { sso?: { labelEn: string; labelAr: string } | null };
 type Step = { kind: 'password' } | { kind: 'verify'; mfaToken: string } | { kind: 'enrol'; mfaToken: string } | { kind: 'codes'; codes: string[]; result: LoginResult };
@@ -110,7 +111,7 @@ export default function Login() {
                   </div>
                 )}
                 {ssoBusy && <Spinner label={t('security.sso.completing')} />}
-                {err ? <ErrorBox error={err} /> : null}
+                {err ? (isSuspendedError(err) ? <SuspendedNotice error={err} /> : <ErrorBox error={err} />) : null}
                 <form onSubmit={submit} noValidate={false}>
                   <Field label={t('login.tenant')} required>
                     {(id) =>

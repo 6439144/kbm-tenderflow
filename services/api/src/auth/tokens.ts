@@ -10,7 +10,7 @@ export const AUDIENCE = 'tenderflow';
 /** Audience of the short-lived second-factor token: never accepted as a session (verify() requires AUDIENCE). */
 export const MFA_AUDIENCE = 'tenderflow-mfa-pending';
 export const MFA_PENDING_TTL_SECONDS = 300;
-export const ROLES = ['VENDOR', 'PROCUREMENT_OFFICER', 'DIRECTOR', 'UNDERSECRETARY', 'COMMITTEE_CHAIR', 'EVALUATOR', 'TENANT_ADMIN', 'AUDITOR'] as const;
+export const ROLES = ['VENDOR', 'PROCUREMENT_OFFICER', 'DIRECTOR', 'UNDERSECRETARY', 'COMMITTEE_CHAIR', 'EVALUATOR', 'TENANT_ADMIN', 'AUDITOR', 'GRADING_AUTHORITY'] as const;
 export type Role = (typeof ROLES)[number];
 
 export interface Actor {

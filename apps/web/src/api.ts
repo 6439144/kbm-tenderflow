@@ -10,7 +10,8 @@ export type Role =
   | 'COMMITTEE_CHAIR'
   | 'EVALUATOR'
   | 'TENANT_ADMIN'
-  | 'AUDITOR';
+  | 'AUDITOR'
+  | 'GRADING_AUTHORITY';
 
 export const ALL_ROLES: Role[] = [
   'PROCUREMENT_OFFICER',
@@ -20,6 +21,7 @@ export const ALL_ROLES: Role[] = [
   'EVALUATOR',
   'TENANT_ADMIN',
   'AUDITOR',
+  'GRADING_AUTHORITY',
   'VENDOR',
 ];
 

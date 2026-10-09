@@ -16,6 +16,7 @@ import { SYSTEM_ACTOR } from './services/audit.js';
 import { installStarterTemplates } from './services/templates.js';
 import { setClassification, upsertActivityCode, purchaseDocuments } from './services/eligibility.js';
 import { createRequest } from './services/requests.js';
+import { seedMoi } from './seed-moi.js';
 
 export const SEED_FILES_DIR = path.join(REPO_ROOT, 'seed', 'files');
 
@@ -211,6 +212,7 @@ export async function seedDemo(ctx: Ctx): Promise<void> {
     setClockOffset(0);
   }
   await tenders.closeDueTenders(ctx);
+  await seedMoi(ctx, password); // entity 3: MOI reference configuration (fictitious demo data)
   await (await import('./features/notify.js')).seedNotifications(ctx); // NOTIFY: notification templates + sample approval SLA
   console.log('[seed] done: entities kea (public tender) and gcia (two-envelope RFP); users officer/director/undersecretary/chair/evaluator1/evaluator2/admin/auditor/vendor1..4');
 }

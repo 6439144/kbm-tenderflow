@@ -7,10 +7,25 @@ import { auditTx } from '../ctx.js';
 import type { Actor } from '../auth/tokens.js';
 import type { Queryable } from '../db.js';
 import { ROLES } from '../auth/tokens.js';
-import { badRequest, camel, conflict, isUuid, notFound, now, reqStr, str, uuid } from '../util.js';
+import { ApiError, badRequest, camel, conflict, isUuid, notFound, now, reqStr, str, uuid } from '../util.js';
 
-export interface ApprovalLevel { role: string; labelEn: string; labelAr: string }
+export interface ApprovalLevel {
+  role: string; labelEn: string; labelAr: string;
+  /** Service level of this approval step in hours (stored and validated here; escalation is a notifications feature). */
+  dueHours?: number;
+}
+/**
+ * FULL_CYCLE — request → … → sealed bids → opening → evaluation → award (default).
+ * PUBLICATION_AND_SALE — the cycle ends at document purchase: bidding, opening, evaluation and award are not part
+ * of this entity's current scope (e.g. MOI Phase 1). The bid/opening routes refuse with 409 STAGE_NOT_IN_SCOPE.
+ */
+export type CycleScope = 'FULL_CYCLE' | 'PUBLICATION_AND_SALE';
+export const OUT_OF_SCOPE_STAGES: Record<CycleScope, string[]> = {
+  FULL_CYCLE: [],
+  PUBLICATION_AND_SALE: ['SEALED_BIDS', 'OPENING', 'COMPLIANCE', 'EVALUATION', 'AWARD_APPROVAL', 'RECORDS_LOCK'],
+};
 export interface CycleConfig {
+  scope?: CycleScope;
   stages: {
     requestIntake: boolean;      // departmental request (Raslni / scanned letter) precedes the tender
     documentPurchase: boolean;   // vendors buy the tender documents before bidding
@@ -40,6 +55,7 @@ export const LEVEL_UNDERSECRETARY = L('UNDERSECRETARY', 'Undersecretary', 'ال�
 
 /** Behaviour of a tender with no template: identical to TenderFlow v1.0 (one director approval, one envelope). */
 export const DEFAULT_CONFIG: CycleConfig = {
+  scope: 'FULL_CYCLE',
   stages: { requestIntake: false, documentPurchase: false, gazette: false, capt: false, complianceScreening: true, recordsLock: false },
   approvals: { request: [LEVEL_DIRECTOR], publish: [LEVEL_DIRECTOR], award: [LEVEL_DIRECTOR] },
   envelopes: 'ONE',
@@ -89,7 +105,13 @@ function parseLevels(v: unknown, field: string, min = 1): ApprovalLevel[] {
     const role = x?.role;
     if (typeof role !== 'string' || !(ROLES as readonly string[]).includes(role) || !APPROVER_ROLES.includes(role))
       throw badRequest(`${field}[${i}].role must be one of ${APPROVER_ROLES.join(', ')}`);
-    return { role, labelEn: str(x?.labelEn, `${field}[${i}].labelEn`, { max: 120 }) ?? role, labelAr: str(x?.labelAr, `${field}[${i}].labelAr`, { max: 120 }) ?? role };
+    const out: ApprovalLevel = { role, labelEn: str(x?.labelEn, `${field}[${i}].labelEn`, { max: 120 }) ?? role, labelAr: str(x?.labelAr, `${field}[${i}].labelAr`, { max: 120 }) ?? role };
+    if (x?.dueHours !== undefined && x?.dueHours !== null && x?.dueHours !== '') {
+      const h = Number(x.dueHours);
+      if (!Number.isInteger(h) || h < 1 || h > 8760) throw badRequest(`${field}[${i}].dueHours must be a whole number of hours between 1 and 8760`);
+      out.dueHours = h;
+    }
+    return out;
   });
 }
 
@@ -119,7 +141,10 @@ export function parseConfig(raw: any): CycleConfig {
   if (documentPurchase && price <= 0) throw badRequest('documentPurchase needs fees.documentPrice > 0');
   const ap = raw.approvals ?? {};
   const ai = raw.ai ?? {};
+  const scope = raw.scope ?? 'FULL_CYCLE';
+  if (scope !== 'FULL_CYCLE' && scope !== 'PUBLICATION_AND_SALE') throw badRequest("scope must be 'FULL_CYCLE' or 'PUBLICATION_AND_SALE'");
   return {
+    scope,
     stages: {
       requestIntake: bool(s.requestIntake, d.stages.requestIntake), documentPurchase,
       gazette: bool(s.gazette, d.stages.gazette), capt: bool(s.capt, d.stages.capt),
@@ -146,7 +171,8 @@ export function configOf(t: { template_snapshot?: any }): CycleConfig {
 
 /** Ordered list of stages a template switches on, for previews and the tender stepper. */
 export function stageList(c: CycleConfig): { key: string; kind: 'FIXED' | 'CONFIGURED' | 'OPTIONAL'; enabled: boolean; detail?: string }[] {
-  return [
+  const out = scopeOf(c) === 'FULL_CYCLE' ? null : OUT_OF_SCOPE_STAGES[scopeOf(c)];
+  const all: { key: string; kind: 'FIXED' | 'CONFIGURED' | 'OPTIONAL'; enabled: boolean; detail?: string }[] = [
     { key: 'REQUEST_INTAKE', kind: 'OPTIONAL', enabled: c.stages.requestIntake },
     { key: 'DRAFT', kind: 'FIXED', enabled: true },
     { key: 'APPROVAL', kind: 'CONFIGURED', enabled: true, detail: c.approvals.publish.map((l) => l.role).join(' → ') },
@@ -163,6 +189,16 @@ export function stageList(c: CycleConfig): { key: string; kind: 'FIXED' | 'CONFI
     { key: 'AWARD_APPROVAL', kind: 'CONFIGURED', enabled: true, detail: c.approvals.award.map((l) => l.role).join(' → ') },
     { key: 'RECORDS_LOCK', kind: 'OPTIONAL', enabled: c.stages.recordsLock },
   ];
+  return out ? all.filter((s) => !out.includes(s.key)) : all;
+}
+
+export const scopeOf = (c: CycleConfig): CycleScope => (c.scope === 'PUBLICATION_AND_SALE' ? 'PUBLICATION_AND_SALE' : 'FULL_CYCLE');
+
+/** Throws 409 STAGE_NOT_IN_SCOPE when the tender's pinned cycle excludes the stage (e.g. bids in PUBLICATION_AND_SALE). */
+export function assertStageInScope(t: { template_snapshot?: any }, stage: string) {
+  const scope = scopeOf(configOf(t));
+  if (OUT_OF_SCOPE_STAGES[scope].includes(stage))
+    throw new ApiError(409, 'STAGE_NOT_IN_SCOPE', `${stage} is outside this entity's current scope (${scope}): the cycle ends at document purchase. Bidding and award are outside the current scope.`, { scope, stage });
 }
 
 export const publicTemplate = (t: TemplateRow) => {

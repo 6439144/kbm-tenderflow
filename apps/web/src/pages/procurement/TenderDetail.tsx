@@ -27,6 +27,7 @@ import { useSession } from '../../session';
 import { DocButton } from '../../components/Layout';
 import { CitationInline, Citations, Countdown, DocList } from '../../components/shared';
 import { DocInsightInline, ExtractedTotalsCard } from '../../features/docintel';
+import { bidsInScope, OutOfScopeNote } from '../../features/moi';
 import {
   AsyncView,
   Badge,
@@ -119,6 +120,7 @@ function Detail({
   const awardChain = (td.awardChain ?? null) as Step[] | null;
   const awardWaiting = waitingStep(awardChain);
   const two = td.cycle?.envelopes === 'TWO';
+  const inScope = bidsInScope(td.cycle); // PUBLICATION_AND_SALE: the cycle ends at the document purchase
   const finKeys = useMemo(() => new Set(two ? td.cycle?.evaluation.financialCriteria ?? [] : []), [two, td.cycle]);
   const finOpen = Boolean(td.financialOpenedAt);
   const seesBids = hasRole('COMMITTEE_CHAIR', 'EVALUATOR', 'DIRECTOR', 'UNDERSECRETARY');
@@ -209,7 +211,7 @@ function Detail({
     );
   if (td.status === 'PUBLISHED' && isOfficer)
     actions.push(jump('goClar', 'sec-clar', t('td.goClar')), jump('goAdd', 'sec-docs', t('td.goAddendum'), 'secondary'));
-  if (td.status === 'CLOSED' && isChair) actions.push(jump('goOpen', 'sec-opening', t('td.goOpen')));
+  if (td.status === 'CLOSED' && isChair && inScope) actions.push(jump('goOpen', 'sec-opening', t('td.goOpen')));
   if ((td.status === 'OPENED' || td.status === 'EVALUATION') && !awardPending) {
     if (isEvaluator) actions.push(jump('goScore', 'sec-scoring', t('td.goScore')));
     if (isChair || isEvaluator) actions.push(jump('goCmp', 'sec-compliance', t('td.goCompliance'), 'secondary'));
@@ -248,12 +250,14 @@ function Detail({
       </header>
 
       <Stepper
+        inScope={inScope}
         status={td.status}
         awardPending={awardPending}
         awardSub={awardWaiting ? t('cycle.td.awardPendingRole', { role: pick(awardWaiting.labelEn, awardWaiting.labelAr) || te('role.', awardWaiting.role) }) : undefined}
         approvalSub={td.status === 'PENDING_APPROVAL' && waiting ? t('cycle.levelOf', { n: waiting.level, total: chain.length }) : undefined}
       />
 
+      {!inScope && <OutOfScopeNote id="sec-scope" />}
       {td.status === 'CANCELLED' && (
         <div className="alert alert-danger" role="status">
           {t('td.cancelledBanner')}
@@ -305,11 +309,11 @@ function Detail({
                 </div>
                 <div className="tile-label">{t('td.countdown')}</div>
               </div>
-              <div className="tile">
+              {inScope && <div className="tile">
                 <div className="tile-num">{td.bidCount ?? bids.data?.length ?? '—'}</div>
                 <div className="tile-label">{t('td.bidsReceived')}</div>
                 <div className="muted small">{t('td.bidsSealedNote')}</div>
-              </div>
+              </div>}
             </div>
           )}
 
@@ -381,7 +385,7 @@ function Detail({
 
           {td.status === 'PUBLISHED' && <ClarificationsInbox td={td} canAnswer={isOfficer} onChange={refresh} />}
 
-          {td.status === 'CLOSED' && (
+          {td.status === 'CLOSED' && inScope && (
             <OpeningSession
               tenderId={td.id}
               canOpen={isChair}
@@ -394,7 +398,7 @@ function Detail({
             />
           )}
 
-          {POST_OPEN.includes(td.status) && (
+          {POST_OPEN.includes(td.status) && inScope && (
             <>
               <BidsTable bids={bids} canDownload={seesBids} two={two} />
               <Compliance td={td} bids={bids.data ?? []} canRun={hasRole('COMMITTEE_CHAIR', 'EVALUATOR')} onChange={refresh} />
@@ -496,13 +500,14 @@ function bidVendor(b: Bid, pick: (e?: string | null, a?: string | null) => strin
 
 // ---------------------------------------------------------------- stepper
 
-function Stepper({ status, awardPending, approvalSub, awardSub }: { status: string; awardPending: boolean; approvalSub?: string; awardSub?: string }) {
+function Stepper({ status, awardPending, approvalSub, awardSub, inScope = true }: { status: string; awardPending: boolean; approvalSub?: string; awardSub?: string; inScope?: boolean }) {
   const { t, te } = useI18n();
-  const idx = LIFECYCLE.indexOf(status as (typeof LIFECYCLE)[number]);
+  const steps = inScope ? LIFECYCLE : LIFECYCLE.slice(0, LIFECYCLE.indexOf('CLOSED') + 1); // PUBLICATION_AND_SALE ends at CLOSED
+  const idx = steps.indexOf(status as (typeof LIFECYCLE)[number]);
   return (
     <nav aria-label={t('td.lifecycle')} className="stepper-wrap">
       <ol className={`stepper ${status === 'CANCELLED' ? 'stepper-cancelled' : ''}`}>
-        {LIFECYCLE.map((s, i) => {
+        {steps.map((s, i) => {
           const state = idx < 0 ? 'todo' : i < idx ? 'done' : i === idx ? (s === 'AWARDED' ? 'done current' : 'current') : 'todo';
           return (
             <li key={s} className={`step ${state}`} aria-current={i === idx ? 'step' : undefined}>

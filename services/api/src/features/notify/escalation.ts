@@ -74,7 +74,7 @@ const maxDate = (...ds: (Date | null | undefined)[]) => {
 };
 
 function due(level: ApprovalLevel, sla: SlaSettings, since: Date) {
-  const raw = (level as ApprovalLevel & { dueHours?: unknown }).dueHours;
+  const raw: unknown = (level as { dueHours?: unknown }).dueHours;
   const lvl = raw === undefined || raw === null || raw === '' ? null : Number(raw);
   const h = lvl !== null && Number.isFinite(lvl) && lvl > 0 ? lvl : sla.defaultDueHours;
   return h && h > 0 ? { dueHours: h, dueAt: new Date(since.getTime() + h * 3_600_000) } : { dueHours: null, dueAt: null };

@@ -10,7 +10,7 @@ export interface TourStep {
   /** Selectors in priority order; none → the step is shown centred without a spotlight. */
   spot?: string[];
 }
-export type TourId = 'officer' | 'director' | 'chair' | 'evaluator' | 'auditor' | 'admin' | 'vendor';
+export type TourId = 'officer' | 'director' | 'chair' | 'evaluator' | 'auditor' | 'admin' | 'vendor' | 'grader';
 
 const LANG = ['.lang-toggle'];
 const END: TourStep = { title: 'demo.tour.end.t', body: 'demo.tour.end.b', spot: ['.demo-launch'] };
@@ -73,11 +73,17 @@ export const TOURS: Record<TourId, TourStep[]> = {
     { title: 'demo.tour.vendor.4.t', body: 'demo.tour.vendor.4.b', spot: LANG },
     END,
   ],
+  grader: [
+    { title: 'demo.tour.grader.1.t', body: 'demo.tour.grader.1.b', path: '/procurement/grading', spot: ['#grading-applications', 'main h1'] },
+    { title: 'demo.tour.grader.2.t', body: 'demo.tour.grader.2.b', path: '/procurement/grading', spot: ['#grading-upgrades'] },
+    { title: 'demo.tour.grader.3.t', body: 'demo.tour.grader.3.b', spot: LANG },
+    END,
+  ],
 };
 
 const ROLE_TOUR: Record<Role, TourId> = {
   VENDOR: 'vendor', PROCUREMENT_OFFICER: 'officer', DIRECTOR: 'director', UNDERSECRETARY: 'director', COMMITTEE_CHAIR: 'chair',
-  EVALUATOR: 'evaluator', AUDITOR: 'auditor', TENANT_ADMIN: 'admin',
+  EVALUATOR: 'evaluator', AUDITOR: 'auditor', TENANT_ADMIN: 'admin', GRADING_AUTHORITY: 'grader',
 };
 
 /** The tour of a user's primary (first) role. */

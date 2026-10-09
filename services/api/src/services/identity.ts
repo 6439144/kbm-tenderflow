@@ -11,6 +11,7 @@ import { installDefaultDocumentTypes } from './doc-catalogue.js';
 import { enforceStaffNetwork, type ReqLike } from '../features/security/network.js';
 import { secondStepFor, startEnrolment, confirmEnrolment, verifySecondFactor } from '../features/security/mfa.js';
 import { loadSettings } from '../features/security/settings.js';
+import { assertLoginAllowed } from './vendor-lifecycle.js';
 
 export interface UserRow {
   id: string; tenant_id: string; username: string; password_hash: string; display_name: string;
@@ -101,6 +102,7 @@ export async function login(ctx: Ctx, body: any, req?: ReqLike) {
     if (u) await ctx.db.tx((q) => auditTx(ctx, q, { tenantId, actor: { id: u.id, roles: u.roles }, action: 'LOGIN_FAILED', resourceType: 'USER', resourceId: u.id }));
     throw new ApiError(401, 'INVALID_CREDENTIALS', 'Invalid tenant, username or password');
   }
+  await assertLoginAllowed(ctx.db, u); // blocked vendor (FR-013): only after the password is verified, so nothing leaks
   if (req) await enforceStaffNetwork(ctx, req, { id: u.id, tenantId, roles: u.roles }, 'LOGIN');
   const step = await secondStepFor(ctx, u);
   if (step) {

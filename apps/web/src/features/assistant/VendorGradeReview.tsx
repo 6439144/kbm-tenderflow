@@ -13,7 +13,7 @@ import { assistantApi, type AgentRun } from './api-assistant';
 export function VendorGradeReview({ vendorId }: { vendorId: string }) {
   const { t, pick, fmtDate } = useI18n();
   const { hasRole } = useSession();
-  const allowed = hasRole('PROCUREMENT_OFFICER', 'TENANT_ADMIN');
+  const allowed = hasRole('PROCUREMENT_OFFICER', 'TENANT_ADMIN', 'GRADING_AUTHORITY');
   const hist = useAsync(() => (allowed ? assistantApi.gradeReviews(vendorId) : Promise.resolve(null)), [vendorId, allowed]);
   const [grade, setGrade] = useState<1 | 2 | 3>(2);
   const [busy, setBusy] = useState(false);

@@ -10,6 +10,7 @@ import { emitDocumentEvent } from './document-events.js';
 import { applyPattern, configOf, getProfile, resolveTemplate, snapshotOf, stageList, type ApprovalLevel } from './templates.js';
 import { checkEligibility, purchaseOf, ruleOf } from './eligibility.js';
 import { notify, notifyRole, notifyVendorsOfTender } from './notifications.js';
+import { assertVendorTenderAccess, filterVendorTenders, packUnlocked } from './vendor-lifecycle.js';
 
 export interface TenderRow {
   id: string; tenant_id: string; tender_number: string; title_en: string; title_ar: string; description_en: string;
@@ -94,13 +95,6 @@ export async function closeDueTenders(ctx: Ctx): Promise<number> {
   return due.length;
 }
 
-async function vendorCanSee(ctx: Ctx, actor: Actor, t: TenderRow): Promise<boolean> {
-  if (!actor.vendorId || !PUBLISHED_PLUS.includes(t.status)) return false;
-  const v = await ctx.db.query(`SELECT 1 FROM vendors WHERE id=$1 AND tenant_id=$2 AND status='APPROVED' AND $3 = ANY(categories)`,
-    [actor.vendorId, actor.tenantId, t.category]);
-  return v.length > 0;
-}
-
 /** Load a tender visible to the caller (tenant-scoped; vendors only PUBLISHED+ in their categories). Auto-closes. */
 export async function loadTender(ctx: Ctx, actor: Actor, id: string): Promise<TenderRow> {
   if (!isUuid(id)) throw notFound('Tender');
@@ -108,7 +102,8 @@ export async function loadTender(ctx: Ctx, actor: Actor, id: string): Promise<Te
   if (!rows[0]) throw notFound('Tender');
   const t = await autoClose(ctx, rows[0]);
   if (isStaff(actor)) return t;
-  if (isVendor(actor) && (await vendorCanSee(ctx, actor, t))) return t;
+  // Vendor visibility (category or BR-007 eligibility per entity policy), blocking and subscription: vendor-lifecycle.ts
+  if (isVendor(actor)) { await assertVendorTenderAccess(ctx.db, actor.tenantId, actor.vendorId, t); return t; }
   throw notFound('Tender');
 }
 
@@ -123,10 +118,10 @@ export async function listTenders(ctx: Ctx, actor: Actor, status?: unknown) {
   if (!actor.vendorId) return [];
   const rows = await ctx.db.query<TenderRow>(
     `SELECT t.* FROM tenders t JOIN vendors v ON v.id=$2 AND v.tenant_id=t.tenant_id
-      WHERE t.tenant_id=$1 AND v.status='APPROVED' AND t.category = ANY(v.categories)
+      WHERE t.tenant_id=$1 AND v.status='APPROVED'
         AND t.status = ANY($3::text[]) AND ($4::text IS NULL OR t.status=$4) ORDER BY t.submission_deadline ASC`,
     [actor.tenantId, actor.vendorId, PUBLISHED_PLUS, s]);
-  return rows.map(publicTender);
+  return (await filterVendorTenders(ctx.db, actor.tenantId, actor.vendorId, rows)).map(publicTender);
 }
 
 export async function createTender(ctx: Ctx, actor: Actor, b: any) {
@@ -358,8 +353,8 @@ export async function tenderDetail(ctx: Ctx, actor: Actor, id: string) {
   const t = await loadTender(ctx, actor, id);
   const staff = isStaff(actor);
   const docTypes = staff ? ['TENDER_PACK', 'ADDENDUM', 'OPENING_RECORD', 'COMMITTEE_REPORT'] : ['TENDER_PACK', 'ADDENDUM'];
-  const docs = await ctx.db.query<DocumentRow>(
-    `SELECT * FROM documents WHERE tender_id=$1 AND tenant_id=$2 AND owner_type = ANY($3::text[]) ORDER BY created_at`, [t.id, actor.tenantId, docTypes]);
+  const docs = staff || !actor.vendorId || (await packUnlocked(ctx.db, t, actor.vendorId)) ? await ctx.db.query<DocumentRow>(
+    `SELECT * FROM documents WHERE tender_id=$1 AND tenant_id=$2 AND owner_type = ANY($3::text[]) ORDER BY created_at`, [t.id, actor.tenantId, docTypes]) : [];
   const clar = await ctx.db.query<any>(
     `SELECT c.*, v.legal_name_en AS vendor_name_en FROM clarifications c JOIN vendors v ON v.id=c.vendor_id
       WHERE c.tender_id=$1 AND c.tenant_id=$2 ORDER BY c.created_at`, [t.id, actor.tenantId]);

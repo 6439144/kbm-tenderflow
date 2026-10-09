@@ -6,6 +6,7 @@ import type { Queryable } from '../db.js';
 import { ApiError, badRequest, isUuid, notFound, sha256Hex, uuid, now, camel } from '../util.js';
 import { encrypt, decrypt } from './vault.js';
 import { ContentStoreUnavailableError } from '../content/types.js';
+import { vendorMayReadPack } from './vendor-lifecycle.js';
 
 export interface UploadFile { originalname: string; mimetype: string; buffer: Buffer; size: number }
 
@@ -182,9 +183,9 @@ export async function loadReadableDocument(ctx: Ctx, actor: Actor, id: string): 
     case 'ADDENDUM':
       if (isStaff(actor)) allowed = true;
       else if (isVendor(actor) && actor.vendorId && d.tender_status && PUBLISHED_PLUS.includes(d.tender_status)) {
-        const v = await ctx.db.query(`SELECT 1 FROM vendors WHERE id=$1 AND tenant_id=$2 AND status='APPROVED' AND $3 = ANY(categories)`,
-          [actor.vendorId, actor.tenantId, d.tender_category]);
-        allowed = v.length > 0;
+        // Same rule as the tender itself (visibility policy, block, subscription) + purchase when the cycle sells the files.
+        const t = (await ctx.db.query<any>('SELECT * FROM tenders WHERE id=$1 AND tenant_id=$2', [d.tender_id, actor.tenantId]))[0];
+        allowed = Boolean(t) && (await vendorMayReadPack(ctx.db, actor.tenantId, actor.vendorId, t));
       }
       break;
     case 'OPENING_RECORD':
