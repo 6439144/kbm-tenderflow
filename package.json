@@ -1,30 +1,22 @@
 {
   "name": "tenderflow",
-  "version": "0.9.0",
+  "version": "1.0.0-rc1",
   "description": "Enterprise Digital Tendering Platform",
   "private": true,
   "type": "module",
   "workspaces": [
-    "apps/*",
-    "packages/*",
-    "services/*"
+    "services/api",
+    "apps/web"
   ],
   "scripts": {
-    "build": "npm run build --workspaces --if-present",
-    "test": "npm run test --workspaces --if-present",
-    "test:e2e": "ts-node tests/e2e/review-demo.test.ts",
-    "test:security": "ts-node tests/security/sealed-bid-security.test.ts",
-    "test:evals": "node agents/evals/score-evals.js",
-    "scan:secrets": "node scripts/secret-scan.js",
-    "generate:sbom": "node scripts/generate-sbom.js",
-    "lint": "npm run lint --workspaces --if-present",
-    "typecheck": "npm run typecheck --workspaces --if-present",
-    "dev:api": "npm run dev --workspace=services/api",
-    "dev:content": "npm run dev --workspace=services/content-adapter",
-    "dev:vendor": "npm run dev --workspace=apps/vendor-portal",
-    "dev:procurement": "npm run dev --workspace=apps/procurement-app",
-    "dev:control": "npm run dev --workspace=apps/control-panel",
-    "seed": "node seed/seed.js"
+    "build": "npm run build -w apps/web && npm run build -w services/api",
+    "start": "npm start -w services/api",
+    "dev": "npm run dev -w services/api",
+    "test": "npm test -w services/api",
+    "gen-keys": "node scripts/gen-keys.mjs",
+    "verify:filenet": "node services/api/dist/tools/verify-filenet.js",
+    "verify:ai": "node services/api/dist/tools/verify-ai.js",
+    "evals": "node services/api/dist/tools/run-evals.js"
   },
   "keywords": [
     "tendering",
@@ -36,7 +28,7 @@
   ],
   "author": "Khorafi Business Machines (KBM)",
   "license": "UNLICENSED",
-  "devDependencies": {
-    "ts-node": "^10.9.2"
+  "engines": {
+    "node": ">=20"
   }
 }
