@@ -15,6 +15,11 @@ evaluationsRouter.get('/', (req: AuthenticatedRequest, res: Response) => {
 });
 
 evaluationsRouter.post('/scorecard', async (req: AuthenticatedRequest, res: Response) => {
+  if (req.user?.role === 'VENDOR' || req.user?.role === 'PUBLIC') {
+    res.status(403).json({ code: 'FORBIDDEN_ROLE', message: 'Vendors are not permitted to submit evaluation scorecards.' });
+    return;
+  }
+
   const { tenderId } = req.params;
   const { bidId, evaluatorId, technicalScore, financialScore, comments } = req.body;
 
@@ -64,6 +69,11 @@ evaluationsRouter.post('/scorecard', async (req: AuthenticatedRequest, res: Resp
 });
 
 evaluationsRouter.post('/award', async (req: AuthenticatedRequest, res: Response) => {
+  if (req.user?.role === 'VENDOR' || req.user?.role === 'PUBLIC') {
+    res.status(403).json({ code: 'FORBIDDEN_ROLE', message: 'Vendors are not permitted to issue contract awards.' });
+    return;
+  }
+
   const { tenderId } = req.params;
   const { winningVendorId, awardValue, justification } = req.body;
 

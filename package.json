@@ -13,7 +13,10 @@
     "build": "npm run build --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "test:e2e": "ts-node tests/e2e/review-demo.test.ts",
+    "test:security": "ts-node tests/security/sealed-bid-security.test.ts",
     "test:evals": "node agents/evals/score-evals.js",
+    "scan:secrets": "node scripts/secret-scan.js",
+    "generate:sbom": "node scripts/generate-sbom.js",
     "lint": "npm run lint --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "dev:api": "npm run dev --workspace=services/api",
@@ -32,5 +35,8 @@
     "filenet"
   ],
   "author": "Khorafi Business Machines (KBM)",
-  "license": "UNLICENSED"
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "ts-node": "^10.9.2"
+  }
 }

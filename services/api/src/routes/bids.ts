@@ -83,6 +83,11 @@ bidsRouter.get('/:bidId/content', (req: AuthenticatedRequest, res: Response) => 
  * Step 8: Bid Opening Ceremony
  */
 bidsRouter.post('/opening-ceremony', async (req: AuthenticatedRequest, res: Response) => {
+  if (req.user?.role === 'VENDOR' || req.user?.role === 'PUBLIC') {
+    res.status(403).json({ code: 'FORBIDDEN_ROLE', message: 'Vendors are not permitted to convene bid opening ceremonies.' });
+    return;
+  }
+
   const { tenderId } = req.params;
   const { committeeChair, attendees, minutesNotes } = req.body;
 

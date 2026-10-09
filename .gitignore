@@ -25,3 +25,10 @@ data/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Generated build & security artifacts
+tenderflow-sbom.json
+deploy/backups/
+deploy/proxy/certs/*.key
+deploy/proxy/certs/*.crt
+

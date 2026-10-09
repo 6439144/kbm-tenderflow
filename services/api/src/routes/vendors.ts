@@ -65,6 +65,11 @@ vendorsRouter.post('/register', async (req: AuthenticatedRequest, res: Response)
 });
 
 vendorsRouter.post('/:vendorId/approve', async (req: AuthenticatedRequest, res: Response) => {
+  if (req.user?.role === 'VENDOR' || req.user?.role === 'PUBLIC') {
+    res.status(403).json({ code: 'FORBIDDEN_ROLE', message: 'Vendors are not permitted to approve vendor registrations.' });
+    return;
+  }
+
   const { vendorId } = req.params;
   const { reason } = req.body;
   const vendor = db.vendors.get(vendorId);

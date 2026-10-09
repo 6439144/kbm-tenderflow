@@ -83,6 +83,12 @@
   - **T17 (Tue 13 Oct)**: `bid-compliance-screener` (unsealed bids only); all agent actions logged to TenderFlow audit log; `import.sh` rebuilds agents in <15 minutes.
 - **Constraints**: Synthetic data only. Never put secrets in agent YAML. Connection via `orchestrate env` with IBM IAM token. Every action strictly advisory (Rule 7).
 
----
-
-*(Agent A6 will be appended when its brief is introduced)*
+### A6 — Quality, Security & Platform Agent
+- **Role**: Platform infrastructure, deployment packaging, containerization, TLS proxy, CI pipelines (lint, typecheck, tests, images, security scans, SBOM), security penetration testing (RBAC, cross-tenant isolation, sealed-bid protections), and Playwright E2E automation.
+- **Owned Folders**: `deploy/`, `tests/`, CI configuration (`.github/`).
+- **Assigned Tasks**:
+  - **T01 (Sun 11 Oct)**: Monorepo scaffold; `deploy/compose` with apps, API, PostgreSQL 16, Keycloak, Mailpit, and TLS reverse proxy; `install.sh` v0; CI workflow with lint, typecheck, tests, image builds, dependency scan, secret scan, and SBOM generation.
+  - **T13 (Mon 12 Oct)**: Deploy to review VM over HTTPS; security tests (vendor cannot call procurement endpoints, no cross-tenant access, nobody—AI tools included—reads a sealed bid before opening); Playwright E2E for demo steps 1-4.
+  - **T18 (Tue 13 Oct)**: E2E for demo steps 5-8; zero critical/high findings in security audit; automated nightly DB dump.
+  - **T22 (Wed 14 Oct)**: Run `install.sh` on clean VM and record execution; record full demo video as fallback. Review every PR for missing tests.
+- **Constraints**: Enforce zero-secret policy across all manifests and workflows. Enforce non-negotiable security boundaries (Rule 1 sealed bids, Rule 2 audit ledger, Rule 3 tenant isolation and RBAC).

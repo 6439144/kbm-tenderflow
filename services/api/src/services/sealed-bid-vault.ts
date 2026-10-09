@@ -180,6 +180,10 @@ export class SealedBidVaultService {
     }
     return list;
   }
+
+  getBidById(bidId: string): StoredBid | undefined {
+    return this.bids.get(bidId);
+  }
 }
 
 export const sealedBidVault = new SealedBidVaultService();

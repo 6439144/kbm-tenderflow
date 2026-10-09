@@ -77,7 +77,70 @@ services:
       - "4000:4000"
 
   # -------------------------------------------------------------
-  # Gateway Reverse Proxy (deploy/proxy)
+  # Vendor Portal (apps/vendor-portal - Port 3000)
+  # -------------------------------------------------------------
+  vendor-portal:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.app
+      args:
+        APP_DIR: vendor-portal
+        APP_PORT: 3000
+    container_name: tenderflow-vendor-portal
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      NEXT_PUBLIC_API_URL: http://api:4000
+    ports:
+      - "3000:3000"
+
+  # -------------------------------------------------------------
+  # Procurement App (apps/procurement-app - Port 3001)
+  # -------------------------------------------------------------
+  procurement-app:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.app
+      args:
+        APP_DIR: procurement-app
+        APP_PORT: 3001
+    container_name: tenderflow-procurement-app
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      NEXT_PUBLIC_API_URL: http://api:4000
+    ports:
+      - "3001:3001"
+
+  # -------------------------------------------------------------
+  # Control Panel (apps/control-panel - Port 3002)
+  # -------------------------------------------------------------
+  control-panel:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.app
+      args:
+        APP_DIR: control-panel
+        APP_PORT: 3002
+    container_name: tenderflow-control-panel
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      NODE_ENV: production
+      PORT: 3002
+      NEXT_PUBLIC_API_URL: http://api:4000
+    ports:
+      - "3002:3002"
+
+  # -------------------------------------------------------------
+  # TLS Reverse Proxy (deploy/proxy - Ports 80 & 443)
   # -------------------------------------------------------------
   proxy:
     image: nginx:alpine
@@ -85,10 +148,15 @@ services:
     restart: unless-stopped
     depends_on:
       - api
+      - vendor-portal
+      - procurement-app
+      - control-panel
     volumes:
       - ./proxy/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./proxy/certs:/etc/nginx/certs:ro
     ports:
       - "80:80"
+      - "443:443"
 
 volumes:
   pgdata:

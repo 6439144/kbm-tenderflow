@@ -130,6 +130,50 @@ export class DatabaseClient {
         },
         createdAt: new Date().toISOString()
       });
+
+      this.tenants.set('ministry_a', {
+        id: 'ministry_a',
+        nameEn: 'Ministry A (Public Works & Infrastructure)',
+        nameAr: 'الوزارة أ (الأشغال العامة والبنية التحتية)',
+        defaultCurrency: 'KWD',
+        status: 'ACTIVE',
+        branding: {
+          primaryColor: '#1A365D',
+          defaultDirection: 'rtl',
+          defaultLocale: 'ar'
+        },
+        config: {
+          tenantId: 'ministry_a',
+          legalName: { en: 'Ministry A', ar: 'الوزارة أ' },
+          branding: { primaryColor: '#1A365D', defaultDirection: 'rtl', defaultLocale: 'ar' },
+          currency: { code: 'KWD', symbolAr: 'د.ك', symbolEn: 'KWD' },
+          categories: [{ code: 'WORKS', nameEn: 'Public Works', nameAr: 'أشغال عامة' }],
+          roles: []
+        },
+        createdAt: new Date().toISOString()
+      });
+
+      this.tenants.set('ministry_b', {
+        id: 'ministry_b',
+        nameEn: 'Ministry B (Communications & Digital Services)',
+        nameAr: 'الوزارة ب (المواصلات والخدمات الرقمية)',
+        defaultCurrency: 'KWD',
+        status: 'ACTIVE',
+        branding: {
+          primaryColor: '#007A78',
+          defaultDirection: 'rtl',
+          defaultLocale: 'ar'
+        },
+        config: {
+          tenantId: 'ministry_b',
+          legalName: { en: 'Ministry B', ar: 'الوزارة ب' },
+          branding: { primaryColor: '#007A78', defaultDirection: 'rtl', defaultLocale: 'ar' },
+          currency: { code: 'KWD', symbolAr: 'د.ك', symbolEn: 'KWD' },
+          categories: [{ code: 'DIGITAL', nameEn: 'Digital Services', nameAr: 'خدمات رقمية' }],
+          roles: []
+        },
+        createdAt: new Date().toISOString()
+      });
     }
   }
 }

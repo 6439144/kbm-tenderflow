@@ -25,6 +25,11 @@ tendersRouter.get('/', (req: AuthenticatedRequest, res: Response) => {
 });
 
 tendersRouter.post('/', async (req: AuthenticatedRequest, res: Response) => {
+  if (req.user?.role === 'VENDOR' || req.user?.role === 'PUBLIC') {
+    res.status(403).json({ code: 'FORBIDDEN_ROLE', message: 'Vendors are not permitted to draft tenders.' });
+    return;
+  }
+
   const { tenderNumber, titleEn, titleAr, category, estimatedBudget, submissionDeadline, documentIds } = req.body;
 
   if (!tenderNumber || !titleEn || !titleAr || !estimatedBudget || !submissionDeadline) {
@@ -67,6 +72,11 @@ tendersRouter.post('/', async (req: AuthenticatedRequest, res: Response) => {
 });
 
 tendersRouter.post('/:tenderId/approve-publish', async (req: AuthenticatedRequest, res: Response) => {
+  if (req.user?.role === 'VENDOR' || req.user?.role === 'PUBLIC') {
+    res.status(403).json({ code: 'FORBIDDEN_ROLE', message: 'Vendors are not permitted to approve tenders.' });
+    return;
+  }
+
   const { tenderId } = req.params;
   const { reason, aiAdvisoryRef } = req.body;
   const tender = db.tenders.get(tenderId);
@@ -104,6 +114,11 @@ tendersRouter.post('/:tenderId/approve-publish', async (req: AuthenticatedReques
 });
 
 tendersRouter.post('/:tenderId/publish', async (req: AuthenticatedRequest, res: Response) => {
+  if (req.user?.role === 'VENDOR' || req.user?.role === 'PUBLIC') {
+    res.status(403).json({ code: 'FORBIDDEN_ROLE', message: 'Vendors are not permitted to publish tenders.' });
+    return;
+  }
+
   const { tenderId } = req.params;
   const tender = db.tenders.get(tenderId);
 
