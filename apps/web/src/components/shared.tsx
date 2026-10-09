@@ -5,10 +5,12 @@ import { DocButton } from './Layout';
 import { Badge, Button, EmptyState, fmtBytes, Hash, Table } from './ui';
 import { DocumentBadges, DocumentEvidence } from '../features/filenet';
 import { ReadingNotice, RowBadge, RowDataButton, useDocListInsights } from '../features/docintel';
+import { ProtectedDocActions, useContentAccess } from '../features/security';
 
 export function DocList({ docs, empty, pathFor }: { docs: DocumentMeta[]; empty: string; pathFor?: (d: DocumentMeta) => string }) {
   const { t, te, fmtDate } = useI18n();
   const di = useDocListInsights(docs); // document intelligence: one request for all rows, polls while Orchestrate reads
+  const ca = useContentAccess(docs); // SEC: protected tender documents → viewer / watermarked copy for vendors
   if (docs.length === 0) return <EmptyState message={empty} />;
   return (
     <>
@@ -32,11 +34,15 @@ export function DocList({ docs, empty, pathFor }: { docs: DocumentMeta[]; empty:
           </td>
           <td>{fmtDate(d.createdAt)}</td>
           <td>
+            {ca.decide(d) === 'protected' ? (
+              <ProtectedDocActions doc={d} access={ca.map[d.id]} />
+            ) : ca.decide(d) === 'plain' ? (
             <DocButton
               path={pathFor ? pathFor(d) : api.documentPath(d.id)}
               name={d.title}
               mode={d.mimeType?.includes('html') ? 'open' : 'download'}
             />
+            ) : null}
             <DocumentEvidence doc={d} />
             <RowDataButton doc={d} hook={di} />
           </td>

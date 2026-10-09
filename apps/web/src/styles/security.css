@@ -1,0 +1,258 @@
+/* SEC workstream styles (identity, access, content protection). Logical properties for RTL. */
+
+.security-page .h3 {
+  font-size: 1.05rem;
+  margin: 0;
+}
+.security-narrow {
+  max-width: 360px;
+}
+.security-check {
+  gap: 8px;
+  align-items: center;
+  cursor: pointer;
+}
+.security-code {
+  font-family: var(--mono);
+  font-size: 1.5rem;
+  letter-spacing: 0.35em;
+  text-align: center;
+  max-width: 14ch;
+}
+.security-auth-wide {
+  max-width: 560px;
+}
+.security-steps {
+  margin: 0;
+  padding-inline-start: 1.3em;
+  color: var(--ink-2);
+}
+.security-qr-row {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.security-qr {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  padding: 6px;
+}
+.security-key {
+  font-size: 0.95rem;
+  word-break: break-all;
+}
+.security-codes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 24px;
+  margin: 0;
+  padding: 14px 18px 14px 36px;
+  background: var(--line-2);
+  border-radius: var(--radius-sm);
+  font-family: var(--mono);
+  font-size: 1.05rem;
+}
+
+/* login: SSO button */
+.security-sso {
+  margin-block: 6px 4px;
+}
+.security-sso .btn-block {
+  display: flex;
+  justify-content: center;
+  text-decoration: none;
+}
+.security-or {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-block: 10px;
+}
+.security-or::before,
+.security-or::after {
+  content: '';
+  flex: 1;
+  border-block-start: 1px solid var(--line);
+}
+
+/* admin */
+.security-whoami {
+  background: var(--line-2);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+}
+.security-whoami .alert {
+  margin: 0;
+}
+.security-mappings {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  display: grid;
+  gap: 10px;
+}
+.security-mappings legend {
+  font-weight: 600;
+  padding-inline: 4px;
+}
+.security-map-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) 2fr auto;
+  gap: 12px;
+  align-items: start;
+  border-block-end: 1px dashed var(--line);
+  padding-block-end: 10px;
+}
+.security-role-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  padding-block-start: 24px;
+  font-size: 0.9rem;
+}
+.security-role-list {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+.security-role-item {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+.security-filters {
+  gap: 16px;
+  margin-block-end: 8px;
+}
+.security-actions .btn {
+  padding-inline: 8px;
+}
+.security-row-disabled td {
+  color: var(--muted);
+}
+.security-doc-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+@media (max-width: 720px) {
+  .security-map-row {
+    grid-template-columns: 1fr;
+  }
+  .security-role-checks {
+    padding-block-start: 0;
+  }
+}
+
+/* protected viewer */
+.security-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: #2a3240;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  outline: none;
+}
+.security-viewer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 20px;
+  background: #1b2130;
+}
+.security-viewer-head h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: #fff;
+}
+.security-viewer-head .muted {
+  color: #c4ccda;
+}
+.security-viewer-title {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.security-viewer-honest {
+  margin: 0;
+  padding: 8px 20px;
+  background: #3a2a14;
+  color: #ffe2b0;
+}
+.security-viewer-notice {
+  margin: 8px 20px 0;
+}
+.security-viewer-body {
+  flex: 1;
+  overflow: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  transition: filter 0.15s;
+}
+.security-viewer-body .spinner-row {
+  color: #fff;
+}
+.security-hidden {
+  filter: blur(22px);
+}
+.security-sheet {
+  width: min(100%, 794px);
+  height: auto;
+  background: #fff;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}
+.security-veil {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+  justify-content: center;
+  background: rgba(20, 24, 33, 0.82);
+  font-size: 1.05rem;
+  text-align: center;
+  padding: 20px;
+}
+.security-print-block {
+  display: none;
+}
+@media print {
+  body.security-viewing > *:not(.security-viewer) {
+    display: none !important;
+  }
+  .security-viewer-head,
+  .security-viewer-honest,
+  .security-viewer-body,
+  .security-viewer-notice,
+  .security-veil {
+    display: none !important;
+  }
+  .security-viewer {
+    position: static;
+    background: #fff;
+    color: #000;
+  }
+  .security-print-block {
+    display: block;
+    padding: 40px;
+    font-size: 18pt;
+  }
+}
