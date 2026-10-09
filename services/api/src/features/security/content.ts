@@ -7,6 +7,7 @@
 // returns it with the watermark lines. The browser paints text + tiled watermark into the same <canvas> pixels — the
 // text is never in the DOM, so it cannot be selected/copied, and any screenshot carries the watermark.
 import type { Ctx } from '../../ctx.js';
+import { policiesOf } from '../../services/entity-policies.js';
 import { auditTx, isVendor } from '../../ctx.js';
 import type { Actor } from '../../auth/tokens.js';
 import { ApiError, conflict, forbidden, isUuid, notFound, now, sha256Hex, uuid } from '../../util.js';
@@ -43,6 +44,9 @@ export async function contentModeForDoc(ctx: Ctx, d: DocumentRow, t?: TenderLite
   if (fromTemplate) return { mode: fromTemplate, source: 'TEMPLATE' };
   const s = await loadSettings(ctx, d.tenant_id);
   if (s.contentProtection) return { mode: s.contentProtection, source: 'ENTITY_SECURITY_SETTINGS' };
+  // Entity policies page (BRD SEC-001/002, FR-023): NONE means "no decision recorded there".
+  const pol = (await policiesOf(ctx.db, d.tenant_id)).contentProtection;
+  if (pol === 'VIEW_ONLY' || pol === 'WATERMARKED_DOWNLOAD') return { mode: pol, source: 'ENTITY_POLICIES' };
   const prof = (await ctx.db.query<{ profile: any }>('SELECT profile FROM tenants WHERE id=$1', [d.tenant_id]))[0]?.profile;
   const fromProfile = validMode(prof?.contentProtection);
   if (fromProfile) return { mode: fromProfile, source: 'ENTITY_PROFILE' };

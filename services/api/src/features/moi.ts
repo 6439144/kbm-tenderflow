@@ -2,6 +2,7 @@
 // grading queue + application decisions, subscription payment/renewal, grade upgrades, fee exemption, blocking,
 // printable receipts, lifecycle jobs (expiry, NOT-001 reminders, automatic reinstatement), activity-code file import.
 import type express from 'express';
+import { registerJob } from '../services/scheduler.js';
 import multer from 'multer';
 import type { Ctx } from '../ctx.js';
 import { auditTx, isStaff, STAFF_ROLES } from '../ctx.js';
@@ -86,8 +87,11 @@ export function registerMoiRoutes(r: express.Router, ctx: Ctx) {
   r.post('/activity-codes/import', requireRoles(ADMIN), h((req) => importActivityCodes(ctx, actor(req), req.body)));
 
   const interval = Number(process.env.LIFECYCLE_JOB_INTERVAL_MS ?? 15 * 60_000);
-  if (Number.isFinite(interval) && interval > 0) {
-    life.startLifecycleJob(ctx, interval);
+  if (Number.isFinite(interval) && interval >= 1000) {
+    // Runs on the shared durable scheduler (Admin → Background jobs, with "Run now", last result and errors).
+    registerJob('vendor-lifecycle', interval, async (c, o) => ({ ...(await life.runLifecycleJobs(c, o.tenantId)) }), {
+      labelEn: 'Vendor lifecycle: block reinstatement, subscription expiry, renewal reminders (NOT-001)',
+      labelAr: 'دورة حياة المورد: إعادة التفعيل بعد الإيقاف، انتهاء الاشتراك، تذكيرات التجديد (NOT-001)' });
     // catch up once shortly after start (blocks that ended / subscriptions that expired while the server was down)
     const first = setTimeout(() => { life.runLifecycleJobs(ctx).catch(() => { /* reported by the interval job */ }); }, 5_000);
     first.unref();

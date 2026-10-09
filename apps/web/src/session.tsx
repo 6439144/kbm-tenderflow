@@ -19,8 +19,7 @@ export function homeFor(user: User): string {
   if (user.roles.includes('GRADING_AUTHORITY') && !user.roles.some((r) => r === 'PROCUREMENT_OFFICER' || r === 'DIRECTOR')) return '/procurement/grading';
   if (user.roles.some((r) => r === 'PROCUREMENT_OFFICER' || r === 'DIRECTOR' || r === 'UNDERSECRETARY' || r === 'COMMITTEE_CHAIR' || r === 'EVALUATOR'))
     return '/procurement';
-  if (user.roles.includes('TENANT_ADMIN')) return '/admin';
-  if (user.roles.includes('AUDITOR')) return '/admin/audit';
+  if (user.roles.includes('TENANT_ADMIN') || user.roles.includes('AUDITOR')) return '/admin/overview';
   return '/procurement';
 }
 

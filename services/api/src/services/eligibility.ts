@@ -177,8 +177,10 @@ export async function purchaseDocuments(ctx: Ctx, actor: Actor, t: TenderRow, b:
     });
   }
   const gateway = b?.gateway === 'KNET' ? 'KNET' : 'TEST';
-  if (gateway === 'KNET' && !process.env.KNET_MERCHANT_ID)
-    throw new ApiError(503, 'KNET_NOT_CONFIGURED', 'KNET is not configured for this entity (KNET_MERCHANT_ID). Use the TEST gateway in the demo.');
+  // No KNET adapter is built yet (needs the merchant account and KNET's integration spec, BRD DEP-004), so KNET is always
+  // refused: a payment is never recorded without server-side verification by a real gateway (BRD SEC-004).
+  if (gateway === 'KNET')
+    throw new ApiError(503, 'KNET_NOT_CONFIGURED', 'KNET is not integrated in this build (needs the KNET merchant account and integration specification). Use the TEST gateway in the demo.');
   const pattern = (await getProfile(ctx, actor.tenantId)).receiptPattern;
   return ctx.db.tx(async (q) => {
     const receipt = await nextReceipt(q, actor.tenantId, pattern);

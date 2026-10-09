@@ -323,7 +323,7 @@ async function issueSubscription(ctx: Ctx, q: Queryable, actor: { id: string; ro
     titleEn: kind === 'NEW' ? `Approved — pay your annual subscription (${Number(s.amount)} ${s.currency}) to activate your account`
       : `Renewal link — annual subscription ${Number(s.amount)} ${s.currency}`,
     titleAr: kind === 'NEW' ? `تمت الموافقة — ادفع الاشتراك السنوي (${Number(s.amount)} ${s.currency}) لتفعيل حسابكم` : `رابط التجديد — الاشتراك السنوي ${Number(s.amount)} ${s.currency}`,
-    body: { brd: 'NOT-004', subscriptionId: s.id, payLink: `/vendor/subscription?link=${token}` } });
+    templateCode: 'NOT-004_REGISTRATION_APPROVED', body: { brd: 'NOT-004', subscriptionId: s.id, payLink: `/vendor/subscription?link=${token}` } });
   return s;
 }
 
@@ -527,7 +527,7 @@ export async function decideUpgrade(ctx: Ctx, actor: Actor, id: string, b: any) 
     await notify(q, { tenantId: actor.tenantId, vendorId: g.vendor_id, kind: 'GRADE_UPGRADE_DECIDED',
       titleEn: decision === 'APPROVE' ? `Grade upgrade ${g.request_number} approved: ${gName!.en}` : `Grade upgrade ${g.request_number} was not approved`,
       titleAr: decision === 'APPROVE' ? `تمت الموافقة على ترقية التصنيف ${g.request_number}: ${gName!.ar}` : `لم تتم الموافقة على ترقية التصنيف ${g.request_number}`,
-      body: { brd: 'NOT-003', upgradeRequestId: id, reason } });
+      templateCode: 'NOT-003_GRADE_UPGRADE_APPROVED', body: { brd: 'NOT-003', upgradeRequestId: id, reason } });
     return camel(rows[0]);
   });
 }
@@ -615,7 +615,7 @@ export async function blockVendor(ctx: Ctx, actor: Actor, vendorId: string, b: a
     const until = to ? to.toISOString().slice(0, 10) : null;
     await notify(q, { tenantId: actor.tenantId, vendorId, kind: 'VENDOR_BLOCKED',
       titleEn: until ? `Your account is suspended until ${until}` : 'Your account is suspended', titleAr: until ? `تم إيقاف حسابكم حتى ${until}` : 'تم إيقاف حسابكم',
-      body: { brd: 'NOT-005', blockId: rows[0].id, reason, ground, outOfBand: 'Delivered in-app; e-mail / SMS delivery is a notification-channel feature (FR-024)' } });
+      templateCode: 'NOT-005_VENDOR_BLOCKED', body: { brd: 'NOT-005', blockId: rows[0].id, reason, ground, outOfBand: 'Delivered in-app; e-mail / SMS delivery is a notification-channel feature (FR-024)' } });
     return camel(rows[0]);
   });
 }
@@ -727,7 +727,7 @@ export async function runLifecycleJobs(ctx: Ctx, tenantId?: string) {
         await notify(q, { tenantId: tid, vendorId: s.vendor_id, kind: 'SUBSCRIPTION_RENEWAL_REMINDER',
           titleEn: `Renewal reminder: your subscription ends on ${end} (${left} day${left === 1 ? '' : 's'} left)`,
           titleAr: `تذكير بالتجديد: ينتهي اشتراككم في ${end} (متبقٍ ${left} يوم)`,
-          body: { brd: 'NOT-001', subscriptionId: s.id, threshold, endsAt: end } });
+          templateCode: 'NOT-001_SUBSCRIPTION_RENEWAL', body: { brd: 'NOT-001', subscriptionId: s.id, threshold, endsAt: end } });
         await auditTx(ctx, q, { tenantId: tid, actor: SYSTEM_ACTOR, action: 'SUBSCRIPTION_REMINDER_SENT', resourceType: 'VENDOR', resourceId: s.vendor_id,
           details: { subscriptionId: s.id, threshold, thresholdsRecorded: fresh, daysLeft: left } });
         result.reminders++;
@@ -756,5 +756,5 @@ export function startLifecycleJob(ctx: Ctx, intervalMs: number): NodeJS.Timeout 
 export async function notifyApplicationReceived(q: Queryable, tenantId: string, vendorId: string, nameEn: string, nameAr: string) {
   const p = await policiesOf(q, tenantId);
   for (const role of p.gradingRoles) await notifyRole(q, tenantId, role, { kind: 'VENDOR_APPLICATION_RECEIVED',
-    titleEn: `New vendor application: ${nameEn}`, titleAr: `طلب تسجيل مورد جديد: ${nameAr}`, body: { brd: 'NOT-002', vendorId } });
+    titleEn: `New vendor application: ${nameEn}`, titleAr: `طلب تسجيل مورد جديد: ${nameAr}`, templateCode: 'NOT-002_NEW_VENDOR_APPLICATION', body: { brd: 'NOT-002', vendorId } });
 }

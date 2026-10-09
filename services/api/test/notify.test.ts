@@ -91,7 +91,7 @@ test('notifications through templates and channels; admin templates; tenant isol
   assert.deepEqual(log.body.items.map((d: any) => d.channel).sort(), ['EMAIL', 'IN_APP', 'SMS']);
   assert.ok(log.body.items.every((d: any) => d.channel === 'IN_APP' ? d.status === 'SENT' : d.status === 'SKIPPED_NOT_CONFIGURED'));
   assert.equal(log.body.items.find((d: any) => d.channel === 'EMAIL').address, 'acme@vendor.test');
-  const skipped = await api(run, 'GET', '/api/v1/admin/notification-deliveries?status=SKIPPED_NOT_CONFIGURED', { token: admin });
+  const skipped = await api(run, 'GET', '/api/v1/admin/notification-deliveries?status=SKIPPED_NOT_CONFIGURED&templateCode=NOT-001', { token: admin });
   assert.equal(skipped.body.items.length, 2);
   const otherLog = await api(run, 'GET', '/api/v1/admin/notification-deliveries', { token: otherAdmin });
   assert.equal(otherLog.body.items.length, 0, 'delivery log is per entity');
