@@ -10,6 +10,7 @@ import { DocButton } from '../../components/Layout';
 import { AsyncView, Badge, Button, Card, ErrorBox, Field, FileInput, ReasonDialog, Spinner, Table, useAsync, useToast } from '../../components/ui';
 import { RequestAiExtras } from '../assistant';
 import { DocInsightInline, LetterPrefill } from '../docintel';
+import { ApprovalSlaBadge } from '../notify';
 import { ChainView, REQUEST_TONE, StageStrip, TemplateBadge, waitingStep, type Step } from './common';
 
 export function RequestsPage() {
@@ -231,7 +232,7 @@ function RequestDetail({ r, reload }: { r: ProcurementRequest & { createdBy?: st
         </div>
       )}
 
-      <Card title={t('cycle.r.approvalChain')} actions={waiting && inApproval ? <span className="muted small">{t('cycle.levelOf', { n: waiting.level, total: chain.length })}</span> : undefined}>
+      <Card title={t('cycle.r.approvalChain')} actions={waiting && inApproval ? <span className="muted small">{t('cycle.levelOf', { n: waiting.level, total: chain.length })}<ApprovalSlaBadge subjectId={r.id} gate="REQUEST" version={`${r.status}:${waiting.level}`} /></span> : undefined}>
         <ChainView steps={chain} />
         {canDecide && (
           <div className="row wrap cyc-mt">

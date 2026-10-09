@@ -1,4 +1,5 @@
 import { ChainView, TenderCyclePanel, waitingStep, type CycleBid, type Step } from '../../features/cycle';
+import { RejectTenderButton } from '../../features/notify';
 import { auditLabel } from '../../locales/audit';
 import { TenderAiExtras } from '../../features/assistant';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
@@ -193,6 +194,7 @@ function Detail({
         {waiting && chain.length > 1 ? t('cycle.td.approveLevel', { n: waiting.level, total: chain.length }) : t('td.approve')}
       </Button>,
     );
+  if (canApproveLevel) actions.push(<RejectTenderButton key="reject" tenderId={td.id} onDone={refresh} disabledReason={approveBlock} />);
   if (canReturn)
     actions.push(
       <Button key="return" variant="secondary" onClick={() => setDialog('return')}>

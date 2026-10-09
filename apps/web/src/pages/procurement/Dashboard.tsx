@@ -3,6 +3,7 @@ import { api } from '../../api';
 import { useI18n, type TKey } from '../../i18n';
 import { AsyncView, Button, Card, useAsync } from '../../components/ui';
 import { ApprovalsWaitingCard, DefaultCycleCard } from '../../features/cycle';
+import { OverdueApprovalsCard } from '../../features/notify';
 
 const LABELS: Record<string, TKey> = {
   vendorsPending: 'vst.PENDING_REVIEW',
@@ -46,6 +47,7 @@ export default function Dashboard() {
       </header>
       <div className="cyc-dash">
         <ApprovalsWaitingCard />
+        <OverdueApprovalsCard />
         <DefaultCycleCard />
       </div>
       <AsyncView state={state} isEmpty={(d) => !d || Object.keys(d).length === 0} empty={t('dash.empty')}>

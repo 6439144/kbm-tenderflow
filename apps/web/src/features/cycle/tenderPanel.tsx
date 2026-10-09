@@ -8,6 +8,7 @@ import { useI18n } from '../../i18n';
 import { useSession } from '../../session';
 import { DocButton } from '../../components/Layout';
 import { AsyncView, Badge, Button, Card, ErrorBox, Field, Table, useAsync, useToast } from '../../components/ui';
+import { ApprovalSlaBadge } from '../notify';
 import { ChainView, PUB_TONE, StageStrip, TemplateBadge, waitingStep, type CycleBid, type StageState, type Step } from './common';
 
 const PUBLISHED_PLUS = ['PUBLISHED', 'CLOSED', 'OPENED', 'EVALUATION', 'AWARDED'];
@@ -78,12 +79,16 @@ export function TenderCyclePanel({ td, onChange }: { td: TenderDetail; onChange:
               {waiting && ['DRAFT', 'PENDING_APPROVAL'].includes(td.status) && (
                 <span className="muted small"> · {t('cycle.levelOf', { n: waiting.level, total: publishChain.length })}</span>
               )}
+              <ApprovalSlaBadge subjectId={td.id} gate="PUBLISH" version={`${td.status}:${waiting?.level ?? 0}`} />
             </h3>
             {publishChain.length ? <ChainView steps={publishChain} /> : <ChainView levels={cfg?.approvals.publish} />}
           </div>
           {(awardChain || ['EVALUATION', 'AWARDED'].includes(td.status)) && (
             <div>
-              <h3>{t('cycle.gate.award')}</h3>
+              <h3>
+                {t('cycle.gate.award')}
+                <ApprovalSlaBadge subjectId={td.id} gate="AWARD" version={`${td.status}:${waitingStep(awardChain)?.level ?? 0}`} />
+              </h3>
               {awardChain ? <ChainView steps={awardChain} /> : <ChainView levels={cfg?.approvals.award} />}
             </div>
           )}

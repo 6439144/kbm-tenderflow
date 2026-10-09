@@ -19,6 +19,7 @@ import { DemoOverlay } from './features/demo';
 import { FileNetHealthPage } from './features/filenet';
 import { AssistantDock } from './features/assistant';
 import { DocumentQueuePage, DocumentTypesPage } from './features/docintel';
+import { DeliveryLogPage, JobsPage, NotificationTemplatesPage } from './features/notify';
 
 const LANG_KEY = 'tf.lang';
 
@@ -50,6 +51,9 @@ const ADMIN_NAV: NavItem[] = [
   { to: '/admin/audit', label: 'nav.audit' },
   { to: '/admin/filenet', label: 'nav.filenet' },
   { to: '/admin/system', label: 'nav.system' },
+  { to: '/admin/notifications', label: 'nav.notifications', end: true },
+  { to: '/admin/notifications/log', label: 'nav.deliveryLog' },
+  { to: '/admin/jobs', label: 'nav.jobs' },
 ];
 
 function Home() {
@@ -116,6 +120,10 @@ export default function App() {
               <Route path="documents" element={<DocumentQueuePage />} />
               <Route path="filenet" element={<FileNetHealthPage />} />
               <Route path="system" element={<AdminSystem />} />
+              {/* notify routes */}
+              <Route path="notifications" element={<NotificationTemplatesPage />} />
+              <Route path="notifications/log" element={<DeliveryLogPage />} />
+              <Route path="jobs" element={<JobsPage />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
