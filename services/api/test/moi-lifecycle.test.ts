@@ -121,6 +121,10 @@ test('grading: NOT-002 on registration, grading role from policy, approval issue
   assert.equal((await audit('VENDOR_GRADED', v)).length, 1);
   // reject needs a reason
   const v2 = await register('gv2', 'CR-G2');
+  // the v1.0 approve-without-grades route is closed while the entity requires a subscription
+  const old = await api(run, 'POST', `/api/v1/vendors/${v2}/decision`, { token: tok.officer, json: { decision: 'APPROVE' } });
+  assert.equal(old.status, 409, old.text);
+  assert.equal(old.body.code, 'GRADING_REQUIRED');
   assert.equal((await api(run, 'POST', `/api/v1/grading/vendors/${v2}/decision`, { token: tok.grader, json: { decision: 'REJECT' } })).status, 400);
   assert.equal((await api(run, 'POST', `/api/v1/grading/vendors/${v2}/decision`, { token: tok.grader, json: { decision: 'REJECT', reason: 'CR expired' } })).body.status, 'REJECTED');
 });

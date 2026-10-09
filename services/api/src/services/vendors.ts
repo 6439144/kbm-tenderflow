@@ -7,6 +7,7 @@ import { insertUser, publicUser, validatePassword } from './identity.js';
 import { insertDocument, publicDoc, putDocument, validateUpload, type DocumentRow, type UploadFile } from './documents.js';
 import { emitDocumentEvent } from './document-events.js';
 import { notifyApplicationReceived } from './vendor-lifecycle.js';
+import { policiesOf } from './entity-policies.js';
 
 export interface VendorRow {
   id: string; tenant_id: string; legal_name_en: string; legal_name_ar: string; cr_number: string; email: string;
@@ -99,6 +100,9 @@ export async function decideVendor(ctx: Ctx, actor: Actor, id: string, body: any
   if (decision === 'REJECT' && !reason) throw badRequest('reason is required when rejecting');
   const v = await getVendorRow(ctx, actor.tenantId, id);
   if (v.status !== 'PENDING_REVIEW') throw conflict('INVALID_STATE', `Vendor is ${v.status}, not PENDING_REVIEW`);
+  // An entity with an annual subscription grades applications in the grading queue (grades + payment link, FR-016/017).
+  if ((await policiesOf(ctx.db, actor.tenantId)).subscriptionRequired)
+    throw conflict('GRADING_REQUIRED', 'This entity decides vendor applications in the grading queue (grades and subscription link): POST /grading/vendors/:id/decision');
   const newState = decision === 'APPROVE' ? 'APPROVED' : 'REJECTED';
   return ctx.db.tx(async (q) => {
     const rows = await q.query<VendorRow>(
