@@ -33,6 +33,9 @@ export interface Config {
   docAiAuto: boolean | null;
   /** FILENET_AI_PROPERTIES — write TF_DocType / TF_ExpiryDate / TF_AIReviewed to the stored document on acceptance. */
   docAiProperties: boolean;
+  // --- insight ---
+  /** PUBLIC_BOARD_RATE_LIMIT_PER_MIN — requests per minute per client IP to the public tender board and its feeds. */
+  publicBoardRateLimit: number;
 }
 
 export class ConfigError extends Error {}
@@ -117,5 +120,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     loginRateLimit: Number(opt(env.LOGIN_RATE_LIMIT_PER_MIN) ?? 30),
     docAiAuto: opt(env.DOC_AI_AUTO) === undefined ? null : ['true', '1', 'yes'].includes(opt(env.DOC_AI_AUTO)!.toLowerCase()),
     docAiProperties: ['true', '1', 'yes'].includes((opt(env.FILENET_AI_PROPERTIES) ?? 'false').toLowerCase()),
+    // --- insight ---
+    publicBoardRateLimit: Math.max(1, Number(opt(env.PUBLIC_BOARD_RATE_LIMIT_PER_MIN) ?? 60) || 60),
   };
 }

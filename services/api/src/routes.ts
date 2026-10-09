@@ -17,7 +17,7 @@ import * as aiRuns from './services/ai-runs.js';
 import { downloadDocument, MAX_UPLOAD_BYTES, type DocumentRow, type UploadFile } from './services/documents.js';
 import { verifyAudit } from './services/audit.js';
 import { registerPlatformRoutes } from './routes-platform.js';
-import { registerFeatureRoutes } from './features/index.js';
+import { registerFeatureRoutes, registerPublicFeatureRoutes } from './features/index.js';
 
 declare module 'express-serve-static-core' {
   interface Request { actor?: Actor }
@@ -75,6 +75,7 @@ export function apiRouter(ctx: Ctx): express.Router {
   r.post('/auth/login', loginLimiter, h((req) => identity.login(ctx, req.body)));
   r.get('/public/tenants', h(() => identity.publicTenants(ctx)));
   r.post('/public/vendors/register', loginLimiter, h(async (req, res) => { res.status(201); return vendors.registerVendor(ctx, req.body); }));
+  registerPublicFeatureRoutes(r, ctx);
 
   // ---- everything below requires a valid token ----
   r.use(auth);

@@ -311,6 +311,8 @@ export interface EntityProfile {
   sector?: string;
   /** Classify vendor and request-letter uploads automatically with Orchestrate (unset → env DOC_AI_AUTO). */
   documentIntelligenceAuto?: boolean;
+  /** List this entity's PUBLISHED tenders on the public cross-entity tender board (unset = on). */
+  publicBoard?: boolean;
 }
 
 export function parseProfile(b: any): EntityProfile {
@@ -330,6 +332,7 @@ export function parseProfile(b: any): EntityProfile {
     logoText: str(b?.logoText, 'logoText', { max: 12 }),
     sector: str(b?.sector, 'sector', { max: 100 }),
     documentIntelligenceAuto: typeof b?.documentIntelligenceAuto === 'boolean' ? b.documentIntelligenceAuto : undefined,
+    publicBoard: typeof b?.publicBoard === 'boolean' ? b.publicBoard : undefined,
   };
 }
 
@@ -348,6 +351,8 @@ export async function getProfile(ctx: Ctx, tenantId: string): Promise<EntityProf
 
 export async function updateProfile(ctx: Ctx, actor: Actor, b: any) {
   const profile = parseProfile(b);
+  // A save that does not mention publicBoard keeps the current setting (never silently re-publishes an entity).
+  if (profile.publicBoard === undefined) profile.publicBoard = (await getProfile(ctx, actor.tenantId)).publicBoard;
   const color = str(b?.primaryColor, 'primaryColor', { max: 9 });
   if (color && !/^#[0-9a-fA-F]{6}$/.test(color)) throw badRequest('primaryColor must be #RRGGBB');
   await ctx.db.tx(async (q) => {

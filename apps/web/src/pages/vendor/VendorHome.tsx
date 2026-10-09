@@ -2,10 +2,11 @@ import { TendersForYou } from '../../features/assistant';
 import { VerifiedDocuments } from '../../features/docintel';
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { api, type Bid, type Tender } from '../../api';
+import { api } from '../../api';
+import { VendorDashboard } from '../../features/insight';
 import { useI18n } from '../../i18n';
 import { DocList } from '../../components/shared';
-import { AsyncView, Badge, Button, Card, ErrorBox, Field, FileInput, Hash, Table, useAsync, useToast } from '../../components/ui';
+import { AsyncView, Badge, Button, Card, ErrorBox, Field, FileInput, Table, useAsync, useToast } from '../../components/ui';
 
 export default function VendorHome() {
   const { t, te, pick, fmtDate } = useI18n();
@@ -38,6 +39,7 @@ export default function VendorHome() {
   return (
     <div className="stack">
       <h1>{t('nav.myCompany')}</h1>
+      <VendorDashboard />
       <Card title={t('vendor.companyStatus')}>
         <AsyncView state={me}>
           {(v) => (
@@ -106,48 +108,7 @@ export default function VendorHome() {
         </AsyncView>
       </Card>
 
-      {tenders.data && tenders.data.length > 0 && <MyBids tenders={tenders.data} />}
       <VerifiedDocuments />
     </div>
-  );
-}
-
-/** There is no "all my bids" endpoint: ask GET /tenders/:id/bids (vendor → own receipt only) per visible tender. */
-function MyBids({ tenders }: { tenders: Tender[] }) {
-  const { t, te, pick, fmtDate } = useI18n();
-  const state = useAsync(async () => {
-    const rows: { tender: Tender; bid: Bid }[] = [];
-    const results = await Promise.allSettled(tenders.map((x) => api.bids(x.id)));
-    results.forEach((r, i) => {
-      if (r.status === 'fulfilled') r.value.forEach((bid) => rows.push({ tender: tenders[i], bid }));
-    });
-    return rows;
-  }, [tenders]);
-  return (
-    <Card title={t('nav.myBids')}>
-      <AsyncView state={state} empty={t('vendor.noBids')}>
-        {(rows) => (
-          <Table head={[t('common.title'), t('vendor.receiptId'), t('vendor.receiptHash'), t('td.submittedAt'), t('common.status')]}>
-            {rows.map(({ tender, bid }) => (
-              <tr key={bid.id}>
-                <td>
-                  <Link to={`/vendor/tenders/${tender.id}`}>{pick(tender.titleEn, tender.titleAr)}</Link>
-                </td>
-                <td>
-                  <Hash value={bid.id} />
-                </td>
-                <td>
-                  <Hash value={bid.receiptSha256} />
-                </td>
-                <td>{fmtDate(bid.submittedAt)}</td>
-                <td>
-                  <Badge value={bid.status} label={te('bst.', bid.status)} />
-                </td>
-              </tr>
-            ))}
-          </Table>
-        )}
-      </AsyncView>
-    </Card>
   );
 }
