@@ -143,9 +143,24 @@ function Detail({
 
   // ---- next action buttons for the current state + role
   const actions: JSX.Element[] = [];
+  const jump = (key: string, target: string, label: string, variant: 'primary' | 'secondary' = 'primary') => (
+    <Button
+      key={key}
+      variant={variant}
+      onClick={() => {
+        const el = document.getElementById(target);
+        el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        el?.focus({ preventScroll: true });
+      }}
+    >
+      {label}
+    </Button>
+  );
   if (td.status === 'DRAFT') {
     if (isOfficer)
       actions.push(
+        jump('goDocs', 'sec-docs', t('td.goDocs'), 'secondary'),
+        jump('goPack', 'sec-pack', t('td.goPackCheck')),
         <Link key="edit" className="btn btn-secondary" to={`/procurement/tenders/${td.id}/edit`}>
           {t('td.edit')}
         </Link>,
@@ -167,6 +182,14 @@ function Detail({
         {t('td.publish')}
       </Button>,
     );
+  if (td.status === 'PUBLISHED' && isOfficer)
+    actions.push(jump('goClar', 'sec-clar', t('td.goClar')), jump('goAdd', 'sec-docs', t('td.goAddendum'), 'secondary'));
+  if (td.status === 'CLOSED' && isChair) actions.push(jump('goOpen', 'sec-opening', t('td.goOpen')));
+  if ((td.status === 'OPENED' || td.status === 'EVALUATION') && !awardPending) {
+    if (isEvaluator) actions.push(jump('goScore', 'sec-scoring', t('td.goScore')));
+    if (isChair || isEvaluator) actions.push(jump('goCmp', 'sec-compliance', t('td.goCompliance'), 'secondary'));
+    if (isChair) actions.push(jump('goRec', 'sec-summary', t('td.goRecommend')));
+  }
   if (awardPending && isDirector)
     actions.push(
       <Button
@@ -298,7 +321,7 @@ function Detail({
             </div>
           </Card>
 
-          <Card title={t('td.documents')}>
+          <Card id="sec-docs" title={t('td.documents')}>
             <DocList docs={packDocs} empty={t('td.noDocuments')} />
             {isOfficer && (td.status === 'DRAFT' || td.status === 'PUBLISHED') && (
               <UploadDoc
@@ -540,6 +563,7 @@ function PackCheck({ td, canRun, onChange }: { td: TenderDetail; canRun: boolean
   const { findings, summary } = latest ? packFindings(latest) : { findings: [], summary: undefined };
   return (
     <Card
+      id="sec-pack"
       title={
         <>
           {t('td.packFindings')} <span className="ai-tag">{t('ai.name')}</span>
@@ -620,7 +644,7 @@ function ClarificationsInbox({ td, canAnswer, onChange }: { td: TenderDetail; ca
   const { t } = useI18n();
   const list = td.clarifications ?? [];
   return (
-    <Card title={t('td.clarInbox')}>
+    <Card id="sec-clar" title={t('td.clarInbox')}>
       {list.length === 0 ? (
         <EmptyState message={t('td.noClarifications')} />
       ) : (
@@ -762,7 +786,7 @@ function OpeningSession({
     }
   };
   return (
-    <Card title={t('td.openSession')}>
+    <Card id="sec-opening" title={t('td.openSession')}>
       <dl className="kv">
         <dt>{t('common.deadline')}</dt>
         <dd>{fmtDate(deadline)}</dd>
@@ -864,6 +888,7 @@ function Compliance({ td, bids, canRun, onChange }: { td: TenderDetail; bids: Bi
 
   return (
     <Card
+      id="sec-compliance"
       title={
         <>
           {t('td.compliance')} <span className="ai-tag">{t('ai.name')}</span>
@@ -953,7 +978,7 @@ function Scoring({
   const { t, pick } = useI18n();
   if (bids.length === 0) return null;
   return (
-    <Card title={t('td.scoring')}>
+    <Card id="sec-scoring" title={t('td.scoring')}>
       <div className="stack">
         {bids.map((b) => (
           <ScoreForm
@@ -1141,7 +1166,7 @@ function EvaluationSummary({
   };
 
   return (
-    <Card title={t('td.evaluations')} actions={<Button variant="ghost" onClick={evals.reload}>{t('common.refresh')}</Button>}>
+    <Card id="sec-summary" title={t('td.evaluations')} actions={<Button variant="ghost" onClick={evals.reload}>{t('common.refresh')}</Button>}>
       <AsyncView state={evals} empty={t('td.noEvaluations')}>
         {() => (
           <Table head={[t('td.rank'), t('td.vendor'), t('td.avgTotal'), t('td.evaluators')]}>

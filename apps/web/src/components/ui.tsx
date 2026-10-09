@@ -93,14 +93,16 @@ export function Card({
   actions,
   children,
   className,
+  id,
 }: {
   title?: ReactNode;
   actions?: ReactNode;
   children: ReactNode;
   className?: string;
+  id?: string;
 }) {
   return (
-    <section className={`card ${className ?? ''}`}>
+    <section id={id} tabIndex={id ? -1 : undefined} className={`card ${className ?? ''}`}>
       {(title || actions) && (
         <header className="card-head">
           {title && <h2 className="card-title">{title}</h2>}
@@ -353,6 +355,8 @@ export function Modal({
   const { t } = useI18n();
   const ref = useRef<HTMLDivElement>(null);
   const titleId = useId();
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   useEffect(() => {
     if (!open) return;
     const prev = document.activeElement as HTMLElement | null;
@@ -360,7 +364,7 @@ export function Modal({
     const first = el?.querySelector<HTMLElement>('input, textarea, select, button:not(.modal-x)');
     (first ?? el)?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') closeRef.current();
       if (e.key === 'Tab' && el) {
         const items = Array.from(
           el.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input, textarea, select, [tabindex="0"]'),
@@ -382,7 +386,7 @@ export function Modal({
       document.removeEventListener('keydown', onKey);
       prev?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
   if (!open) return null;
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>

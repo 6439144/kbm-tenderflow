@@ -7,7 +7,7 @@ const LABELS: Record<string, TKey> = {
   vendorsPending: 'vst.PENDING_REVIEW',
   pendingVendors: 'vst.PENDING_REVIEW',
   bids: 'td.bids',
-  aiRuns: 'ai.runs',
+  aiRuns: 'dash.aiRuns',
   tenders: 'nav.tenders',
   tendersByStatus: 'nav.tenders',
   vendors: 'nav.vendors',
