@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { I18nContext, makeI18n, type Lang } from './i18n';
 import { homeFor, SessionProvider, useSession } from './session';
@@ -24,7 +24,7 @@ import { AdminOverviewPage, AnalyticsPage, EvidencePackPage, PublicBoardPage } f
 import { DeliveryLogPage, JobsPage, NotificationTemplatesPage } from './features/notify';
 import { AdminAccountsPage, AdminIdentityPage, MyMfaPage } from './features/security';
 import { MyTasksPage, StudioPage } from './features/lowcode';
-import { AdminBuilderPage } from './features/adminagent';
+import { AdminBuilderPage, DescribeChangeButton } from './features/adminagent';
 import { EntityPoliciesPage, GradingQueuePage, GradingVendorPage, ReceiptPage, UpgradeRequestPage, VendorLifecycleAdminPage, VendorSubscriptionPage } from './features/moi';
 
 const LANG_KEY = 'tf.lang';
@@ -158,9 +158,9 @@ export default function App() {
             <Route path="/admin" element={<Portal roles={['TENANT_ADMIN', 'AUDITOR']} nav={ADMIN_NAV} />}>
               <Route index element={<AdminUsers />} />
               <Route path="audit" element={<AdminAudit />} />
-              <Route path="cycle" element={<CycleDesignerPage />} />
+              <Route path="cycle" element={<Remountable render={(reload) => <CycleDesignerPage headerExtras={<DescribeChangeButton scope="template" onApplied={reload} />} />} />} />
               {/* low-code routes */}
-              <Route path="studio" element={<StudioPage />} />
+              <Route path="studio" element={<Remountable render={(reload) => <StudioPage headerExtras={<DescribeChangeButton scope="process" onApplied={reload} />} />} />} />
               {/* AI admin builder */}
               <Route path="builder" element={<AdminBuilderPage />} />
               <Route path="entity" element={<EntitySettingsPage />} />
@@ -196,4 +196,11 @@ export default function App() {
       </ToastProvider>
     </I18nContext.Provider>
   );
+}
+
+/** Re-mounts a page shortly after the AI builder created drafts, so the page reloads its templates / definitions. */
+function Remountable({ render }: { render: (reload: () => void) => ReactNode }) {
+  const [k, setK] = useState(0);
+  const reload = useCallback(() => { window.setTimeout(() => setK((x) => x + 1), 1500); }, []);
+  return <Fragment key={k}>{render(reload)}</Fragment>;
 }

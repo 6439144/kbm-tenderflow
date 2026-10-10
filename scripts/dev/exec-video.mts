@@ -37,7 +37,8 @@ const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tf-video-'));
 const PASSWORD = 'Demo-Video-2026!';
 const config = loadConfig({
   BID_MASTER_KEY: crypto.randomBytes(32).toString('base64'), AUDIT_SIGNING_KEY: crypto.randomBytes(32).toString('hex'),
-  DATA_DIR: dataDir, SEED_DEMO: 'true', DEMO_PASSWORD: PASSWORD, DEMO_MODE: 'false',
+  DATA_DIR: dataDir, SEED_DEMO: 'true', TENANCY_MODE: 'dedicated', ENTITY_ID: 'kea', DEMO_ENTITY: 'kea', // one installation = one entity
+  DEMO_PASSWORD: PASSWORD, DEMO_MODE: 'false',
   CONTENT_STORE_TYPE: useFileNet ? 'filenet' : 'filesystem', ...fnEnv,
   PUBLIC_BASE_URL: 'http://localhost', WEB_DIST_DIR: path.join(REPO_ROOT, 'apps/web/dist'), LOGIN_RATE_LIMIT_PER_MIN: '1000',
 });
@@ -346,16 +347,34 @@ try {
   }
   // S3 Low-code Process Studio (admin)
   {
+    const w = await newPage('kea', 'admin'); await go(w, '/admin/cycle');
+    await shot('s04w-wizard', w, async () => {
+      await w.waitForTimeout(1200);
+      await click(w, w.getByRole('button', { name: /New template/ }).first(), 2200);
+      const dlg = w.locator('[role="dialog"]').last();
+      await click(w, dlg.getByText('RFP — two envelopes').first(), 1600);
+      await click(w, dlg.getByRole('button', { name: /^Next$/ }).first(), 2200);
+      await click(w, dlg.getByRole('button', { name: /^Next$/ }).first(), 1600);
+      const preset = dlg.getByText('Director → Undersecretary').first();
+      if (await preset.count()) await click(w, preset, 1600);
+      for (let i = 0; i < 3; i++) await click(w, dlg.getByRole('button', { name: /^Next$/ }).first(), 1800);
+      await w.waitForTimeout(1500);
+      const create = dlg.getByRole('button', { name: /Create draft/ }).first();
+      if (await create.count()) await click(w, create, 2600);
+    });
+    await w.context().close();
     const p = await newPage('kea', 'admin'); await go(p, '/admin/studio');
     await shot('s04-studio-map', p, async () => { await p.waitForTimeout(1800); await scrollTo(p, { by: 380 }, 2400); await p.waitForTimeout(1600); });
     await shot('s05-studio-rules', p, async () => {
-      await click(p, p.getByRole('tab', { name: /^Rules$/ }), 1500);
-      await click(p, p.getByRole('button', { name: /Edit \(new draft\)/ }), 1200);
-      await click(p, p.getByRole('button', { name: /^Edit$/ }).first(), 2600);
-      const dlg = p.locator('[role="dialog"]').first();
-      if (await dlg.count()) await scrollTo(p, { by: 300 }, 1800).catch(() => {});
-      await p.waitForTimeout(1500);
-      await p.keyboard.press('Escape'); await p.waitForTimeout(600);
+      await click(p, p.getByRole('tab', { name: /^Rules$/ }), 1300);
+      await click(p, p.getByRole('button', { name: /New rule/ }).first(), 2600);
+      const dlg = p.locator('[role="dialog"]').last();
+      await click(p, dlg.getByText('Extra approval above an amount').first(), 2200);
+      for (let i = 0; i < 3; i++) await click(p, dlg.getByRole('button', { name: /^Next$/ }).first(), 2300);
+      await p.waitForTimeout(1200);
+      const cancel = dlg.getByRole('button', { name: /^Cancel$|^Close$/ }).first();
+      if (await cancel.count()) await cancel.click(); else await p.keyboard.press('Escape');
+      await p.waitForTimeout(500);
     });
     await shot('s06-studio-sim', p, async () => {
       await click(p, p.getByRole('tab', { name: /^Simulator$/ }), 1200);
