@@ -11,14 +11,14 @@
 //   SMS_SENDER              sender id substituted for {sender}
 //   SMS_HTTP_MESSAGE_ID_PATH dotted path of the provider message id in a JSON response (e.g. "data.messageId")
 // Any 2xx response is a successful hand-over to the provider; anything else is a failure (retried by the job).
-import nodemailer from 'nodemailer';
+import nodemailer, { type Transporter } from 'nodemailer';
 import type { NotifyConfig } from '../../config.js';
 
 export const emailConfigured = (c: NotifyConfig) => Boolean(c.smtp.host && c.smtp.from);
 export const smsConfigured = (c: NotifyConfig) => Boolean(c.sms.url);
 
-const transports = new WeakMap<NotifyConfig['smtp'], nodemailer.Transporter>();
-function transportFor(c: NotifyConfig): nodemailer.Transporter {
+const transports = new WeakMap<NotifyConfig['smtp'], Transporter>();
+function transportFor(c: NotifyConfig): Transporter {
   let t = transports.get(c.smtp);
   if (!t) {
     t = nodemailer.createTransport({

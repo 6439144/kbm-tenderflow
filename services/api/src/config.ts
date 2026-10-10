@@ -45,6 +45,13 @@ export interface Config {
   staffNetworkBreakGlass: boolean;
   /** OIDC_ALLOW_HTTP=true — allow a plain-http OIDC issuer other than localhost (never in production). */
   oidcAllowHttp: boolean;
+  // --- harden ---
+  /** LOGIN_LOCKOUT_ATTEMPTS / _WINDOW_MIN / _MINUTES — N failed password/MFA attempts within the window lock the
+   *  sign-in name for M minutes (attempts 0 = lockout off). */
+  loginLockout: { attempts: number; windowMinutes: number; lockMinutes: number };
+  /** TRUST_PROXY — Express 'trust proxy' (default false: X-Forwarded-For is ignored). A hop count such as 1 behind the
+   *  OpenShift router, or a comma-separated list of proxy addresses / CIDRs / loopback|linklocal|uniquelocal. */
+  trustProxy: false | number | string[];
 }
 
 export class ConfigError extends Error {}
@@ -102,6 +109,21 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const mfaEncKey = opt(env.MFA_ENC_KEY);
   if (mfaEncKey && Buffer.from(mfaEncKey, 'base64').length !== 32) problems.push('MFA_ENC_KEY must be base64 of exactly 32 bytes');
 
+  // --- harden ---
+  const lockNum = (name: string, def: number, min: number) => {
+    const raw = opt(env[name]);
+    if (raw === undefined) return def;
+    const n = Number(raw);
+    if (!Number.isInteger(n) || n < min || n > 10_000) { problems.push(`${name} must be an integer between ${min} and 10000 (got '${raw}')`); return def; }
+    return n;
+  };
+  const loginLockout = {
+    attempts: lockNum('LOGIN_LOCKOUT_ATTEMPTS', 5, 0),
+    windowMinutes: lockNum('LOGIN_LOCKOUT_WINDOW_MIN', 15, 1),
+    lockMinutes: lockNum('LOGIN_LOCKOUT_MINUTES', 15, 1),
+  };
+  const trustProxy = parseTrustProxy(opt(env.TRUST_PROXY), problems);
+
   if (missing.length || problems.length) {
     const lines = [
       ...missing.map((m) => `  - missing required environment variable: ${m}`),
@@ -137,10 +159,32 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     mfaEncKey,
     staffNetworkBreakGlass: (opt(env.STAFF_NETWORK_BREAK_GLASS) ?? 'false').toLowerCase() === 'true',
     oidcAllowHttp: (opt(env.OIDC_ALLOW_HTTP) ?? 'false').toLowerCase() === 'true',
+    // --- harden ---
+    loginLockout,
+    trustProxy,
     // --- insight ---
     publicBoardRateLimit: Math.max(1, Number(opt(env.PUBLIC_BOARD_RATE_LIMIT_PER_MIN) ?? 60) || 60),
     notify: loadNotifyConfig(env),
   };
+}
+
+// --- harden --- TRUST_PROXY → app.set('trust proxy', …). 'true' (trust every hop) is refused: the client could then
+// choose its own address by sending X-Forwarded-For.
+const PROXY_NAMES = ['loopback', 'linklocal', 'uniquelocal'];
+export function parseTrustProxy(raw: string | undefined, problems: string[] = []): false | number | string[] {
+  if (raw === undefined || ['false', '0', 'no', 'off'].includes(raw.toLowerCase())) return false;
+  if (/^[1-9]\d?$/.test(raw)) return Number(raw);
+  if (raw.toLowerCase() === 'true') {
+    problems.push("TRUST_PROXY=true would let any client choose its address; use the number of proxy hops (e.g. 1) or the proxy addresses");
+    return false;
+  }
+  const parts = raw.split(',').map((p) => p.trim()).filter(Boolean);
+  const bad = parts.filter((p) => !PROXY_NAMES.includes(p.toLowerCase()) && !/^[0-9a-f.:]+(\/\d{1,3})?$/i.test(p));
+  if (!parts.length || bad.length) {
+    problems.push(`TRUST_PROXY must be off, a hop count (1-99) or a comma list of proxy addresses/CIDRs/${PROXY_NAMES.join('/')} (bad: ${bad.join(', ') || raw})`);
+    return false;
+  }
+  return parts.map((p) => (PROXY_NAMES.includes(p.toLowerCase()) ? p.toLowerCase() : p));
 }
 
 // --- notify --- (docs/NOTIFICATIONS-AND-ESCALATION.md)

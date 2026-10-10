@@ -108,7 +108,7 @@ test('AI routes return 503 AI_NOT_CONFIGURED with the placeholder AI service (no
   assert.equal(runs[0].response, null);
   // review of a failed run is refused
   assert.equal((await api(run, 'POST', `/api/v1/ai-runs/${r.body.aiRunId}/review`, { token: officerA, json: { decision: 'ACCEPTED' } })).status, 409);
-  const ready = await api(run, 'GET', '/ready');
+  const ready = await api(run, 'GET', '/ready', { token: auditorA }); // details only for TENANT_ADMIN / AUDITOR (HARDEN)
   assert.equal(ready.status, 200);
   assert.equal(ready.body.checks.ai.ok, false);
   assert.equal(ready.body.checks.database.ok, true);

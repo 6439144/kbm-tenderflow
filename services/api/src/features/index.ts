@@ -9,6 +9,7 @@ import { registerInsightRoutes, registerPublicBoardRoutes } from './insight.js';
 import { registerNotifyRoutes } from './notify.js';
 import { registerSecurityRoutes } from './security.js';
 import { registerMoiRoutes } from './moi.js';
+import { registerHardenRoutes } from './harden.js';
 
 export function registerFeatureRoutes(r: express.Router, ctx: Ctx) {
   registerDemoRoutes(r, ctx);
@@ -19,6 +20,7 @@ export function registerFeatureRoutes(r: express.Router, ctx: Ctx) {
   registerSecurityRoutes(r, ctx);
   registerNotifyRoutes(r, ctx);
   registerInsightRoutes(r, ctx);
+  registerHardenRoutes(r, ctx);
 }
 
 /** Routes that need no login (registered before the authentication middleware in routes.ts). */

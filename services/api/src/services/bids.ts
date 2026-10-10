@@ -131,7 +131,11 @@ export async function decryptBidDocuments(ctx: Ctx, bid: BidRow, opts: { technic
   } finally { key.fill(0); }
 }
 
-export async function downloadBidDocument(ctx: Ctx, actor: Actor, bidId: string, docId: string) {
+/**
+ * Read rule of one bid document (sealed until opening; financial envelope sealed until opened for two-envelope
+ * tenders). Shared by the download route and the protected viewer (HARDEN). No bytes are read here.
+ */
+export async function loadReadableBidDocument(ctx: Ctx, actor: Actor, bidId: string, docId: string): Promise<{ bid: BidRow; doc: DocumentRow; isOwner: boolean }> {
   const bid = await loadBid(ctx, actor.tenantId, bidId);
   const isOwner = !!actor.vendorId && actor.vendorId === bid.vendor_id;
   if (!isOwner) {
@@ -146,9 +150,18 @@ export async function downloadBidDocument(ctx: Ctx, actor: Actor, bidId: string,
     const t = (await ctx.db.query<TenderRow>('SELECT * FROM tenders WHERE id=$1', [bid.tender_id]))[0];
     if (financialSealed(t, bid)) throw new ApiError(403, 'FINANCIAL_SEALED', 'The financial envelope stays sealed until the chair opens it for bids that passed the technical evaluation');
   }
+  return { bid, doc: d, isOwner };
+}
+
+/** Decrypt one bid document (call only after loadReadableBidDocument). */
+export async function readBidDocument(ctx: Ctx, bid: BidRow, d: DocumentRow): Promise<Buffer> {
   const key = unwrapKey(ctx.config.bidMasterKey, bid);
-  let bytes: Buffer;
-  try { bytes = await readSealed(ctx, d, key); } finally { key.fill(0); }
+  try { return await readSealed(ctx, d, key); } finally { key.fill(0); }
+}
+
+export async function downloadBidDocument(ctx: Ctx, actor: Actor, bidId: string, docId: string) {
+  const { bid, doc: d, isOwner } = await loadReadableBidDocument(ctx, actor, bidId, docId);
+  const bytes = await readBidDocument(ctx, bid, d);
   await ctx.db.tx((q) => auditTx(ctx, q, { tenantId: actor.tenantId, actor, action: 'BID_DOCUMENT_ACCESSED', resourceType: 'BID',
     resourceId: bid.id, details: { documentId: d.id, owner: isOwner } }));
   return { doc: d, bytes };

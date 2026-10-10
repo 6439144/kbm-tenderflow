@@ -12,8 +12,28 @@ import { createAiService, type AiService } from './ai/index.js';
 import { TokenService } from './auth/tokens.js';
 import type { Ctx } from './ctx.js';
 import { apiRouter, errorHandler } from './routes.js';
+import { securityGate } from './features/security.js';
 import { closeDueTenders } from './services/tenders.js';
 import { seedDemo } from './seed.js';
+
+/**
+ * HARDEN: Content-Security-Policy of the single-page app and the API (docs/SECURITY-FEATURES.md). No inline or remote
+ * scripts; the pdf.js worker is a same-origin file. style-src keeps 'unsafe-inline' because the server-generated HTML
+ * records (opening record, committee report, notices) carry an inline <style> and are opened as blob: documents,
+ * which inherit this policy. Document downloads (sendDoc) override it with a sandboxing policy of their own.
+ */
+export const CSP_DIRECTIVES = {
+  defaultSrc: ["'self'"],
+  scriptSrc: ["'self'"],
+  styleSrc: ["'self'", "'unsafe-inline'"],
+  imgSrc: ["'self'", 'data:', 'blob:'],
+  workerSrc: ["'self'", 'blob:'],
+  connectSrc: ["'self'"],
+  frameAncestors: ["'none'"],
+  objectSrc: ["'none'"],
+  baseUri: ["'self'"],
+  formAction: ["'self'"],
+};
 
 export interface AppHandle { app: express.Express; ctx: Ctx; close(): Promise<void> }
 
@@ -38,23 +58,37 @@ export async function createApp(config: Config, overrides: { store?: ContentStor
 
   const app = express();
   app.disable('x-powered-by');
-  app.set('trust proxy', 1);
-  app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
+  // HARDEN: TRUST_PROXY (default off) — only then is X-Forwarded-For used for req.ip (staff allowlist, lockout audit).
+  app.set('trust proxy', config.trustProxy);
+  app.use(helmet({ contentSecurityPolicy: { useDefaults: false, directives: CSP_DIRECTIVES }, crossOriginEmbedderPolicy: false }));
   if (config.corsOrigin) app.use(cors({ origin: config.corsOrigin.split(',').map((s) => s.trim()), credentials: false }));
   app.use(express.json({ limit: '1mb' }));
 
   app.get('/health', (_req, res) => { res.json({ status: 'ok', uptimeSeconds: Math.round(process.uptime()) }); });
-  app.get('/ready', async (_req, res) => {
+  // HARDEN: probes and the public get { status } only; dependency details only for a signed-in TENANT_ADMIN / AUDITOR.
+  const readyDetailsAllowed = async (req: express.Request): Promise<boolean> => {
+    const hdr = req.headers.authorization;
+    if (!hdr || !/^Bearer\s+\S+$/i.test(hdr)) return false;
+    try {
+      const a = await tokens.verify(hdr.replace(/^Bearer\s+/i, '').trim());
+      await securityGate(ctx, req, a);
+      return a.roles.some((r) => r === 'TENANT_ADMIN' || r === 'AUDITOR');
+    } catch { return false; }
+  };
+  app.get('/ready', async (req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    const details = await readyDetailsAllowed(req);
     const checks: Record<string, { ok: boolean; detail: string }> = {};
     try { await db.query('SELECT 1'); checks.database = { ok: true, detail: `${db.kind} reachable` }; }
     catch (err) { checks.database = { ok: false, detail: (err as Error).message }; }
     try { checks.contentStore = await store.ping(); }
     catch (err) { checks.contentStore = { ok: false, detail: (err as Error).message }; }
     checks.contentStore.detail = `${store.type}: ${checks.contentStore.detail}`;
+    const ready = checks.database.ok && checks.contentStore.ok;
+    if (!details) { res.status(ready ? 200 : 503).json({ status: ready ? 'ready' : 'not_ready' }); return; }
     if (ai.isConfigured()) {
       try { checks.ai = await ai.ping(); } catch (err) { checks.ai = { ok: false, detail: (err as Error).message }; }
     } else checks.ai = { ok: false, detail: 'AI not configured (WXO_INSTANCE_URL / WXO_API_KEY); AI endpoints return 503 AI_NOT_CONFIGURED' };
-    const ready = checks.database.ok && checks.contentStore.ok;
     res.status(ready ? 200 : 503).json({ status: ready ? 'ready' : 'not_ready', checks });
   });
   app.get('/.well-known/jwks.json', (_req, res) => { res.json(tokens.jwks()); });

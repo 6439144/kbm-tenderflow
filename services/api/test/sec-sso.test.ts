@@ -35,9 +35,14 @@ async function configure(oidc: unknown) {
   return r.body;
 }
 
+/** The state cookie set by the last /start (HARDEN: state + nonce bound to the browser). */
+let lastCookie = '';
+const cookieOf = (res: Response) => (res.headers.get('set-cookie') ?? '').split(';')[0];
+
 /** Drive the browser redirects: TenderFlow /start → IdP /authorize → TenderFlow /callback → /login?… */
 async function ssoFlow(tenant = 'so', tamper?: (callbackUrl: URL) => void): Promise<URLSearchParams> {
   const s = await fetch(`${run.base}/api/v1/auth/oidc/${tenant}/start`, { redirect: 'manual' });
+  lastCookie = cookieOf(s);
   assert.equal(s.status, 302);
   const loc = s.headers.get('location')!;
   if (loc.startsWith('/login')) return new URL(loc, run.base).searchParams;
@@ -45,7 +50,7 @@ async function ssoFlow(tenant = 'so', tamper?: (callbackUrl: URL) => void): Prom
   const back = new URL(a.headers.get('location')!);
   const cb = new URL(back.pathname + back.search, run.base); // PUBLIC_BASE_URL is http://tenderflow.test in tests
   tamper?.(cb);
-  const c = await fetch(cb, { redirect: 'manual' });
+  const c = await fetch(cb, { redirect: 'manual', headers: { cookie: lastCookie } });
   assert.equal(c.status, 302);
   const final = new URL(c.headers.get('location')!, run.base);
   assert.equal(final.pathname, '/login');
@@ -129,7 +134,7 @@ test('refusals: wrong nonce, wrong audience, expired, foreign signature, IdP tok
   // Replay: the same callback (state) twice.
   let saved: URL | null = null;
   await ssoFlow('so', (u) => { saved = new URL(u); });
-  const again = await fetch(saved!, { redirect: 'manual' });
+  const again = await fetch(saved!, { redirect: 'manual', headers: { cookie: lastCookie } });
   assert.equal(new URL(again.headers.get('location')!, run.base).searchParams.get('ssoError'), 'SSO_STATE_INVALID');
   // Unmapped groups → clear refusal, no account created.
   idp.nextUser = { sub: 'ad-333', username: 'khalid@moi.example', groups: ['Domain Users'] };

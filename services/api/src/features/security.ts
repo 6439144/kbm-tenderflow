@@ -19,7 +19,7 @@ import { clientIp, enforceStaffNetwork, networkStatus } from './security/network
 import { adminResetMfa, confirmEnrolment, disableOwn, mfaStatus, startEnrolment } from './security/mfa.js';
 import { amendUser, listAccounts, ROLE_CATALOGUE, setActive, setRoles } from './security/accounts.js';
 import { documentAccess, openView, recordViewEvent, watermarkedDownload } from './security/content.js';
-import { redirectUri, ssoCallback, ssoExchange, ssoStart, SsoError, testDiscovery } from './security/sso.js';
+import { clearSsoCookie, redirectUri, ssoCallback, ssoExchange, ssoStart, SsoError, testDiscovery } from './security/sso.js';
 
 const ADMIN = 'TENANT_ADMIN';
 
@@ -55,11 +55,13 @@ export function registerSecurityPublicRoutes(r: express.Router, ctx: Ctx) {
   const toLogin = (res: express.Response, params: Record<string, string>) => res.redirect(302, `/login?${new URLSearchParams(params).toString()}`);
   r.get('/auth/oidc/:tenantId/start', limiter, (req, res) => {
     ssoStart(ctx, req.params.tenantId)
-      .then((url) => res.redirect(302, url))
+      .then(({ url, cookie }) => { res.setHeader('Set-Cookie', cookie); res.setHeader('Cache-Control', 'no-store'); res.redirect(302, url); })
       .catch((e) => toLogin(res, { ssoError: e instanceof SsoError || e?.code ? String(e.code) : 'SSO_FAILED', tenant: req.params.tenantId }));
   });
   r.get('/auth/oidc/callback', limiter, (req, res) => {
-    ssoCallback(ctx, req.query as Record<string, unknown>, req)
+    res.setHeader('Set-Cookie', clearSsoCookie(ctx)); // single use, whatever the outcome
+    res.setHeader('Cache-Control', 'no-store');
+    ssoCallback(ctx, req.query as Record<string, unknown>, req, req.headers.cookie)
       .then(({ tenantId, handoff }) => toLogin(res, { tenant: tenantId, ssoHandoff: handoff }))
       .catch((e) => {
         if (!(e instanceof SsoError) && !e?.code) console.error('[sso] callback failed:', e);

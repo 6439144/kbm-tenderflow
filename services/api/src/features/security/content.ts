@@ -28,9 +28,9 @@ const MAX_EVENTS_PER_VIEW = 30;
 
 const validMode = (v: unknown): ContentMode | null => (CONTENT_MODES.includes(v as ContentMode) ? (v as ContentMode) : null);
 
-interface TenderLite { id: string; tenant_id: string; template_snapshot: any; tender_number: string }
+export interface TenderLite { id: string; tenant_id: string; template_snapshot: any; tender_number: string }
 
-async function tenderOf(ctx: Ctx, d: DocumentRow): Promise<TenderLite | null> {
+export async function tenderOf(ctx: Ctx, d: DocumentRow): Promise<TenderLite | null> {
   if (!d.tender_id) return null;
   return (await ctx.db.query<TenderLite>('SELECT id, tenant_id, template_snapshot, tender_number FROM tenders WHERE id=$1 AND tenant_id=$2', [d.tender_id, d.tenant_id]))[0] ?? null;
 }
@@ -63,7 +63,7 @@ export async function assertOriginalDownloadAllowed(ctx: Ctx, actor: Actor, d: D
     : 'This tender document is protected: open it in the protected viewer (view only)', { mode });
 }
 
-async function purchaseState(ctx: Ctx, t: TenderLite | null, vendorId: string | null) {
+export async function purchaseState(ctx: Ctx, t: TenderLite | null, vendorId: string | null) {
   if (!t) return { required: false, purchased: false, receipt: null as string | null };
   const required = configOf(t).stages.documentPurchase;
   const p = vendorId ? await purchaseOf(ctx.db, t.id, vendorId) : null;
@@ -72,7 +72,7 @@ async function purchaseState(ctx: Ctx, t: TenderLite | null, vendorId: string | 
 
 export type DownloadState = 'ORIGINAL' | 'WATERMARKED' | 'PURCHASE_REQUIRED' | 'VIEW_ONLY_FORMAT' | 'NONE';
 
-function downloadState(mode: ContentMode, d: DocumentRow, staff: boolean, purchase: { required: boolean; purchased: boolean }): DownloadState {
+export function downloadState(mode: ContentMode, d: DocumentRow, staff: boolean, purchase: { required: boolean; purchased: boolean }): DownloadState {
   if (staff || mode === 'OFF') return 'ORIGINAL';
   if (mode === 'VIEW_ONLY') return 'NONE';
   if (d.mime_type !== PDF) return 'VIEW_ONLY_FORMAT';
@@ -100,7 +100,7 @@ export async function documentAccess(ctx: Ctx, actor: Actor, idsRaw: unknown) {
   return out;
 }
 
-async function watermarkFor(ctx: Ctx, actor: Actor, ref: string, receipt: string | null): Promise<Watermark & { linesAr: string[] }> {
+export async function watermarkFor(ctx: Ctx, actor: Actor, ref: string, receipt: string | null): Promise<Watermark & { linesAr: string[] }> {
   const at = now().toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
   if (actor.vendorId) {
     const v = (await ctx.db.query<{ legal_name_en: string; legal_name_ar: string; cr_number: string }>(

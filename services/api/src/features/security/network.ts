@@ -12,7 +12,9 @@ export interface ReqLike { ip?: string; socket?: { remoteAddress?: string } }
 
 /** Caller address: the TCP peer, or — only when the entity trusts its reverse proxy — the address it forwarded. */
 export function clientIp(req: ReqLike, net: Pick<StaffNetwork, 'trustProxyHeader'>): string {
-  // app.set('trust proxy', 1): req.ip is the right-most X-Forwarded-For entry (the one our proxy appended).
+  // req.ip honours X-Forwarded-For only when the server sets TRUST_PROXY (app 'trust proxy', e.g. 1 hop behind the
+  // OpenShift router: the right-most entry, the one our proxy appended). With TRUST_PROXY off (default) req.ip is the
+  // TCP peer, so the header cannot be spoofed whatever the entity setting says.
   const raw = net.trustProxyHeader ? (req.ip ?? req.socket?.remoteAddress ?? '') : (req.socket?.remoteAddress ?? req.ip ?? '');
   const p = parseIp(raw);
   return p ? formatIp(p) : raw;
@@ -59,6 +61,7 @@ export async function networkStatus(ctx: Ctx, req: Request, tenantId: string, ca
     mode: net.mode,
     basis: net.basis,
     trustProxyHeader: net.trustProxyHeader,
+    serverTrustProxy: ctx.config.trustProxy !== false, // HARDEN: TRUST_PROXY; without it the proxy header is never used
     inside: net.mode !== 'ALLOWLIST' || ipInList(ip, net.cidrs),
     insideList: ipInList(ip, net.cidrs),
     breakGlass: ctx.config.staffNetworkBreakGlass,
