@@ -2,6 +2,12 @@
 
 For: KBM delivery engineers and the entity's IT operations team. Version 1.0.0-rc3.
 
+**One installation per government entity.** TenderFlow is sold to each entity separately and runs in separation from
+other entities: every entity gets its own installation (`TENANCY_MODE=dedicated`, `ENTITY_ID=<entity code>`), its own
+database, its own FileNet object store (or root folder) and its own Orchestrate instance (or agent set). See §5 and
+[DEPLOYMENT-MODEL.md](DEPLOYMENT-MODEL.md). `TENANCY_MODE=shared` (several entities in one installation) is only for
+KBM's multi-entity demo.
+
 | Deployment | Database | Documents | Use |
 |---|---|---|---|
 | Windows laptop (demo) | embedded PGlite in `.\data` | local files (or FileNet TechZone) | presentations, workshops |
@@ -9,7 +15,7 @@ For: KBM delivery engineers and the entity's IT operations team. Version 1.0.0-r
 | OpenShift `production` overlay | PostgreSQL | IBM FileNet Content Manager | live tendering, 2+ pods |
 
 Contents: [1 Windows demo](#1-windows-demo-install) · [2 OpenShift](#2-openshift-install) · [3 PostgreSQL](#3-postgresql) ·
-[4 Configuration and production safety](#4-configuration-and-production-safety) · [5 New entity](#5-provision-a-new-entity) ·
+[4 Configuration and production safety](#4-configuration-and-production-safety) · [5 One installation per entity](#5-one-installation-per-entity) ·
 [6 Backups](#6-backups-database--filenet--keys) · [7 Keys](#7-keys-and-rotation) · [8 Upgrades](#8-upgrade-procedure) ·
 [9 Monitoring](#9-monitoring-endpoints) · [10 Troubleshooting](#10-troubleshooting)
 
@@ -25,6 +31,7 @@ copy .env.example .env                    # first time only
 npm install
 npm run gen-keys                          # paste the two printed lines into .env
 notepad .env                              # DEMO_PASSWORD=<choose one>; SEED_DEMO=true; DEMO_MODE=true; TF_ENV=demo
+                                          # one demo entity (default): DEMO_ENTITY=kea|gcia|moi; all three: TENANCY_MODE=shared
 npm run config:check                      # every line OK or WARN (WARN = would be refused in production)
 npm run build
 npm start                                 # http://localhost:4000
@@ -42,19 +49,21 @@ npm start                                 # http://localhost:4000
 Manifests: [`deploy/openshift/`](../deploy/openshift/README.md) (Kustomize base + `demo` and `production` overlays).
 Image: [`Containerfile`](../Containerfile) (UBI 9 Node.js 22, non-root, works with arbitrary UIDs).
 
-1. **Project:** `oc new-project tenderflow` (production) or `oc new-project tenderflow-demo`.
+1. **Project:** one project per entity, e.g. `oc new-project tenderflow-moh` (production; set `namespace:` in your copy of
+   the overlay) or `oc new-project tenderflow-demo`.
 2. **Image:** build in the cluster or with Podman (commands in `deploy/openshift/README.md`). Pass `TF_COMMIT` and
    `TF_BUILD_TIME` build arguments so `GET /api/v1/version` identifies the build.
 3. **PostgreSQL** (production): see §3. Put `DATABASE_URL` in the Secret.
 4. **Secret:** `npm run gen-keys -- --production > tenderflow-secrets.env`, add the site values listed in
    `deploy/openshift/base/secret.template.yaml`, then `oc create secret generic tenderflow-secrets --from-env-file=tenderflow-secrets.env`.
    Store the file in the customer's vault and delete the local copy.
-5. **Overlay values:** in `overlays/production/kustomization.yaml` set `PUBLIC_BASE_URL` (the final https URL),
+5. **Overlay values:** in `overlays/production/kustomization.yaml` set `ENTITY_ID` (the entity code, e.g. `moh`; the
+   API refuses to start in production while it is empty), `PUBLIC_BASE_URL` (the final https URL),
    the image name/tag, and in `pvc-patch.yaml` a ReadWriteMany storage class (e.g. ODF CephFS).
 6. **Check, then apply:** run `config:check` in a one-off pod with the same Secret (command in the deploy README), then
    `oc apply -k deploy/openshift/overlays/production` and `oc rollout status deploy/tenderflow`.
 7. **Smoke test:** `curl -s https://<route>/api/v1/version`, `curl -si https://<route>/ready` (200), sign in.
-8. **First entity:** §5.
+8. **The entity:** §5 (`entity:create` with `--code` = `ENTITY_ID`).
 
 What is created: Deployment (startup/readiness/liveness probes, requests/limits, restricted securityContext, read-only
 root filesystem), Service, Route (edge TLS, http→https redirect, 120 s timeout, HSTS), PVC for `/data`, ConfigMap,
@@ -91,6 +100,7 @@ and prints every reason when any of these is true:
 
 | Refused in production | Fix |
 |---|---|
+| `TENANCY_MODE=dedicated` (default) without `ENTITY_ID` | set `ENTITY_ID` to the entity code |
 | `DEMO_MODE=true`, `SEED_DEMO=true` or `DEMO_PASSWORD` set | remove them |
 | no `DATABASE_URL` (embedded PGlite) | PostgreSQL (§3) |
 | `BID_MASTER_KEY`, `AUDIT_SIGNING_KEY` missing, weak (low entropy, < 32 characters), a placeholder, or the same value | `npm run gen-keys -- --production` |
@@ -108,7 +118,24 @@ TF_ENV=production", so a UAT system shows what is left before go-live.
 Other ops settings: `TRUST_PROXY` (reverse-proxy hops, default 1 = the OpenShift router; used for client IPs in the audit
 log, rate limits and the staff network allowlist), `SHUTDOWN_DELAY_MS` / `SHUTDOWN_TIMEOUT_MS` (§9), `TF_EVIDENCE_DIR`.
 
-## 5. Provision a new entity
+## 5. One installation per entity
+
+Each government entity gets its own installation; a new entity is a new installation, never a new tenant in an
+existing one (a dedicated installation refuses to create any entity other than `ENTITY_ID`, answer 403
+`ENTITY_CREATION_DISABLED`).
+
+| Per entity | Recommended | Also supported |
+|---|---|---|
+| OpenShift | own namespace (`tenderflow-<code>`) with its Deployment, Route, ConfigMap (`ENTITY_ID`), NetworkPolicy and **own Secret** (own `BID_MASTER_KEY`, `AUDIT_SIGNING_KEY`, `JWT_PRIVATE_KEY_PEM`, `MFA_ENC_KEY`) | several entity namespaces on one cluster |
+| PostgreSQL | own database and owner role, own backups | several entity databases on one PostgreSQL server; never two entities in one database |
+| FileNet | own object store | shared object store with a different `FILENET_ROOT_FOLDER` per entity (e.g. `/TenderFlow-MOH`) and a service user per entity limited to that folder |
+| Orchestrate | own instance (own API key and run history) | shared instance with a separate agent set per entity, referenced through `WXO_AGENT_*` (renamed copies; the import scripts use fixed names) |
+
+Start-up checks: with `ENTITY_ID` set, a database that holds other entities but not this one is refused; an empty
+database starts and waits for the entity to be provisioned (below). `GET /api/v1/public/deployment` shows the
+installation's mode and entity.
+
+### Provision the installation's entity
 
 ```bash
 npm run entity:create -- --code moh --name-en "Ministry of Health (example)" --name-ar "وزارة الصحة (مثال)" \
@@ -116,7 +143,7 @@ npm run entity:create -- --code moh --name-en "Ministry of Health (example)" --n
 # OpenShift: oc exec deploy/tenderflow -- node services/api/dist/tools/entity-create.js --code moh …
 ```
 
-It creates the entity and its profile (numbering `MOH-{YYYY}-{SEQ3}`, receipts `MOH-R-{YYYY}-{SEQ5}`), the first
+In a dedicated installation `--code` must be the installation's `ENTITY_ID`. It creates the entity and its profile (numbering `MOH-{YYYY}-{SEQ3}`, receipts `MOH-R-{YYYY}-{SEQ5}`), the first
 administrator (`TENANT_ADMIN`), the three starter cycle templates (published; the chosen one is the default), the default
 document types, the bilingual notification templates and a 48-hour approval service level. Every step is written to the
 entity's audit chain, plus an `ENTITY_PROVISIONED` summary.
@@ -215,3 +242,7 @@ There is no Prometheus metrics endpoint in 1.0; alert on probe failures, pod res
 | `entity:create` hangs or fails on PGlite | The API is running on the same data directory; stop it first. |
 | FileNet refused in production with plain http | Use https, or `ALLOW_INSECURE_FILENET=true` for an isolated test system only. |
 | Demo data missing after restart (OpenShift demo) | The PVC was deleted or `SEED_DEMO=false`; the seed runs only when the database has no entities. |
+| "ENTITY_ID 'x' is not an entity in this database (it holds: …)" | The pod points at another entity's database, or `ENTITY_ID` is wrong. Fix `DATABASE_URL` / `ENTITY_ID`. |
+| Start-up warning "TENANCY_MODE=dedicated but ENTITY_ID is not set and this database holds N entities: running in SHARED mode" | Development/demo only (production refuses). Set `ENTITY_ID`, or `TENANCY_MODE=shared` for the multi-entity demo. |
+| `entity:create` answers `ENTITY_CREATION_DISABLED` | Dedicated installation: only `--code <ENTITY_ID>` is allowed. A new entity needs its own installation. |
+| Sign-in or registration answers 404 "Entity not found" | A client sent another entity's id to a dedicated installation (old bookmark with `?tenant=…`, or a script). Leave the id out. |

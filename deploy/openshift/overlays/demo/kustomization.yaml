@@ -20,6 +20,9 @@ configMapGenerator:
     behavior: merge
     literals:
       - TF_ENV=demo
+      # KBM's multi-entity demo (kea, gcia, moi in one installation). For a single-entity demo as the product is sold:
+      # TENANCY_MODE=dedicated and DEMO_ENTITY=kea|gcia|moi (docs/DEPLOYMENT-MODEL.md).
+      - TENANCY_MODE=shared
       - DEMO_MODE=true
       - SEED_DEMO=true
       - CONTENT_STORE_TYPE=filesystem

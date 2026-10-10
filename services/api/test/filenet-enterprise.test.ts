@@ -348,7 +348,7 @@ describe('API with FileNet (class model, ACLs, search, evidence, opening)', () =
     Object.assign(process.env, orch.env);
     const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tf-fn-ent-'));
     const config = loadConfig({ BID_MASTER_KEY, AUDIT_SIGNING_KEY, DATA_DIR: dataDir, SEED_DEMO: 'true', DEMO_PASSWORD, CONTENT_STORE_TYPE: 'filenet',
-      PUBLIC_BASE_URL: 'http://tenderflow.test', LOGIN_RATE_LIMIT_PER_MIN: '1000', WEB_DIST_DIR: path.join(dataDir, 'no-web'), DOC_AI_AUTO: 'false', WXO_TIMEOUT_MS: '10000' });
+      PUBLIC_BASE_URL: 'http://tenderflow.test', LOGIN_RATE_LIMIT_PER_MIN: '1000', WEB_DIST_DIR: path.join(dataDir, 'no-web'), DOC_AI_AUTO: 'false', WXO_TIMEOUT_MS: '10000', TENANCY_MODE: 'shared' }); // several demo entities
     const store = withTelemetry(new FileNetStore(fake.env(MODEL_ENV)));
     const handle = await createApp(config, { store });
     const server = handle.app.listen(0, '127.0.0.1');
