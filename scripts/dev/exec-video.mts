@@ -367,6 +367,7 @@ try {
     await shot('s04-studio-map', p, async () => { await p.waitForTimeout(1800); await scrollTo(p, { by: 380 }, 2400); await p.waitForTimeout(1600); });
     await shot('s05-studio-rules', p, async () => {
       await click(p, p.getByRole('tab', { name: /^Rules$/ }), 1300);
+      await click(p, p.getByRole('button', { name: /Edit \(new draft\)/ }).first(), 1500);
       await click(p, p.getByRole('button', { name: /New rule/ }).first(), 2600);
       const dlg = p.locator('[role="dialog"]').last();
       await click(p, dlg.getByText('Extra approval above an amount').first(), 2200);

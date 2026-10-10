@@ -60,11 +60,13 @@ for seg in board['segments']:
         print('missing segment, skipped:', seg['id']); continue
     vdur = round(ffconcat_duration(src), 2)
     if seg.get('card'): vdur = min(vdur, seg['seconds'])
+    speed = float(seg.get('speed', 1.0))  # >1 plays a long screen recording faster
+    vdur = round(vdur / speed, 2)
     wav, adur = voice(seg)
     dur = round(max(vdur, LEAD + adur + TAIL), 2)
     hold = max(0.0, dur - vdur)
     outp = os.path.join(seg_dir, seg['id'] + '.mp4')
-    base = (f"[0:v]fps=30,scale=1920:1080:flags=lanczos,unsharp=5:5:0.35:5:5:0,setsar=1,trim=duration={vdur},"
+    base = (f"[0:v]setpts=PTS/{speed},fps=30,scale=1920:1080:flags=lanczos,unsharp=5:5:0.35:5:5:0,setsar=1,trim=duration={vdur},"
             f"tpad=stop_mode=clone:stop_duration={hold + 0.1:.2f},trim=duration={dur},format=rgba[b]")
     cmd = ['ffmpeg', '-y', '-loglevel', 'error', '-f', 'concat', '-safe', '0', '-i', src, '-i', wav]
     if seg.get('shot'):

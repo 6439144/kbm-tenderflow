@@ -1,5 +1,5 @@
 {
-  "title": "TenderFlow — Executive demo (Release 1.0 rc5)",
+  "title": "TenderFlow — Executive demo (Release 1.0 rc6)",
   "segments": [
     {
       "id": "c01-title",
@@ -57,7 +57,8 @@
       "shot": true,
       "title": "A guided wizard for new tender cycles",
       "sub": "Pick a starting point, the envelopes, approvals and stages, then review it in plain words before saving a draft",
-      "say": "A guided wizard creates new tender cycles. Choose a starting point, the envelopes, the approvals and the stages, then review everything in plain words before saving a draft."
+      "say": "A guided wizard creates new tender cycles. Choose a starting point, the envelopes, the approvals and the stages, then review everything in plain words before saving a draft.",
+      "speed": 1.45
     },
     {
       "id": "s04-studio-map",
@@ -71,7 +72,8 @@
       "shot": true,
       "title": "Rules from ready-made recipes",
       "sub": "Pick a recipe, fill in the blanks step by step, and read the rule as a sentence",
-      "say": "In the Process Studio, rules start from ready-made recipes. The administrator fills in the blanks step by step and reads the rule as a sentence: tenders above five hundred thousand dinars need the Undersecretary."
+      "say": "In the Process Studio, rules start from ready-made recipes. The administrator fills in the blanks step by step and reads the rule as a sentence: tenders above five hundred thousand dinars need the Undersecretary.",
+      "speed": 1.15
     },
     {
       "id": "s06-studio-sim",
