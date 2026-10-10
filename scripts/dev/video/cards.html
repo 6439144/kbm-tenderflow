@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>TenderFlow video cards</title>
+<style>
+  :root { --bg:#0a1a2b; --bg2:#0f2a44; --ink:#f3f6fa; --muted:#a9b8c9; --accent:#f5a524; --teal:#2bb3c0; --line:rgba(255,255,255,.12); }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html, body { width:1440px; height:810px; overflow:hidden; background:var(--bg); color:var(--ink); font-family:Inter, system-ui, sans-serif; }
+  body { background: radial-gradient(1200px 700px at 85% -10%, #1b4a72 0%, transparent 60%), radial-gradient(900px 600px at -10% 110%, #123a5c 0%, transparent 55%), var(--bg); }
+  .card { position:absolute; inset:0; padding:84px 96px; display:none; }
+  .card.on { display:block; }
+  .card.on.center { display:flex; flex-direction:column; justify-content:center; padding-bottom:110px; }
+  .grid-bg { position:absolute; inset:0; background-image:linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px); background-size:48px 48px; mask-image:radial-gradient(800px 500px at 70% 30%, rgba(0,0,0,.5), transparent 70%); opacity:.35; }
+  .in { opacity:0; transform:translateY(18px); animation:in .8s cubic-bezier(.2,.7,.2,1) forwards; }
+  @keyframes in { to { opacity:1; transform:none; } }
+  .d1{animation-delay:.25s}.d2{animation-delay:.6s}.d3{animation-delay:.95s}.d4{animation-delay:1.3s}.d5{animation-delay:1.65s}.d6{animation-delay:2s}.d7{animation-delay:2.35s}.d8{animation-delay:2.7s}.d9{animation-delay:3.05s}.d10{animation-delay:3.4s}.d11{animation-delay:3.75s}
+  .kicker { font-size:18px; letter-spacing:.18em; text-transform:uppercase; color:var(--accent); font-weight:700; }
+  h1 { font-size:76px; line-height:1.02; font-weight:800; letter-spacing:-.02em; }
+  h2 { font-size:52px; line-height:1.08; font-weight:800; letter-spacing:-.015em; }
+  .lead { font-size:26px; line-height:1.45; color:var(--muted); max-width:1000px; }
+  .bar { width:84px; height:6px; background:var(--accent); border-radius:3px; }
+  .logo { display:inline-flex; align-items:center; gap:14px; font-weight:700; font-size:22px; }
+  .logo b { width:44px; height:44px; border-radius:10px; background:#fff; color:#0B4F6C; display:grid; place-items:center; font-size:26px; }
+  .foot { position:absolute; left:96px; right:96px; bottom:56px; display:flex; justify-content:space-between; color:var(--muted); font-size:17px; }
+  .pill { display:inline-block; padding:6px 14px; border:1px solid var(--line); border-radius:999px; font-size:16px; color:var(--muted); }
+  /* title */
+  #title .stack { position:absolute; left:96px; top:190px; display:flex; flex-direction:column; gap:28px; }
+  #title h1 span { color:var(--accent); }
+  /* lists */
+  .points { display:grid; grid-template-columns:1fr 1fr; gap:22px 28px; margin-top:44px; }
+  .pt { background:rgba(255,255,255,.05); border:1px solid var(--line); border-radius:16px; padding:26px 28px; display:flex; gap:20px; align-items:flex-start; }
+  .pt i { font-style:normal; font-size:30px; line-height:1; width:52px; height:52px; border-radius:12px; background:rgba(245,165,36,.14); display:grid; place-items:center; flex:none; }
+  .pt h3 { font-size:24px; margin-bottom:6px; }
+  .pt p { font-size:18px; color:var(--muted); line-height:1.45; }
+  /* lifecycle */
+  .flow { display:flex; align-items:center; gap:0; margin-top:46px; flex-wrap:nowrap; }
+  .step { background:rgba(255,255,255,.06); border:1px solid var(--line); border-radius:12px; padding:14px 12px; font-size:17px; font-weight:600; text-align:center; min-width:104px; }
+  .step.k { border-color:var(--accent); background:rgba(245,165,36,.12); }
+  .step small { display:block; color:var(--muted); font-weight:500; font-size:13px; margin-top:4px; }
+  .arrow { color:var(--muted); font-size:22px; padding:0 7px; }
+  .pillars { display:grid; grid-template-columns:repeat(3,1fr); gap:24px; margin-top:52px; }
+  .pillar { border-top:4px solid var(--teal); padding-top:18px; }
+  .pillar h3 { font-size:25px; margin-bottom:8px; }
+  .pillar p { font-size:18px; color:var(--muted); line-height:1.45; }
+  /* chapter */
+  .chapter { position:absolute; left:96px; top:300px; }
+  .chapter .num { font-size:150px; font-weight:800; color:rgba(255,255,255,.07); position:absolute; top:-170px; left:-8px; line-height:1; }
+  .chapter h2 { font-size:64px; }
+  .chapter .lead { margin-top:14px; }
+  /* agents */
+  .agents { display:grid; grid-template-columns:repeat(5,1fr); gap:16px; margin-top:38px; }
+  .ag { background:rgba(255,255,255,.05); border:1px solid var(--line); border-radius:14px; padding:18px 16px; min-height:122px; }
+  .ag.sup { border-color:var(--teal); background:rgba(43,179,192,.10); }
+  .ag h4 { font-size:18px; margin-bottom:6px; }
+  .ag p { font-size:14.5px; color:var(--muted); line-height:1.4; }
+  .rules { display:flex; gap:16px; margin-top:28px; flex-wrap:wrap; }
+  .rule { display:flex; gap:10px; align-items:center; font-size:19px; background:rgba(245,165,36,.10); border:1px solid rgba(245,165,36,.4); border-radius:999px; padding:10px 18px; }
+  .next { margin-top:22px; font-size:18px; color:var(--muted); }
+  .next b { color:var(--teal); }
+  /* deploy */
+  .tiles { display:grid; grid-template-columns:repeat(3,1fr); gap:20px; margin-top:44px; }
+  .tile { background:rgba(255,255,255,.05); border:1px solid var(--line); border-radius:16px; padding:24px; }
+  .tile h3 { font-size:22px; margin-bottom:8px; }
+  .tile p { font-size:17px; color:var(--muted); line-height:1.45; }
+  /* close */
+  #close .stack { position:absolute; left:96px; top:220px; display:flex; flex-direction:column; gap:26px; }
+  .tri { display:flex; gap:18px; flex-wrap:wrap; }
+  .tri span { font-size:24px; font-weight:600; padding:12px 20px; border-radius:12px; background:rgba(255,255,255,.06); border:1px solid var(--line); }
+</style>
+</head>
+<body>
+<div class="grid-bg"></div>
+
+<section class="card" id="title">
+  <div class="stack">
+    <div class="logo in d1"><b>T</b> TenderFlow</div>
+    <h1 class="in d2">Government e-tendering,<br><span>integrity built in.</span></h1>
+    <div class="bar in d3"></div>
+    <p class="lead in d4">Secure, bilingual tendering for government entities — built on IBM FileNet and IBM watsonx Orchestrate.</p>
+  </div>
+  <div class="foot in d5"><span>KBM · Executive demo · Release 1.0 (rc5)</span><span class="pill">All organisations and people shown are fictitious</span></div>
+</section>
+
+<section class="card center" id="challenge">
+  <div class="kicker in d1">The challenge</div>
+  <h2 class="in d2" style="margin-top:14px">Procurement is where public trust is won or lost</h2>
+  <div class="points">
+    <div class="pt in d3"><i>📄</i><div><h3>Paper and e-mail approvals</h3><p>Hard to trace who approved what, when, and on which version.</p></div></div>
+    <div class="pt in d4"><i>🔒</i><div><h3>Sealed bids depend on people</h3><p>Confidentiality before the opening relies on procedure, not on the system.</p></div></div>
+    <div class="pt in d5"><i>🏛️</i><div><h3>Every entity works differently</h3><p>Thresholds, approvers and required documents vary — and change often.</p></div></div>
+    <div class="pt in d6"><i>🔎</i><div><h3>Auditors need evidence</h3><p>Proof must be complete, tamper-evident and quick to produce.</p></div></div>
+  </div>
+</section>
+
+<section class="card center" id="solution">
+  <div class="kicker in d1">The solution</div>
+  <h2 class="in d2" style="margin-top:14px">One platform for the full tender cycle</h2>
+  <div class="flow in d3">
+    <div class="step">Request<small>letter / memo</small></div><span class="arrow">→</span>
+    <div class="step">Tender<small>draft</small></div><span class="arrow">→</span>
+    <div class="step">Approvals<small>risk-based</small></div><span class="arrow">→</span>
+    <div class="step">Publication<small>portal + notices</small></div><span class="arrow">→</span>
+    <div class="step k">Sealed bids<small>encrypted</small></div><span class="arrow">→</span>
+    <div class="step k">Opening<small>chair only</small></div><span class="arrow">→</span>
+    <div class="step">Evaluation<small>scored</small></div><span class="arrow">→</span>
+    <div class="step">Award<small>approved</small></div><span class="arrow">→</span>
+    <div class="step">Records<small>IBM FileNet</small></div>
+  </div>
+  <div class="pillars">
+    <div class="pillar in d5"><h3>Integrity by design</h3><p>Encrypted bids, segregation of duties and a tamper-evident audit trail that no setting can switch off.</p></div>
+    <div class="pillar in d6"><h3>Configurable without code</h3><p>Each entity adds its own fields, approvals, checks and automations in a visual studio.</p></div>
+    <div class="pillar in d7"><h3>Built on IBM</h3><p>Documents and records in IBM FileNet; advisory AI agents on IBM watsonx Orchestrate.</p></div>
+  </div>
+</section>
+
+<section class="card" id="ch1"><div class="chapter"><div class="num in d1">01</div><div class="kicker in d1">Chapter 1</div><h2 class="in d2">From request to tender</h2><p class="lead in d3">Role dashboards, departmental requests and tenders that carry each entity's own rules.</p></div></section>
+<section class="card" id="ch2"><div class="chapter"><div class="num in d1">02</div><div class="kicker in d1">Chapter 2</div><h2 class="in d2">Process Studio — low code</h2><p class="lead in d3">Business administrators change the process themselves. Controls can be added, never removed.</p></div></section>
+<section class="card" id="ch3"><div class="chapter"><div class="num in d1">03</div><div class="kicker in d1">Chapter 3</div><h2 class="in d2">From sealed bids to award</h2><p class="lead in d3">Vendors in Arabic or English, bids encrypted until the deadline, decisions by different people.</p></div></section>
+<section class="card" id="ch4"><div class="chapter"><div class="num in d1">04</div><div class="kicker in d1">Chapter 4</div><h2 class="in d2">IBM FileNet — the system of record</h2><p class="lead in d3">Every tender document, bid and report stored, versioned and searchable in the Content Engine.</p></div></section>
+<section class="card" id="ch5"><div class="chapter"><div class="num in d1">05</div><div class="kicker in d1">Chapter 5</div><h2 class="in d2">Governance and insight</h2><p class="lead in d3">Tamper-evident audit, auditor evidence packs and analytics for leadership.</p></div></section>
+
+<section class="card center" id="wxo">
+  <div class="kicker in d1">AI assistance</div>
+  <h2 class="in d2" style="margin-top:14px">Ten advisory agents on IBM watsonx Orchestrate</h2>
+  <div class="agents">
+    <div class="ag in d3"><h4>Request classifier</h4><p>Reads the letter and suggests template, activity and urgency.</p></div>
+    <div class="ag in d3"><h4>Pack checker</h4><p>Finds gaps in a draft tender pack before approval.</p></div>
+    <div class="ag in d4"><h4>Notice drafter</h4><p>Drafts the gazette and CAPT notices in Arabic and English.</p></div>
+    <div class="ag in d4"><h4>Relevance matcher</h4><p>Matches eligible vendors and tenders.</p></div>
+    <div class="ag in d5"><h4>Clarification assistant</h4><p>Drafts cited answers to bidder questions.</p></div>
+    <div class="ag in d5"><h4>Compliance screener</h4><p>Checks opened bids against required documents.</p></div>
+    <div class="ag in d6"><h4>Evaluation narrator</h4><p>Writes the committee's evaluation narrative.</p></div>
+    <div class="ag in d6"><h4>Grade reviewer</h4><p>Reviews vendor documents against grade criteria.</p></div>
+    <div class="ag in d7"><h4>Document intelligence</h4><p>Classifies uploads and extracts key fields.</p></div>
+    <div class="ag sup in d7"><h4>TenderFlow assistant</h4><p>Supervisor agent: answers in context and routes to the specialists.</p></div>
+  </div>
+  <div class="rules in d8">
+    <div class="rule">🧑‍⚖️ Advisory only — a person decides</div>
+    <div class="rule">🔒 Never sees bid contents before opening</div>
+    <div class="rule">🧾 Every AI run is recorded in the audit trail</div>
+  </div>
+  <p class="next in d9">Agents are packaged for import into the customer's watsonx Orchestrate instance. <b>Next:</b> an admin agent that turns plain-language requests into draft templates and rules for human approval.</p>
+</section>
+
+<section class="card center" id="deploy">
+  <div class="kicker in d1">Enterprise-ready</div>
+  <h2 class="in d2" style="margin-top:14px">Deployment and security</h2>
+  <div class="tiles">
+    <div class="tile in d3"><h3>Red Hat OpenShift</h3><p>Container image and OpenShift manifests; PostgreSQL; health and readiness probes.</p></div>
+    <div class="tile in d4"><h3>Identity</h3><p>Single sign-on through the entity's directory (OIDC) and two-step verification.</p></div>
+    <div class="tile in d5"><h3>Multi-entity</h3><p>Each government entity has its own users, branding, cycle templates and rules.</p></div>
+    <div class="tile in d6"><h3>Arabic and English</h3><p>Every screen, notice and report in both languages, right-to-left included.</p></div>
+    <div class="tile in d7"><h3>Integrations</h3><p>Signed webhooks to ERP, finance or IBM App Connect, with retries and a delivery log.</p></div>
+    <div class="tile in d8"><h3>Locked controls</h3><p>Bid encryption, chair-only opening, segregation of duties and the audit chain cannot be configured away.</p></div>
+  </div>
+</section>
+
+<section class="card" id="close">
+  <div class="stack">
+    <div class="logo in d1"><b>T</b> TenderFlow</div>
+    <h1 class="in d2">Integrity built in.<br>Flexibility without code.<br><span style="color:var(--accent)">On IBM.</span></h1>
+    <div class="tri in d3"><span>IBM FileNet</span><span>IBM watsonx Orchestrate</span><span>Red Hat OpenShift</span></div>
+  </div>
+  <div class="foot in d4"><span>KBM · Prepared for the IBM Build / ESA review</span><span class="pill">Demo data · fictitious</span></div>
+</section>
+
+<script>
+  const id = new URLSearchParams(location.search).get('card') || 'title';
+  document.getElementById(id).classList.add('on');
+</script>
+</body>
+</html>

@@ -1,0 +1,237 @@
+{
+  "title": "TenderFlow — Executive demo (Release 1.0 rc5)",
+  "segments": [
+    {
+      "id": "c01-title",
+      "card": "title",
+      "seconds": 8,
+      "say": "TenderFlow: secure, bilingual e-tendering for government entities, built on IBM FileNet and IBM watsonx Orchestrate."
+    },
+    {
+      "id": "c02-challenge",
+      "card": "challenge",
+      "seconds": 15,
+      "say": "Procurement is where public trust is won or lost. Approvals on paper and e-mail are hard to trace, sealed bids depend on people, every entity works a little differently, and auditors need evidence they can rely on."
+    },
+    {
+      "id": "c03-solution",
+      "card": "solution",
+      "seconds": 15,
+      "say": "TenderFlow runs the full cycle in one platform, from the departmental request to the award and the records. Integrity is designed in, each entity configures its own process without code, and it is built on IBM."
+    },
+    {
+      "id": "c04-ch1",
+      "card": "ch1",
+      "seconds": 3.2,
+      "say": "Chapter one: from request to tender."
+    },
+    {
+      "id": "s01-dashboard",
+      "shot": true,
+      "chapter": "From request to tender",
+      "title": "Every role starts with what needs them",
+      "sub": "The director's dashboard: approvals waiting, how long they have waited, and what was published this month",
+      "say": "Each user starts on a dashboard for their role. The director sees what waits for a decision, and for how long."
+    },
+    {
+      "id": "s02-request",
+      "shot": true,
+      "chapter": "From request to tender",
+      "title": "It starts with a departmental request",
+      "sub": "The general manager's scanned letter, the budget and the department, captured once and approved in a chain",
+      "say": "A department requests a smart-meter platform. The scanned letter is stored, and the request is approved first."
+    },
+    {
+      "id": "s03-tender",
+      "shot": true,
+      "chapter": "From request to tender",
+      "title": "The approved request becomes a tender",
+      "sub": "The entity's own fields and live process checks appear on the tender automatically",
+      "say": "The approved request becomes a tender, with the entity's own fields and live checks of its process rules."
+    },
+    {
+      "id": "c05-ch2",
+      "card": "ch2",
+      "seconds": 3.2,
+      "say": "Chapter two: the Process Studio."
+    },
+    {
+      "id": "s04-studio-map",
+      "shot": true,
+      "chapter": "Process Studio — low code",
+      "title": "Each entity shapes its own process, without code",
+      "sub": "Process Studio: every stage of the cycle and the rules attached to it, on one map",
+      "say": "Each entity shapes its own process without code. The studio maps every stage and its rules."
+    },
+    {
+      "id": "s05-studio-rules",
+      "shot": true,
+      "chapter": "Process Studio — low code",
+      "title": "Rules read like sentences",
+      "sub": "When a tender is submitted, if the budget is above 500,000 KWD, add the Undersecretary to the approvals",
+      "say": "Rules read like sentences. For example: when a tender is submitted and the budget is above five hundred thousand dinars, add the Undersecretary to the approval chain."
+    },
+    {
+      "id": "s06-studio-sim",
+      "shot": true,
+      "chapter": "Process Studio — low code",
+      "title": "Test before you publish",
+      "sub": "The simulator shows which rules fire and the approval chain that results. Every version is kept and audited",
+      "say": "The simulator shows which rules fire and the resulting approvals. Rules can add controls, never remove them."
+    },
+    {
+      "id": "s07-gate",
+      "shot": true,
+      "chapter": "Process Studio — low code",
+      "title": "The process stops what is not ready",
+      "sub": "The budget line and minimum local content are missing, so submission is held back with the reason",
+      "say": "This draft cannot be submitted yet: the budget line and local content are missing."
+    },
+    {
+      "id": "s08-chain",
+      "shot": true,
+      "chapter": "Process Studio — low code",
+      "title": "Approval chains adapt to risk",
+      "sub": "The director has approved. The Undersecretary level was added by the high-value rule",
+      "say": "The director approved; the high-value rule added the Undersecretary."
+    },
+    {
+      "id": "c06-ch3",
+      "card": "ch3",
+      "seconds": 3.2,
+      "say": "Chapter three: sealed bids to award."
+    },
+    {
+      "id": "s09-board",
+      "shot": true,
+      "chapter": "From sealed bids to award",
+      "title": "One public board for all entities",
+      "sub": "Suppliers find open tenders without signing in",
+      "say": "Published tenders from all entities appear on one public board."
+    },
+    {
+      "id": "s10-vendor-ar",
+      "shot": true,
+      "chapter": "From sealed bids to award",
+      "title": "Fully bilingual, Arabic and English",
+      "sub": "The supplier portal in Arabic, right to left",
+      "say": "Suppliers work in Arabic or English. Here is the supplier portal in Arabic."
+    },
+    {
+      "id": "s11-sealed",
+      "shot": true,
+      "chapter": "From sealed bids to award",
+      "title": "Bids stay sealed until the deadline",
+      "sub": "Each bid is encrypted with AES-256-GCM. Until the opening, no one can read it in TenderFlow, administrators included",
+      "say": "Bids are encrypted on arrival; until the opening, not even an administrator can read them."
+    },
+    {
+      "id": "s12-opened",
+      "shot": true,
+      "chapter": "From sealed bids to award",
+      "title": "Only the committee chair opens, only after the deadline",
+      "sub": "The opening is recorded with the attendees and a fingerprint of every bid",
+      "say": "Only the chair opens the bids, after the deadline, with attendees and fingerprints recorded."
+    },
+    {
+      "id": "s13-evaluation",
+      "shot": true,
+      "chapter": "From sealed bids to award",
+      "title": "Evaluation and award with segregation of duties",
+      "sub": "Evaluators score, the chair recommends, and a different person approves the award",
+      "say": "Evaluators score each bid, the chair recommends the award, and a different person must approve it. The system enforces this separation."
+    },
+    {
+      "id": "s14-awarded",
+      "shot": true,
+      "chapter": "From sealed bids to award",
+      "title": "Awarded, with every step on the timeline",
+      "sub": "Who did what, when and why, from the first draft to the award",
+      "say": "The tender is awarded, and the timeline shows who did what, when and why."
+    },
+    {
+      "id": "c07-ch4",
+      "card": "ch4",
+      "seconds": 3.2,
+      "say": "Chapter four: IBM FileNet."
+    },
+    {
+      "id": "s14b-fn-evidence",
+      "shot": true,
+      "chapter": "IBM FileNet",
+      "title": "Every document lives in IBM FileNet",
+      "sub": "Object ID, document class, folder, version and SHA-256 hash, read from the Content Engine",
+      "tag": "Demo environment",
+      "note": "FileNet Content Services API simulator",
+      "say": "Every document is stored in IBM FileNet. For any file, users can see the FileNet object, its class, folder, version and hash."
+    },
+    {
+      "id": "s15-filenet",
+      "shot": true,
+      "chapter": "IBM FileNet",
+      "title": "IBM FileNet as the system of record",
+      "sub": "A folder for each entity and tender, with TenderFlow classes and properties",
+      "tag": "Demo environment",
+      "note": "FileNet Content Services API simulator",
+      "say": "FileNet is the system of record, with a folder per entity and tender."
+    },
+    {
+      "id": "s16-filenet-search",
+      "shot": true,
+      "chapter": "IBM FileNet",
+      "title": "Search FileNet, within TenderFlow's access rules",
+      "sub": "Content Engine search, limited to the entity. Sealed bids stay hidden until they are opened",
+      "tag": "Demo environment",
+      "note": "FileNet Content Services API simulator",
+      "say": "Users search FileNet directly, always within TenderFlow's access rules. Sealed bids stay hidden until they are opened."
+    },
+    {
+      "id": "c08-ch5",
+      "card": "ch5",
+      "seconds": 3.2,
+      "say": "Chapter five: governance and insight."
+    },
+    {
+      "id": "s17-audit",
+      "shot": true,
+      "chapter": "Governance and insight",
+      "title": "A tamper-evident audit trail",
+      "sub": "Every action is chained with HMAC and append-only. Integrity is verified with one click",
+      "say": "Every action is recorded in an append-only audit trail, chained so that any change is detectable. The auditor verifies it with one click."
+    },
+    {
+      "id": "s18-evidence",
+      "shot": true,
+      "chapter": "Governance and insight",
+      "title": "Evidence packs for auditors",
+      "sub": "One file with the documents, hashes, audit chain and decisions, verifiable offline",
+      "say": "For an audit, TenderFlow produces an evidence pack: the documents, their hashes, the audit chain and the decisions, in one file that can be verified offline."
+    },
+    {
+      "id": "s19-analytics",
+      "shot": true,
+      "chapter": "Governance and insight",
+      "title": "Insight for leadership",
+      "sub": "Cycle times, tender status, categories and supplier participation",
+      "say": "Leadership sees cycle times, tender status and supplier participation."
+    },
+    {
+      "id": "c09-wxo",
+      "card": "wxo",
+      "seconds": 16,
+      "say": "TenderFlow includes ten advisory agents for IBM watsonx Orchestrate, from request classification to the evaluation narrative. They are advisory only: a person always decides, they never see bid contents before the opening, and every run is audited."
+    },
+    {
+      "id": "c10-deploy",
+      "card": "deploy",
+      "seconds": 11,
+      "say": "TenderFlow runs on Red Hat OpenShift, with single sign-on, two-step verification, multiple entities, Arabic and English, and signed integrations. The integrity controls are locked."
+    },
+    {
+      "id": "c11-close",
+      "card": "close",
+      "seconds": 7,
+      "say": "TenderFlow: integrity built in, flexibility without code, on IBM."
+    }
+  ]
+}
