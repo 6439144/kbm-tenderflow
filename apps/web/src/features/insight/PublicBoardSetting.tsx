@@ -1,12 +1,15 @@
-// Entity setting: list this entity's published tenders on the public, cross-entity tender board.
+// Entity setting: list this entity's published tenders on the public tender board (its own board in a dedicated
+// installation; the cross-entity board in a shared one).
 import { useI18n } from '../../i18n';
 import { Card } from '../../components/ui';
+import { useDeployment } from '../../deployment';
 
 export function PublicBoardSetting({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
   const { t } = useI18n();
+  const { dedicated } = useDeployment();
   return (
     <Card title={t('insight.setting.title')}>
-      <p className="muted small">{t('insight.setting.hint')}</p>
+      <p className="muted small">{t(dedicated ? 'ded.setting.hint' : 'insight.setting.hint')}</p>
       <label className="cyc-switch">
         <input type="checkbox" checked={value} onChange={(e) => onChange(e.target.checked)} />
         <span>

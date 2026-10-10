@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { I18nContext, makeI18n, type Lang } from './i18n';
 import { homeFor, SessionProvider, useSession } from './session';
+import { DeploymentProvider } from './deployment';
 import { ToastProvider } from './components/ui';
 import { Portal, type NavItem } from './components/Layout';
 import Login from './pages/Login';
@@ -111,6 +112,7 @@ export default function App() {
   return (
     <I18nContext.Provider value={i18n}>
       <ToastProvider>
+        <DeploymentProvider>
         <SessionProvider>
           <Routes>
             <Route path="/" element={<Home />} />
@@ -186,6 +188,7 @@ export default function App() {
           <DemoOverlay />
           <AssistantDock />
         </SessionProvider>
+        </DeploymentProvider>
       </ToastProvider>
     </I18nContext.Provider>
   );

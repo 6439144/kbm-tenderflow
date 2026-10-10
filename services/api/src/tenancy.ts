@@ -75,6 +75,10 @@ export function resolveTenancy(config: Pick<Config, 'tenancyMode' | 'entityId' |
         + 'A dedicated installation serves exactly one entity: point ENTITY_ID at it, or use this entity\'s own database.');
     if (!ids.length && !config.seedDemo)
       warnings.push(`entity '${config.entityId}' is not provisioned yet: run \`npm run entity:create -- --code ${config.entityId} …\``);
+    const others = ids.filter((id) => id !== config.entityId);
+    if (others.length)
+      warnings.push(`this database also holds other entities (${others.join(', ')}): this installation never serves them, `
+        + 'but a dedicated installation should have a database of its own (docs/DEPLOYMENT-MODEL.md)');
     return { mode: 'dedicated', entityId: config.entityId, warnings };
   }
   if (config.tfEnv === 'production') throw new TenancyStartupError('ENTITY_ID is required with TENANCY_MODE=dedicated and TF_ENV=production');

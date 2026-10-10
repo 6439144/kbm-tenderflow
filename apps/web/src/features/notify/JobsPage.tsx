@@ -1,6 +1,7 @@
 // Admin → Background jobs: the durable scheduler's jobs (last run, result, error, "Run now"), the entity's approval
 // service levels (due hours, reminder, escalation target) and the approvals that are overdue right now.
 import { useEffect, useState, type FormEvent } from 'react';
+import { useDeployment } from '../../deployment';
 import { useI18n, type TKey } from '../../i18n';
 import { useSession } from '../../session';
 import { AsyncView, Badge, Button, Card, ErrorBox, Field, Spinner, Table, useAsync, useToast } from '../../components/ui';
@@ -31,13 +32,14 @@ export function JobsPage() {
   );
 }
 
-function resultText(r: Record<string, unknown> | null | undefined, t: (k: TKey, v?: Record<string, string | number>) => string, te: (p: string, v: string) => string) {
+function resultText(r: Record<string, unknown> | null | undefined, t: (k: TKey, v?: Record<string, string | number>) => string, te: (p: string, v: string) => string, dedicated = false) {
   if (!r) return '—';
-  if (r.scope === 'OTHER_ENTITY') return t('notify.j.otherEntity');
+  // Dedicated installation: every run concerns this entity only (no "other entity" / "all entities" wording).
+  if (r.scope === 'OTHER_ENTITY') return dedicated ? '—' : t('notify.j.otherEntity');
   const parts = Object.entries(r)
-    .filter(([k, v]) => !['trigger', 'scope'].includes(k) && (typeof v === 'number' || typeof v === 'string'))
+    .filter(([k, v]) => !['trigger', 'scope', ...(dedicated ? ['entities', 'tenantId'] : [])].includes(k) && (typeof v === 'number' || typeof v === 'string'))
     .map(([k, v]) => `${te('notify.jr.', k)}: ${v}`);
-  const scope = r.scope === 'ENTITY' ? t('notify.j.scopeEntity') : r.scope === 'ALL' ? t('notify.j.scopeAll') : '';
+  const scope = r.scope === 'ENTITY' || (dedicated && r.scope === 'ALL') ? t('notify.j.scopeEntity') : r.scope === 'ALL' ? t('notify.j.scopeAll') : '';
   const trig = typeof r.trigger === 'string' ? te('notify.jt.', r.trigger) : '';
   return [parts.join(' · '), [trig, scope].filter(Boolean).join(', ')].filter(Boolean).join(' — ');
 }
@@ -45,6 +47,7 @@ function resultText(r: Record<string, unknown> | null | undefined, t: (k: TKey, 
 function JobsCard({ onRan }: { onRan: () => void }) {
   const { t, te, pick, fmtDate } = useI18n();
   const { hasRole } = useSession();
+  const { dedicated } = useDeployment();
   const toast = useToast();
   const isAdmin = hasRole('TENANT_ADMIN');
   const jobs = useAsync(() => notifyApi.jobs(), []);
@@ -95,7 +98,7 @@ function JobsCard({ onRan }: { onRan: () => void }) {
                     )}
                     {j.lastError && <div className="field-error small notify-err">{j.lastError}</div>}
                   </td>
-                  <td className="small">{resultText(j.lastResult, t, te)}</td>
+                  <td className="small">{resultText(j.lastResult, t, te, dedicated)}</td>
                   <td className="notify-num">{j.runCount}</td>
                   <td>
                     {isAdmin && (
@@ -110,7 +113,7 @@ function JobsCard({ onRan }: { onRan: () => void }) {
             {last && (
               <p className="small notify-lastrun" role="status">
                 <strong dir="ltr">{last.name}</strong>: {te('notify.js.', last.status)}
-                {last.result ? ` — ${resultText(last.result, t, te)}` : ''}
+                {last.result ? ` — ${resultText(last.result, t, te, dedicated)}` : ''}
                 {last.error ? ` — ${last.error}` : ''}
                 {typeof last.durationMs === 'number' ? ` (${last.durationMs} ms)` : ''}
               </p>

@@ -5,6 +5,7 @@ import { api } from '../../api';
 import { AsyncView, Badge, Button, Card, ErrorBox, Field, Modal, Table, errText, useAsync, useToast } from '../../components/ui';
 import { lowcode, type Catalog, type Endpoint, type PackagePreview, type SimResult } from './api';
 import { KIND_ICON } from './Studio';
+import { useDeployment } from '../../deployment';
 
 const tone = (s: string) => (['OK', 'SENT', 'DONE', 'PUBLISHED'].includes(s) ? 'success' : ['ERROR', 'DEAD', 'BLOCKED'].includes(s) ? 'danger' : ['PARTIAL', 'FAILED', 'QUEUED', 'OPEN', 'DRAFT'].includes(s) ? 'warn' : 'neutral');
 
@@ -226,6 +227,7 @@ export function ActivityTab({ canEdit }: { canEdit: boolean }) {
 // ---------------------------------------------------------------- packages
 export function PackagesTab({ canEdit }: { canEdit: boolean }) {
   const { t } = useI18n();
+  const { dedicated } = useDeployment();
   const toast = useToast();
   const [pkg, setPkg] = useState<unknown>(null);
   const [preview, setPreview] = useState<PackagePreview | null>(null);
@@ -252,7 +254,7 @@ export function PackagesTab({ canEdit }: { canEdit: boolean }) {
   if (!canEdit) return <Card title={t('lc.tab.packages')}><p className="muted">{t('lc.readOnly')}</p></Card>;
   return (
     <Card title={t('lc.tab.packages')}>
-      <p className="muted">{t('lc.pkg.intro')}</p>
+      <p className="muted">{t(dedicated ? 'ded.pkg.intro' : 'lc.pkg.intro')}</p>
       <Button onClick={download} busy={busy === 'export'}>{t('lc.pkg.export')}</Button>
       <h3>{t('lc.pkg.import')}</h3>
       <Field label={t('lc.pkg.choose')}>{(id) => <input id={id} type="file" accept="application/json,.json" onChange={(e) => onFile(e.target.files?.[0])} />}</Field>
