@@ -56,6 +56,7 @@ const page = async (tenantId: string, username: string, viewport = { width: 1400
   const p = await ctx.newPage();
   p.on('pageerror', (e: Error) => console.error('[pageerror]', e.message));
   p.on('console', (m: any) => { if (m.type() === 'error') console.error('[console]', m.text()); });
+  p.on('response', (r: any) => { if (r.status() === 404) console.error('[404]', r.url()); });
   p.on('dialog', (d: any) => { console.log('[dialog]', d.message()); void d.dismiss(); });
   return p;
 };

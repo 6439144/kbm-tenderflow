@@ -4,6 +4,7 @@ import { useState, type ReactNode } from 'react';
 import { useI18n, type TKey } from '../../i18n';
 import { useSession } from '../../session';
 import { AsyncView, Badge, Button, Card, useAsync } from '../../components/ui';
+import { DescribeChangeSlot, GettingStarted, HelpButton, HelpDrawer, STUDIO_TOPICS, useGettingStarted } from '../../components/ux';
 import { lowcode, type Catalog, type Check, type Definition, type TriggerKind } from './api';
 import { RulesTab } from './RulesTab';
 import { FormsTab } from './FormsTab';
@@ -13,20 +14,47 @@ type Tab = 'map' | 'rules' | 'forms' | 'simulator' | 'integrations' | 'activity'
 const TABS: Tab[] = ['map', 'rules', 'forms', 'simulator', 'integrations', 'activity', 'packages'];
 export const KIND_ICON: Record<TriggerKind, string> = { GATE: '⛔', EVENT: '⚡', SCHEDULE: '⏰' };
 
-export default function StudioPage() {
+export default function StudioPage({ headerExtras }: { /** Slot for the separately built "describe a change" feature. */ headerExtras?: ReactNode } = {}) {
   const { t, pick } = useI18n();
   const { hasRole } = useSession();
   const canEdit = hasRole('TENANT_ADMIN');
   const [tab, setTab] = useState<Tab>('map');
   const [newRuleStage, setNewRuleStage] = useState<string | null>(null);
+  const [help, setHelp] = useState(false);
+  const gs = useGettingStarted('studio');
   const cat = useAsync(() => lowcode.catalog(), []);
+  const rulesets = useAsync(() => (canEdit && !gs.hidden ? lowcode.definitions('RULESET') : Promise.resolve([])), [canEdit, gs.hidden, tab]);
+  const go = (k: Tab) => {
+    setTab(k);
+    requestAnimationFrame(() => document.getElementById(`lc-tab-${k}`)?.focus());
+  };
+  const liveRules = (rulesets.data ?? []).find((d) => d.status === 'PUBLISHED')?.definition?.rules?.length ?? 0;
   return (
     <div className="stack lc-studio">
       <header className="page-head">
         <h1>{t('lc.title')}</h1>
+        <div className="row wrap ux-head-actions">
+          <DescribeChangeSlot>{headerExtras}</DescribeChangeSlot>
+          <HelpButton onClick={() => setHelp(true)} />
+        </div>
       </header>
       <p className="lead">{t('lc.intro')}</p>
       {!canEdit && <div className="alert alert-info" role="status">{t('lc.readOnly')}</div>}
+      {canEdit && !gs.hidden && cat.data && (
+        <GettingStarted
+          title={t('ux.gs.studio.title')}
+          intro={t('ux.gs.studio.intro')}
+          onDismiss={gs.dismiss}
+          items={[
+            { key: 'map', label: t('ux.gs.studio.map'), hint: t('ux.gs.studio.mapHint'), action: { label: t('lc.tab.map'), onClick: () => go('map') } },
+            { key: 'form', label: t('ux.gs.studio.form'), hint: t('ux.gs.studio.formHint'), done: cat.data.liveForms.includes('TENDER'), action: { label: t('lc.tab.forms'), onClick: () => go('forms') } },
+            { key: 'rule', label: t('ux.gs.studio.rule'), hint: t('ux.gs.studio.ruleHint'), done: rulesets.data ? liveRules > 0 : undefined, action: { label: t('lc.tab.rules'), onClick: () => go('rules') } },
+            { key: 'sim', label: t('ux.gs.studio.sim'), hint: t('ux.gs.studio.simHint'), action: { label: t('lc.tab.simulator'), onClick: () => go('simulator') } },
+            { key: 'publish', label: t('ux.gs.studio.publish'), hint: t('ux.gs.studio.publishHint') },
+          ]}
+        />
+      )}
+      <HelpDrawer open={help} onClose={() => setHelp(false)} topics={STUDIO_TOPICS} intro={t('ux.help.studioIntro')} onShowGettingStarted={canEdit && gs.hidden ? gs.show : undefined} />
       <div className="lc-tabs" role="tablist" aria-label={t('lc.title')}>
         {TABS.map((k) => (
           <button key={k} type="button" role="tab" id={`lc-tab-${k}`} aria-selected={tab === k} aria-controls={`lc-panel-${k}`}
