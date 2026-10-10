@@ -134,8 +134,8 @@ server rejects `graphql`, change `multipartQueryPart` there.
 
 ```powershell
 npm install
-npm run build -w services/api
-npm run verify:filenet
+scripts\windows\filenet-check.cmd          # no build needed (tsx); Node.js 20.6+
+# or: npm run build -w services/api; npm run verify:filenet
 ```
 
 If the full API build is broken mid-rewrite, `tsc` still emits JavaScript by default. If it emits nothing,
@@ -158,10 +158,19 @@ npx -y -p typescript@5.6 tsc --outDir services/api/dist --rootDir services/api/s
    SHA-256, and confirm both share one version series with v2 current. Runs whatever `FILENET_VERSIONING` is,
    so the flag can be turned on only after it passes (skip with `VERIFY_SKIP_VERSIONING=true`).
 9. Records declaration (only when `FILENET_RECORDS_MODE` is `property` or `retention`).
-Then it prints document ids and Navigator paths (and a Navigator link when `FILENET_NAVIGATOR_URL` is set).
+10. Class model (`FILENET_CLASS_MODEL=subclasses`): all six TF_* classes with their properties exist, and a tender
+    document is stored as `TF_TenderDocument` with its properties read back.
+11. Document security (`FILENET_ACL_MODE=groups`): a sealed envelope is written with the service user only, then
+    changed to COMMITTEE; both permission lists are read back.
+12. CE SQL search finds the verify text document (when the class has `TF_TenantId`).
+13. IBM Content Navigator answers (configured, or found at `<origin>/navigator` / `<origin>/icn/navigator`;
+    `FILENET_NAVIGATOR_URL=off` skips it).
+14. `TF_AiClassification` / `TF_AiConfidence` written and read back (when the class has them).
+Then it prints document ids, Navigator paths, the Navigator link for the v2 document and the ACCE address.
 
-It writes `docs/evidence/filenet-verify-<timestamp>.json` with no secrets. It stops at the first failure with the
-full server error.
+Each step prints **PASS**, **FAIL** (with the full server error) or **SKIP** (with the reason). Steps 1–5 stop the
+run when they fail; later steps each report on their own. The exit code is 1 when any step failed. It writes
+`docs/evidence/filenet-verify-<timestamp>.json` with no secrets; the health page shows it.
 
 If a step fails, run the following and send both files from `docs/evidence/`:
 
@@ -171,7 +180,8 @@ node services/api/dist/tools/filenet-introspect.js
 
 The introspection tool dumps the live definitions of `DocumentPropertiesInput`, `ContentElementListInput`,
 `BaseContentElementInput`, `SubContentTransferInput`, `PropertyIdentifierAndScalarValue`,
-`FolderPropertiesInput`, `ObjectReferenceInput`, `Document`, `ContentTransfer` and the related root fields to
+`FolderPropertiesInput`, `ObjectReferenceInput`, `Document`, `ContentTransfer`, the class-model, permission and
+search types (`PropertyDescription`, `PermissionListInput`, `AccessPermission`, `DocumentSet`, …) and the related root fields to
 `docs/evidence/filenet-schema-<timestamp>.txt`.
 
 The verify documents stay in `/TenderFlow/_verify`, so you can screenshot them in Navigator or ACCE. You can
@@ -181,7 +191,7 @@ delete them there by hand. The tool never deletes anything.
 
 ```bash
 npm test                      # all API tests, including the FileNet ones below
-cd services/api && node --import tsx --test test/filenet-store.test.ts test/filenet-showcase-store.test.ts test/filenet-showcase-api.test.ts
+cd services/api && node --import tsx --test test/filenet-store.test.ts test/filenet-showcase-store.test.ts test/filenet-showcase-api.test.ts test/filenet-enterprise.test.ts
 ```
 
 The fake server lives in `services/api/test/fakes/fake-filenet.ts`.
@@ -202,6 +212,9 @@ The test starts a local fake Content Services GraphQL server. The fake checks th
   back silently (`test/filenet-showcase-store.test.ts`).
 - `describe()`, `declareRecord()` (none / property / retention), the folder tree and the telemetry ring buffer.
 - The evidence and health routes and their access rules (`test/filenet-showcase-api.test.ts`).
+- The class model (class per owner type, inherited properties, fallbacks), permission lists at create and at the
+  opening, the retry job, the search where-clause and access filter, Navigator / ACCE links (configured, derived,
+  off, unreachable), vendor redaction and AI properties (`test/filenet-enterprise.test.ts`).
 
 What the FileNet showcase adds (evidence panel, health page, versioning, records) is described in
 [SHOWCASE.md](SHOWCASE.md).
