@@ -8,6 +8,7 @@ import * as insightL from './locales/insight';
 import * as notifyL from './locales/notify';
 import * as securityL from './locales/security';
 import * as moiL from './locales/moi';
+import * as hardenL from './locales/harden';
 
 export type Lang = 'ar' | 'en';
 
@@ -427,7 +428,7 @@ const coreEn = {
   'misc.days': '{d}d {h}h {m}m',
 } as const;
 
-const en = { ...coreEn, ...cycleL.en, ...demoL.en, ...filenetL.en, ...assistantL.en, ...docintelL.en, ...insightL.en, ...notifyL.en, ...securityL.en, ...moiL.en };
+const en = { ...coreEn, ...cycleL.en, ...demoL.en, ...filenetL.en, ...assistantL.en, ...docintelL.en, ...insightL.en, ...notifyL.en, ...securityL.en, ...moiL.en, ...hardenL.en };
 export type TKey = keyof typeof en;
 
 const coreAr: Record<keyof typeof coreEn, string> = {
@@ -828,7 +829,7 @@ const coreAr: Record<keyof typeof coreEn, string> = {
   'misc.days': '{d}ي {h}س {m}د',
 };
 
-const ar: Record<TKey, string> = { ...coreAr, ...cycleL.ar, ...demoL.ar, ...filenetL.ar, ...assistantL.ar, ...docintelL.ar, ...insightL.ar, ...notifyL.ar, ...securityL.ar, ...moiL.ar };
+const ar: Record<TKey, string> = { ...coreAr, ...cycleL.ar, ...demoL.ar, ...filenetL.ar, ...assistantL.ar, ...docintelL.ar, ...insightL.ar, ...notifyL.ar, ...securityL.ar, ...moiL.ar, ...hardenL.ar };
 
 const dict: Record<Lang, Record<TKey, string>> = { en, ar };
 

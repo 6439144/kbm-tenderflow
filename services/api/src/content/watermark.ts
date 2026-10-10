@@ -14,7 +14,7 @@ export interface Watermark {
   footer: string;
 }
 
-const latin1 = (s: string) => s.replace(/[^\x20-\x7e\xa0-\xff]/g, '?');
+const latin1 = (s: string) => s.replace(/[\u2013\u2014]/g, '-').replace(/[^\x20-\x7e\xa0-\xff]/g, '?'); // HARDEN: dashes stay readable
 
 export async function stampPdf(original: Buffer, wm: Watermark, meta: { id: string; title?: string }): Promise<Buffer> {
   let doc: PDFDocument;

@@ -5,7 +5,7 @@ import { DocButton } from './Layout';
 import { Badge, Button, EmptyState, fmtBytes, Hash, Table } from './ui';
 import { DocumentBadges, DocumentEvidence } from '../features/filenet';
 import { ReadingNotice, RowBadge, RowDataButton, useDocListInsights } from '../features/docintel';
-import { ProtectedDocActions, useContentAccess } from '../features/security';
+import { ProtectedDocActions, useContentAccess, ViewDocButton } from '../features/security';
 
 export function DocList({ docs, empty, pathFor }: { docs: DocumentMeta[]; empty: string; pathFor?: (d: DocumentMeta) => string }) {
   const { t, te, fmtDate } = useI18n();
@@ -37,11 +37,14 @@ export function DocList({ docs, empty, pathFor }: { docs: DocumentMeta[]; empty:
             {ca.decide(d) === 'protected' ? (
               <ProtectedDocActions doc={d} access={ca.map[d.id]} />
             ) : ca.decide(d) === 'plain' ? (
+            <>
+            <ViewDocButton documentId={d.id} mimeType={d.mimeType} title={d.title} />
             <DocButton
               path={pathFor ? pathFor(d) : api.documentPath(d.id)}
               name={d.title}
               mode={d.mimeType?.includes('html') ? 'open' : 'download'}
             />
+            </>
             ) : null}
             <DocumentEvidence doc={d} />
             <RowDataButton doc={d} hook={di} />

@@ -60,10 +60,11 @@ export async function issueViewGrant(ctx: Ctx, actor: Actor, id: string) {
   const issuedAt = now();
   const expiresAt = new Date(issuedAt.getTime() + VIEW_GRANT_TTL_MS);
   await ctx.db.query('DELETE FROM view_grants WHERE expires_at < $1', [new Date(issuedAt.getTime() - 3_600_000)]);
+  const viewId = uuid(); // also the watermark reference and, once the bytes are fetched, the viewer session id
   await ctx.db.query('INSERT INTO view_grants (id, grant_hash, tenant_id, document_id, user_id, expires_at, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7)',
-    [uuid(), hashGrant(grant), actor.tenantId, doc.id, actor.id, expiresAt, issuedAt]);
+    [viewId, hashGrant(grant), actor.tenantId, doc.id, actor.id, expiresAt, issuedAt]);
   return {
-    grant, expiresAt, documentId: doc.id, title: doc.title, sourceMimeType: doc.mime_type, mimeType: PDF,
+    grant, viewId, expiresAt, documentId: doc.id, title: doc.title, sourceMimeType: doc.mime_type, mimeType: PDF,
     mode: vendor ? mode : 'OFF', download: downloadState(mode, doc, !vendor, purchase), watermarked: true,
   };
 }

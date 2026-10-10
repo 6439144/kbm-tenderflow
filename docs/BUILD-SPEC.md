@@ -84,7 +84,7 @@ Auth & meta
 - `POST /api/v1/auth/login` {tenantId, username, password} → {token, user:{id,username,displayName,roles,tenantId,vendorId}}  (public)
 - `GET /api/v1/auth/me` → user
 - `GET /api/v1/public/tenants` → [{id,nameEn,nameAr,primaryColor}]  (public)
-- `GET /health` (process) · `GET /ready` (real checks: db, content store ping, ai configured/ok)
+- `GET /health` (process) · `GET /ready` (real checks: db, content store ping, ai configured/ok; anonymous callers and probes get `{status}` only, details for a signed-in TENANT_ADMIN/AUDITOR — docs/SECURITY-FEATURES.md §6.4)
 - `GET /.well-known/jwks.json`
 
 Vendors

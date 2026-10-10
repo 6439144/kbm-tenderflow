@@ -16,6 +16,10 @@ All settings are per entity (table `security_settings`, migration `005_security.
 | Staff network allowlist | Admin → Identity & access → *Staff network allowlist* | OFF |
 | Account administration | Admin → Accounts (`/admin/accounts`) | — |
 | Tender document protection | Admin → Identity & access, or the cycle template `config.contentProtection` | OFF |
+| Sign-in lockout (HARDEN) | server environment `LOGIN_LOCKOUT_*`; unlock on Admin → Users | 5 failures / 15 min → locked 15 min |
+| CSP and security headers (HARDEN) | server (`app.ts`, helmet) | on |
+| Reverse-proxy trust (HARDEN) | server environment `TRUST_PROXY` | off |
+| Protected PDF / image viewer (HARDEN) | **View** on document lists (pdf.js, server watermark) | on for every readable PDF / PNG / JPEG |
 
 ---
 
@@ -54,7 +58,13 @@ entity has enabled it). Authorization-code flow with **PKCE (S256), state and no
 (`services/api/src/features/security/sso.ts`):
 
 1. `GET /api/v1/auth/oidc/<tenant>/start` → discovery (`<issuer>/.well-known/openid-configuration`) → redirect to the
-   IdP. state/nonce/verifier are stored server-side for 10 minutes, single use.
+   IdP. state/nonce/verifier are stored server-side for 10 minutes, single use. **HARDEN:** the same response sets
+   `tf_oidc_state` — an httpOnly, `SameSite=Lax`, `Path=/api/v1/auth/oidc`, 10-minute cookie (`Secure` when
+   `PUBLIC_BASE_URL` is https) holding the state, the SHA-256 of the nonce, the entity and the expiry, HMAC-signed with
+   a key derived (HKDF) from `AUDIT_SIGNING_KEY`. The callback is refused with `SSO_BROWSER_MISMATCH` unless that same
+   browser presents the cookie for exactly that state and nonce (login CSRF / authorization-code injection), and the
+   callback always clears the cookie. A second sign-in started in another tab replaces the cookie, so only the latest
+   one completes.
 2. IdP → `GET /api/v1/auth/oidc/callback` → code exchanged at the token endpoint (client secret from the server
    environment) → **ID token validated with the issuer JWKS (jose)**: signature, `iss`, `aud` = client id, `exp/nbf`
    (60 s tolerance), `nonce`.
@@ -70,7 +80,8 @@ entity has enabled it). Authorization-code flow with **PKCE (S256), state and no
 Refusals return to the login page with a bilingual message and are audited (`SSO_LOGIN_REFUSED` with the reason code):
 `SSO_NONCE_MISMATCH`, `SSO_TOKEN_AUDIENCE`, `SSO_TOKEN_EXPIRED`, `SSO_TOKEN_ISSUER`, `SSO_TOKEN_INVALID` (signature),
 `SSO_NO_MAPPED_GROUP`, `SSO_NOT_PROVISIONED`, `SSO_GROUPS_OVERAGE` (Entra ID group overage — emit only groups
-assigned to the application, or app roles), `SSO_IDP_ERROR`, `SSO_TOKEN_EXCHANGE_FAILED`, `SSO_STATE_INVALID`, …
+assigned to the application, or app roles), `SSO_IDP_ERROR`, `SSO_TOKEN_EXCHANGE_FAILED`, `SSO_STATE_INVALID`
+(state unknown, expired or already used — replay), `SSO_BROWSER_MISMATCH` (state cookie missing / foreign / tampered), …
 Successful provisioning/linking is audited (`USER_PROVISIONED_FROM_DIRECTORY`, `USER_LINKED_TO_DIRECTORY`,
 `USER_ROLES_SYNCED_FROM_DIRECTORY`).
 
@@ -114,9 +125,10 @@ AD FS** (not reachable from the build environment).
 `OUTSIDE_PREMISES` with a bilingual message. Vendors are never affected. CIDR matching is our own small implementation
 (`services/api/src/auth/cidr.ts`, IPv4, IPv6, IPv4-mapped IPv6, zone ids).
 
-- **Caller address**: the TCP peer address; only when *trustProxyHeader* is on, the address appended by the entity’s
-  own reverse proxy (`X-Forwarded-For`, right-most hop — Express `trust proxy = 1`). Turn it on only behind your own
-  proxy, otherwise a client could claim any address.
+- **Caller address**: the TCP peer address; only when the **server** trusts its proxy (`TRUST_PROXY`, see §6) **and**
+  the entity's *trustProxyHeader* is on, the address appended by the reverse proxy (`X-Forwarded-For`, right-most
+  trusted hop). With `TRUST_PROXY` off (default) the header is ignored whatever the entity setting says, so a client
+  cannot claim an address. The admin page shows both (`serverTrustProxy`).
 - **basis**: the entity records which reading of SEC-003 the ranges implement — `PREMISES_NETWORK`,
   `VPN_ADDRESS_POOL` or `PREMISES_AND_VPN`. *Managed devices* (device certificates / MDM / conditional access) are
   **not** implemented by an IP allowlist; with Entra ID that reading is best enforced by Conditional Access on the SSO
@@ -176,6 +188,12 @@ available before and after purchase (SEC-001/002).
 photographing the screen. The controls deter casual copying; the per-vendor watermark and the audit trail make any
 leak traceable to the vendor account.
 
+### pdf.js viewer for PDFs and images (HARDEN)
+
+PDF, PNG and JPEG documents now open in a **pdf.js** viewer that shows the real page layout (scanned PDFs included)
+instead of extracted text; other formats (DOCX, text, Markdown) and PDFs that cannot be stamped keep the text viewer
+above. See §6.5 for the API.
+
 ### Watermarked download (`WATERMARKED_DOWNLOAD`)
 
 `GET /security/content/documents/:id/download` (vendors): when purchase is required by the cycle and the vendor has not
@@ -185,6 +203,116 @@ or file store) is never modified; the stamped copy is generated per download. No
 (409 `VIEW_ONLY_FORMAT`); encrypted PDFs cannot be stamped (409 `PDF_ENCRYPTED`). Standard PDF fonts are Latin-only,
 so the PDF stamp uses the vendor’s English legal name. Audit: `TENDER_DOCUMENT_DOWNLOADED_WATERMARKED` with the SHA-256
 of the original and of the stamped copy.
+
+---
+
+## 6. Hardening (HARDEN workstream)
+
+### 6.1 Sign-in lockout
+
+`services/api/src/services/login-lockout.ts`, table `login_lockouts` (migration `010_harden.sql`).
+
+- `LOGIN_LOCKOUT_ATTEMPTS` (default 5) failed **password or second-factor** attempts within
+  `LOGIN_LOCKOUT_WINDOW_MIN` (15) lock the sign-in name for `LOGIN_LOCKOUT_MINUTES` (15). `0` attempts switches the
+  lockout off. Wrong TOTP / recovery codes at sign-in (and at forced enrolment) count; a completed sign-in clears the
+  counter; after a lock expires the full number of attempts is available again.
+- Locked → **HTTP 423 `ACCOUNT_LOCKED`** with `minutesRemaining` and `retryAfterSeconds`, checked **before** the password
+  is looked at — the right password does not help while locked, and the second sign-in step is refused too.
+- **No user enumeration**: the counter is keyed by (entity, typed username), not by user id. An unknown username is
+  counted, locked and answered exactly like a real one (same status, code, body fields, message, minutes).
+- Audit: `LOGIN_LOCKED` (system actor; resource `USER` for a real account, `SIGN_IN_NAME` for an unknown name; failures,
+  window, lock length, last attempt kind, caller address). Unknown entities are counted but never create an audit chain.
+- **Admin → Users** shows *Locked until …* (or recent failed attempts) per user and an **Unlock** button
+  (`POST /api/v1/admin/users/:id/unlock`, TENANT_ADMIN, optional `reason`) → `LOGIN_UNLOCKED_BY_ADMIN`; it also clears
+  the second factor's own 5-minute lock. The per-address rate limiter (`LOGIN_RATE_LIMIT_PER_MIN`) stays in front.
+- Trade-off: anyone who knows a username can lock it for 15 minutes (deliberate — the standard lockout trade-off);
+  the administrator can unlock, and the rate limiter slows a mass lock-out attempt.
+
+### 6.2 Content-Security-Policy and security headers
+
+`app.ts` (helmet) sends on every response (web app and API):
+
+```
+default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:;
+worker-src 'self' blob:; connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'
+```
+
+plus helmet's defaults (HSTS, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, COOP/CORP, …).
+No inline or remote scripts: the built `index.html` loads one same-origin module (checked by `test/harden.test.ts`
+when `apps/web/dist` exists); no `unsafe-eval` (pdf.js runs with `isEvalSupported: false`).
+`style-src 'unsafe-inline'` **is needed**: the server-generated HTML records (opening record, committee report,
+notices) carry an inline `<style>` and are opened as `blob:` documents, which inherit this policy. Document downloads
+keep their own stricter policy (`sandbox; default-src 'none'`). The SSO start is a top-level navigation (not a form),
+so `form-action 'self'` does not affect it.
+
+### 6.3 `TRUST_PROXY`
+
+`app.set('trust proxy', TRUST_PROXY)`. Default **off**: `req.ip` is the TCP peer and `X-Forwarded-For` is ignored, so it
+cannot be spoofed. Behind the OpenShift router set `TRUST_PROXY=1` (one hop: the right-most `X-Forwarded-For` entry,
+the one the router appended) or the router addresses / CIDRs (`loopback`, `uniquelocal`, `10.128.0.0/14`, …).
+`TRUST_PROXY=true` (trust every hop) is refused at start-up because the client would choose its own address. `req.ip`
+feeds the staff network allowlist, the rate limiters and the lockout audit.
+
+### 6.4 `/ready`
+
+Probes and anonymous callers get **`{ "status": "ready" | "not_ready" }`** only (200 / 503, `Cache-Control: no-store`);
+the dependency details (database, content store, watsonx Orchestrate reachability with messages) are returned only to a
+signed-in `TENANT_ADMIN` or `AUDITOR` (token verified, account active, staff network rule applied), which is what
+Admin → System shows. The AI ping runs only for those callers.
+
+### 6.5 Protected document viewer (pdf.js)
+
+`services/api/src/features/security/viewer.ts`, `apps/web/src/features/security/PdfViewer.tsx`.
+
+1. **View** (any readable PDF / PNG / JPEG: tender pack, addenda, opened bid envelopes, vendor documents, …) →
+   `POST /api/v1/documents/:id/view-grant` → `{ grant, viewId, expiresAt, mode, download, … }`. The grant is 32 random
+   bytes, **single use, valid 60 seconds**, bound to the entity, the document and the signed-in user; only its SHA-256 is
+   stored (`view_grants`).
+2. The page fetches `GET /api/v1/documents/:id/view-bytes` with header **`X-Viewer-Grant`** → the document as a PDF with
+   the watermark (**user, UTC time, entity** — for vendors the company name, vendor ID and CR — and the view reference)
+   **stamped into every page by the server** (pdf-lib; images are first wrapped into a one-page PDF). Headers:
+   `Content-Type: application/pdf`, `Cache-Control: no-store`, `Pragma: no-cache`, `Content-Disposition: inline` (no
+   file name), `nosniff`, `Content-Security-Policy: sandbox; default-src 'none'`. The grant is consumed and
+   **`DOCUMENT_VIEWED`** audited (view id, owner type, tender / bid, original and stamped SHA-256) in one transaction.
+   A second use → 410 `VIEW_GRANT_USED`; after 60 s → 410 `VIEW_GRANT_EXPIRED`; another user, another document,
+   missing or malformed grant → 403 `VIEW_GRANT_INVALID` (another user's attempt does not consume it).
+3. **Same read rules as download**: entity documents through `loadReadableDocument` (deny by default); bid envelopes
+   through `loadReadableBidDocument` — a **sealed bid stays sealed** (403 `BID_SEALED` before the opening ceremony,
+   `FINANCIAL_SEALED` for a sealed financial envelope; competitors 404). The rules are checked when the grant is issued
+   and again when the bytes leave the server.
+4. **Browser**: pdf.js 4.10.38 (lazy chunk) renders each page into a `<canvas>` only — no text layer (nothing to select
+   or copy), no annotation layer, no toolbar, **no download or print UI**; context menu, copy / save / print shortcuts
+   are blocked, content blurs when the window loses focus, `@media print` prints a notice (the deterrents of §5). The
+   bytes live only in memory. The **pdf.js worker, standard fonts and CMaps are same-origin files** under
+   `/pdfjs/<version>/` emitted by `apps/web/vite-plugin-pdfjs.ts` (served from `node_modules` by the dev server), so
+   the viewer works under `worker-src 'self'` with no CDN. The grant's view id is also the viewer session for deterrent
+   events (`CONTENT_PROTECTION_EVENT`).
+5. **Entity policy**: the existing content-protection mode decides whether vendors may download a tender document at all
+   (`VIEW_ONLY` → no download, viewer only; `WATERMARKED_DOWNLOAD` → stamped copy). The grant response carries the
+   resulting `download` state; staff are not restricted.
+6. Fallback: DOCX / text / Markdown, encrypted or unreadable PDFs → the text viewer of §5.
+
+Honest limit unchanged: a browser cannot prevent screenshots or photos; the stamped identity makes copies traceable.
+
+### 6.6 Dependencies and `npm audit`
+
+Upgraded: **nodemailer 6.10 → 10.1.0** (fixes the address-parser, SMTP command-injection and domain-confusion
+advisories; ships its own types, `@types/nodemailer` removed; our use — SMTP transport + `sendMail` — is unaffected by
+the 7–10 breaking changes); **react-router-dom 6.26.2 → 6.30.6** (latest 6.x; fixes the `@remix-run/router` open-redirect
+advisories); **pdfjs-dist 4.10.38** added. `npm audit --omit=dev` items that remain, with reasons:
+
+| Package | Severity | Why it remains |
+|---|---|---|
+| `react-router` / `react-router-dom` ≤ 7.17 | moderate | Fix only in 7.x (major, different API). One advisory is SSR-only (`deserializeErrors`, we do not server-render); the other is an open redirect via a backslash in `<Link>`/`navigate()` targets — our navigation targets always start with a fixed in-app prefix (`/vendor/…`, `/procurement/…`), never a raw user-supplied URL. Plan: move to v7 in a later release. |
+| `mammoth` → `argparse` → `sprintf-js` | moderate | `sprintf-js` is used by `argparse`, the command-line parser of mammoth's CLI; TenderFlow calls mammoth's library API only. The only "fix" is a downgrade to mammoth 0.3.29. |
+| `unpdf` 0.12 → `canvas` → `@mapbox/node-pre-gyp` → `tar` | critical / high | `canvas` is an **optional** dependency of unpdf and is **not installed** (no native build); `tar` would only run at its install time. Fix requires unpdf 1.x (major) — planned with the next document-intelligence change. |
+
+CI (`.github/workflows/ci.yml`) reports `npm audit --omit=dev` on every run without failing the build.
+
+### 6.7 CI
+
+`.github/workflows/ci.yml`: Node 22, `npm ci`, API typecheck, web typecheck, tests, build, and the non-blocking
+`npm audit --omit=dev` report.
 
 ---
 
@@ -208,7 +336,8 @@ of the original and of the stamped copy.
 ```
 
 Environment (`.env.example`, block `# --- security ---`): `MFA_ENC_KEY`, `STAFF_NETWORK_BREAK_GLASS`,
-`OIDC_ALLOW_HTTP` (plain-http non-localhost issuer, never in production), `TF_OIDC_SECRET_*`.
+`OIDC_ALLOW_HTTP` (plain-http non-localhost issuer, never in production), `TF_OIDC_SECRET_*`; block `# --- harden ---`:
+`LOGIN_LOCKOUT_ATTEMPTS`, `LOGIN_LOCKOUT_WINDOW_MIN`, `LOGIN_LOCKOUT_MINUTES`, `TRUST_PROXY`.
 
 ## What is verified
 
@@ -221,3 +350,9 @@ Environment (`.env.example`, block `# --- security ---`): `MFA_ENC_KEY`, `STAFF_
 | OIDC SSO (PKCE, state, nonce, JWKS, audience, expiry, foreign signature, unmapped groups, ADMIN_CREATED, allowlist) | `test/sec-sso.test.ts` with the fake provider | admin configuration page | **not verified** with Entra ID / AD FS |
 | Protected viewer, audit, deterrent events, other tenant refused, purchase rules | `test/sec-content.test.ts` | watermark on canvas, blur on focus loss, PrintScreen | — |
 | Watermarked PDF (every page, vendor, ID, time, receipt; original unchanged) | `test/sec-content.test.ts`, `test/sec-units.test.ts` | downloaded from the UI and checked with unpdf | FileNet-stored originals not verified live |
+| Sign-in lockout (password + MFA, window, expiry, no enumeration, admin unlock, audit) | `test/harden.test.ts` | Admin → Users lock badge + Unlock (headless Chromium, EN) | — |
+| CSP / headers, no inline script in the build, pdf.js worker served as JavaScript | `test/harden.test.ts` | viewer and admin pages under the CSP with no violation reported (headless Chromium) | behind the OpenShift router not verified |
+| `TRUST_PROXY` (off ignores `X-Forwarded-For`, 1 hop uses the router's entry, `true` refused) | `test/harden.test.ts` | — | OpenShift router not verified |
+| `/ready` shape | `test/harden.test.ts` | — | — |
+| SSO state cookie (missing / foreign / tampered / expired cookie, replay) | `test/harden.test.ts`, `test/sec-sso.test.ts` | — | **not verified** with Entra ID / AD FS |
+| pdf.js viewer: grant single use, 60 s, user/document binding, headers, sealed bids, VIEW_ONLY, images, audit | `test/sec-viewer.test.ts` | PDF (EN, staff) and PNG (AR, vendor, VIEW_ONLY) rendered with the server watermark (headless Chromium) | FileNet-stored originals not verified live |

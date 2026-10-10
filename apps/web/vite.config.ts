@@ -1,10 +1,11 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { pdfjsAssets } from './vite-plugin-pdfjs';
 
 const API_TARGET = process.env.TF_API_URL ?? 'http://localhost:4000';
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), pdfjsAssets()], // HARDEN: pdf.js worker as a same-origin asset (CSP worker-src 'self')
   build: { outDir: 'dist', emptyOutDir: true, sourcemap: false },
   server: {
     port: 5173,

@@ -80,6 +80,10 @@ const L: Record<string, [en: string, ar: string]> = {
   APPROVAL_REMINDER_SENT: ['Approval reminder sent', 'إرسال تذكير بالاعتماد'],
   APPROVAL_ESCALATED: ['Overdue approval escalated', 'تصعيد اعتماد متأخر'],
   TENDER_REJECTED: ['Tender rejected at approval', 'رفض المناقصة عند الاعتماد'],
+  // HARDEN
+  LOGIN_LOCKED: ['Sign-in locked after failed attempts', 'قفل الدخول بعد محاولات فاشلة'],
+  LOGIN_UNLOCKED_BY_ADMIN: ['Sign-in unlocked by administrator', 'فتح قفل الدخول بواسطة المسؤول'],
+  DOCUMENT_VIEWED: ['Document viewed (protected viewer)', 'عرض مستند (العارض المحمي)'],
 };
 
 const humanise = (code: string) => code.toLowerCase().replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());

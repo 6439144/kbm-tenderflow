@@ -4,6 +4,7 @@ import { ALL_ROLES, api, type AuditVerify, type Role } from '../../api';
 import { useI18n } from '../../i18n';
 import { useSession } from '../../session';
 import { AsyncView, Badge, Button, Card, ErrorBox, Field, Hash, Modal, Table, useAsync, useToast } from '../../components/ui';
+import { SignInLockCell, type LockInfo } from '../../features/security/Lockout';
 
 // ---------------------------------------------------------------- users
 
@@ -22,7 +23,7 @@ export function AdminUsers() {
       <Card>
         <AsyncView state={users} empty={t('admin.noUsers')}>
           {(list) => (
-            <Table head={[t('admin.username'), t('admin.displayName'), t('admin.roles'), t('admin.active'), t('common.createdAt')]}>
+            <Table head={[t('admin.username'), t('admin.displayName'), t('admin.roles'), t('admin.active'), t('harden.lock.column'), t('common.createdAt')]}>
               {list.map((u) => (
                 <tr key={u.id}>
                   <td dir="ltr">{u.username}</td>
@@ -35,6 +36,9 @@ export function AdminUsers() {
                     </div>
                   </td>
                   <td>{u.active === false ? t('common.no') : t('common.yes')}</td>
+                  <td>
+                    <SignInLockCell user={u as LockInfo} canUnlock={isAdmin} onUnlocked={users.reload} />
+                  </td>
                   <td>{fmtDate(u.createdAt)}</td>
                 </tr>
               ))}

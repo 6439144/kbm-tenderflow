@@ -563,6 +563,12 @@ export async function downloadFile(path: string, fallbackName: string): Promise<
   setTimeout(() => URL.revokeObjectURL(url), 30_000);
 }
 
+/** HARDEN: fetch a protected file as bytes for the in-page protected viewer (extra headers such as X-Viewer-Grant). */
+export async function fetchBytes(path: string, headers: Record<string, string> = {}): Promise<ArrayBuffer> {
+  const res = await send(path, { headers: { Accept: 'application/pdf', ...headers }, cache: 'no-store' });
+  return res.arrayBuffer();
+}
+
 /** Fetch a protected file and open it in a new tab (used for HTML reports). */
 export async function openFile(path: string): Promise<void> {
   const res = await send(path);

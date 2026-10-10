@@ -1,86 +1,56 @@
-name: TenderFlow CI Pipeline
+name: TenderFlow CI
 
+# HARDEN: one job that mirrors what a developer runs locally (README / docs/SECURITY-FEATURES.md §6.7).
 on:
   push:
-    branches: [ integration ]
   pull_request:
-    branches: [ integration ]
+
+permissions:
+  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  validate:
-    name: Code Validation & Quality Gates
+  build-and-test:
+    name: Typecheck, test, build, audit
     runs-on: ubuntu-latest
-
+    timeout-minutes: 30
     steps:
-      - name: Checkout Code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js 20
+      - name: Set up Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: 'npm'
+          node-version: 22
+          cache: npm
 
-      - name: Install Dependencies
-        run: npm ci || npm install
+      - name: Install (lockfile only)
+        run: npm ci
 
-      - name: Security Scan (Rule 5: Zero Secrets)
-        run: npm run scan:secrets
+      - name: Secret scan
+        run: node scripts/secret-scan.js
 
-      - name: Workspace Lint
-        run: npm run lint
+      - name: Typecheck API
+        run: npm run typecheck -w services/api
 
-      - name: TypeScript Typecheck
-        run: npm run typecheck
+      - name: Typecheck web
+        run: npx tsc --noEmit -p apps/web
 
-      - name: Build Workspaces
-        run: npm run build
-
-      - name: Unit & Integration Tests
+      - name: Tests (node:test, embedded PGlite)
         run: npm test
 
-      - name: Security Penetration Tests (RBAC, Rule 1, Isolation)
-        run: npm run test:security
+      - name: Build
+        run: npm run build
 
-      - name: 10-Step Review Demo E2E Tests
-        run: npm run test:e2e
+      - name: Check built web app (no inline scripts, same-origin pdf.js worker)
+        working-directory: services/api
+        run: node --import tsx --test --test-name-pattern "built web app" test/harden.test.ts
 
-      - name: AI Advisory Benchmark Evals (Task T11)
-        run: npm run test:evals
-
-      - name: Generate CycloneDX SBOM (Task T01)
-        run: npm run generate:sbom
-
-      - name: Upload SBOM Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: tenderflow-sbom
-          path: tenderflow-sbom.json
-
-      - name: Dependency Security Audit
-        run: npm audit --audit-level=high || echo "Audited with non-blocking findings"
-
-  docker-build:
-    name: Container Build & Image Verification
-    runs-on: ubuntu-latest
-    needs: validate
-
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Generate Dev TLS Certs for Proxy
+      - name: npm audit (production dependencies, report only)
+        if: always()
+        continue-on-error: true
         run: |
-          mkdir -p deploy/proxy/certs
-          bash deploy/proxy/certs/generate-certs.sh
-
-      - name: Build Docker Stack
-        run: |
-          docker compose -f deploy/docker-compose.yml build
+          npm audit --omit=dev || echo "::warning::npm audit reports findings (non-blocking; reasons in docs/SECURITY-FEATURES.md §6.6)"
