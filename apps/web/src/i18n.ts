@@ -11,6 +11,7 @@ import * as moiL from './locales/moi';
 import * as hardenL from './locales/harden';
 import * as lowcodeL from './locales/lowcode';
 import * as uxL from './locales/ux';
+import * as adminagentL from './locales/adminagent';
 
 export type Lang = 'ar' | 'en';
 
@@ -431,6 +432,7 @@ const coreEn = {
 } as const;
 
 const en = { ...coreEn, ...cycleL.en, ...demoL.en, ...filenetL.en, ...assistantL.en, ...docintelL.en, ...insightL.en, ...notifyL.en, ...securityL.en, ...moiL.en, ...hardenL.en, ...lowcodeL.en, ...uxL.en };
+const en = { ...coreEn, ...cycleL.en, ...demoL.en, ...filenetL.en, ...assistantL.en, ...docintelL.en, ...insightL.en, ...notifyL.en, ...securityL.en, ...moiL.en, ...hardenL.en, ...lowcodeL.en, ...adminagentL.en };
 export type TKey = keyof typeof en;
 
 const coreAr: Record<keyof typeof coreEn, string> = {
@@ -832,6 +834,7 @@ const coreAr: Record<keyof typeof coreEn, string> = {
 };
 
 const ar: Record<TKey, string> = { ...coreAr, ...cycleL.ar, ...demoL.ar, ...filenetL.ar, ...assistantL.ar, ...docintelL.ar, ...insightL.ar, ...notifyL.ar, ...securityL.ar, ...moiL.ar, ...hardenL.ar, ...lowcodeL.ar, ...uxL.ar };
+const ar: Record<TKey, string> = { ...coreAr, ...cycleL.ar, ...demoL.ar, ...filenetL.ar, ...assistantL.ar, ...docintelL.ar, ...insightL.ar, ...notifyL.ar, ...securityL.ar, ...moiL.ar, ...hardenL.ar, ...lowcodeL.ar, ...adminagentL.ar };
 
 const dict: Record<Lang, Record<TKey, string>> = { en, ar };
 

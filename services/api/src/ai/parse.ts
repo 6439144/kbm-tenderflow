@@ -2,8 +2,9 @@
 // reported as problems (which trigger one repair turn, then an error), and citations that do not
 // point at a provided document section are dropped.
 
+import { ADMIN_OP_TYPES } from './types.js';
 import type {
-  AmountValue, ChatAnswer, Citation, ClarificationDraft, ComplianceItem, DocFieldValue, DocText, DocTypeDef, DocumentInsight, ExtractedField, EvaluationNarrative, NoticeDraft, PackFinding, RankedItem, RequestClassification,
+  AdminOperation, AdminOpType, AdminPlan, Bilingual, AmountValue, ChatAnswer, Citation, ClarificationDraft, ComplianceItem, DocFieldValue, DocText, DocTypeDef, DocumentInsight, ExtractedField, EvaluationNarrative, NoticeDraft, PackFinding, RankedItem, RequestClassification,
 } from './types.js';
 import { normalizeText } from './text-utils.js';
 
@@ -516,4 +517,87 @@ export function validateDocumentInsight(obj: unknown, doc: DocText, catalogue: D
   if (!docType) docType = '';
   const value: DocumentInsight = { docType, language, fields, summaryEn, summaryAr, citations };
   return { value: problems.length ? undefined : value, problems, citations, dropped: top.dropped };
+}
+
+// ================================================================ Admin builder
+
+type Kind = 'string' | 'object' | 'boolean' | 'array';
+/** Top-level keys of each admin operation. Anything else is rejected (the content of objects is validated by TenderFlow's services). */
+export const ADMIN_OP_SPEC: Record<AdminOpType, { required: Record<string, Kind>; optional: Record<string, Kind> }> = {
+  CREATE_TEMPLATE: { required: { code: 'string', nameEn: 'string', nameAr: 'string' }, optional: { description: 'string', baseCode: 'string', changes: 'object' } },
+  NEW_TEMPLATE_VERSION: { required: { code: 'string' }, optional: { nameEn: 'string', nameAr: 'string', description: 'string', changes: 'object' } },
+  ADD_RULE: { required: { rule: 'object' }, optional: {} },
+  UPDATE_RULE: { required: { ruleId: 'string', changes: 'object' }, optional: {} },
+  SET_RULE_ENABLED: { required: { ruleId: 'string', enabled: 'boolean' }, optional: {} },
+  ADD_FORM_FIELD: { required: { form: 'string', field: 'object' }, optional: {} },
+  UPDATE_FORM_FIELD: { required: { form: 'string', key: 'string', changes: 'object' }, optional: {} },
+  ADD_FORM_SECTION: { required: { form: 'string', section: 'object' }, optional: {} },
+  ADD_DOCUMENT_TYPE: { required: { code: 'string', nameEn: 'string', nameAr: 'string', contexts: 'array' }, optional: { fields: 'array' } },
+};
+export const MAX_ADMIN_OPERATIONS = 20;
+
+const kindOf = (v: unknown): Kind | 'other' =>
+  typeof v === 'string' ? 'string' : typeof v === 'boolean' ? 'boolean' : Array.isArray(v) ? 'array' : v && typeof v === 'object' ? 'object' : 'other';
+
+/**
+ * Strict shape check of a list of admin operations (shared by the agent reply and the Orchestrate tool path):
+ * known "op" values only, required keys present with the right type, no unknown keys (null optional keys are dropped).
+ */
+export function parseAdminOperations(raw: unknown): { operations?: AdminOperation[]; problems: string[] } {
+  const problems: string[] = [];
+  if (!Array.isArray(raw)) return { problems: ['"operations" must be an array'] };
+  if (raw.length > MAX_ADMIN_OPERATIONS) return { problems: [`at most ${MAX_ADMIN_OPERATIONS} operations per proposal`] };
+  const out: AdminOperation[] = [];
+  raw.forEach((o: any, i) => {
+    const p = `operations[${i}]`;
+    if (!o || typeof o !== 'object' || Array.isArray(o)) { problems.push(`${p} must be an object`); return; }
+    const spec = ADMIN_OP_SPEC[o.op as AdminOpType];
+    if (!spec) { problems.push(`${p}.op "${String(o.op)}" is not one of ${ADMIN_OP_TYPES.join(', ')}`); return; }
+    const clean: AdminOperation = { op: o.op };
+    for (const [k, v] of Object.entries(o)) {
+      if (k === 'op') continue;
+      const want = spec.required[k] ?? spec.optional[k];
+      if (!want) { problems.push(`${p} (${o.op}) has an unknown key "${k}"`); continue; }
+      if (v === null && !spec.required[k]) continue;
+      if (kindOf(v) !== want) { problems.push(`${p}.${k} must be ${want === 'array' ? 'an array' : `a${want === 'object' ? 'n' : ''} ${want}`}`); continue; }
+      if (typeof v === 'string' && v.length > 4000) { problems.push(`${p}.${k} is too long`); continue; }
+      clean[k] = v;
+    }
+    for (const k of Object.keys(spec.required)) if (!(k in clean) && !problems.some((x) => x.startsWith(`${p}.${k} `))) problems.push(`${p} (${o.op}) needs "${k}"`);
+    out.push(clean);
+  });
+  return problems.length ? { problems } : { operations: out, problems: [] };
+}
+
+function bilingual(v: unknown, path: string, problems: string[]): Bilingual | undefined {
+  const o = v as { en?: unknown; ar?: unknown } | null;
+  if (!o || typeof o !== 'object' || Array.isArray(o)) { problems.push(`${path} must be an object {"en","ar"}`); return undefined; }
+  const extra = Object.keys(o).filter((k) => k !== 'en' && k !== 'ar');
+  if (extra.length) problems.push(`${path} has unknown key(s) ${extra.join(', ')}`);
+  const en = typeof o.en === 'string' ? o.en.trim() : '';
+  const ar = typeof o.ar === 'string' ? o.ar.trim() : '';
+  if (!en) problems.push(`${path}.en must be a non-empty English text`);
+  if (!ar) problems.push(`${path}.ar must be a non-empty Arabic text`);
+  if (en.length > 2000 || ar.length > 2000) problems.push(`${path} is too long (max 2000 characters per language)`);
+  return en && ar ? { en, ar } : undefined;
+}
+
+/** Validates the admin builder reply: {"reply":{"en","ar"}, "operations":[...], "questions":[{"en","ar"}]} — nothing else. */
+export function validateAdminPlan(obj: unknown): Validated<AdminPlan> {
+  const problems: string[] = [];
+  const o = obj as Record<string, unknown> | null;
+  if (!o || typeof o !== 'object' || Array.isArray(o)) return { problems: ['the reply must be a JSON object'], citations: [], dropped: 0 };
+  const extra = Object.keys(o).filter((k) => !['reply', 'operations', 'questions'].includes(k));
+  if (extra.length) problems.push(`unknown top-level key(s): ${extra.join(', ')} (allowed: reply, operations, questions)`);
+  const reply = bilingual(o.reply, 'reply', problems);
+  const ops = parseAdminOperations(o.operations ?? []);
+  problems.push(...ops.problems);
+  const questions: Bilingual[] = [];
+  if (o.questions !== undefined && o.questions !== null) {
+    if (!Array.isArray(o.questions)) problems.push('"questions" must be an array');
+    else if (o.questions.length > 5) problems.push('at most 5 questions');
+    else o.questions.forEach((q, i) => { const b = bilingual(q, `questions[${i}]`, problems); if (b) questions.push(b); });
+  }
+  if (problems.length || !reply || !ops.operations) return { problems, citations: [], dropped: 0 };
+  return { value: { reply, operations: ops.operations, questions }, problems: [], citations: [], dropped: 0 };
 }

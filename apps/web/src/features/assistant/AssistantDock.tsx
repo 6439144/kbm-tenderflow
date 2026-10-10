@@ -205,6 +205,12 @@ export function AssistantDock() {
                     </div>
                   </div>
                 )}
+                {hasRole('TENANT_ADMIN') && (
+                  <Link to="/admin/builder" className="aa-dock-link" onClick={() => setOpen(false)}>
+                    <Sparkle size={16} />
+                    <span><strong>{t('aa.dock.link')}</strong><br />{t('aa.dock.hint')}</span>
+                  </Link>
+                )}
                 <div className="ast-context small">{tenderId ? t('assistant.contextTender') : t('assistant.contextGeneral')}</div>
                 {msgs.length === 0 && <p className="small muted">{t('assistant.intro')}</p>}
                 {msgs.map((m) =>

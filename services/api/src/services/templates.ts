@@ -248,37 +248,52 @@ export async function resolveTemplate(ctx: Ctx, q: Queryable, tenantId: string, 
 export const snapshotOf = (t: TemplateRow | null) =>
   t ? { templateId: t.id, code: t.code, version: t.version, nameEn: t.name_en, nameAr: t.name_ar, config: t.config } : null;
 
+/** Fields of a template draft, already validated (config from parseConfig). */
+export interface TemplateDraftInput { code: string; nameEn: string; nameAr: string; description: string; config: CycleConfig }
+
+/**
+ * Insert a new DRAFT version inside the caller's transaction (code new → version 1; existing code → next version).
+ * Used by createTemplate and by the AI admin builder (several drafts in one transaction). Audited as TEMPLATE_CREATED.
+ */
+export async function insertTemplateDraft(ctx: Ctx, q: Queryable, actor: Actor, d: TemplateDraftInput, auditDetails: Record<string, unknown> = {}): Promise<TemplateRow> {
+  const v = await q.query<{ v: number | null }>('SELECT max(version) AS v FROM cycle_templates WHERE tenant_id=$1 AND code=$2', [actor.tenantId, d.code]);
+  const version = (Number(v[0]?.v) || 0) + 1;
+  const rows = await q.query<TemplateRow>(
+    `INSERT INTO cycle_templates (id, tenant_id, code, version, name_en, name_ar, description, config, status, created_by, created_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,'DRAFT',$9,$10) RETURNING *`,
+    [uuid(), actor.tenantId, d.code, version, d.nameEn, d.nameAr, d.description, JSON.stringify(d.config), actor.id, now()]);
+  await auditTx(ctx, q, { tenantId: actor.tenantId, actor, action: 'TEMPLATE_CREATED', resourceType: 'TEMPLATE', resourceId: rows[0].id,
+    newState: 'DRAFT', details: { code: d.code, version, ...auditDetails } });
+  return rows[0];
+}
+
+/** Update a DRAFT version inside the caller's transaction (409 if it is no longer a draft). Audited as TEMPLATE_UPDATED. */
+export async function updateTemplateDraft(ctx: Ctx, q: Queryable, actor: Actor, id: string, d: Omit<TemplateDraftInput, 'code'>, auditDetails?: Record<string, unknown>): Promise<TemplateRow> {
+  const rows = await q.query<TemplateRow>(
+    `UPDATE cycle_templates SET name_en=$1, name_ar=$2, description=$3, config=$4::jsonb WHERE id=$5 AND tenant_id=$6 AND status='DRAFT' RETURNING *`,
+    [d.nameEn, d.nameAr, d.description, JSON.stringify(d.config), id, actor.tenantId]);
+  if (!rows[0]) throw conflict('INVALID_STATE', 'Only DRAFT template versions can be edited; create a new version instead');
+  await auditTx(ctx, q, { tenantId: actor.tenantId, actor, action: 'TEMPLATE_UPDATED', resourceType: 'TEMPLATE', resourceId: id, ...(auditDetails ? { details: auditDetails } : {}) });
+  return rows[0];
+}
+
 /** Create a new DRAFT version (code new → version 1; existing code → next version). */
 export async function createTemplate(ctx: Ctx, actor: Actor, b: any) {
   const code = reqStr(b?.code, 'code', 60).toUpperCase();
   if (!/^[A-Z0-9_]{2,60}$/.test(code)) throw badRequest('code may contain only A-Z, 0-9 and _');
   const config = parseConfig(b?.config ?? {});
-  return ctx.db.tx(async (q) => {
-    const v = await q.query<{ v: number | null }>('SELECT max(version) AS v FROM cycle_templates WHERE tenant_id=$1 AND code=$2', [actor.tenantId, code]);
-    const version = (Number(v[0]?.v) || 0) + 1;
-    const rows = await q.query<TemplateRow>(
-      `INSERT INTO cycle_templates (id, tenant_id, code, version, name_en, name_ar, description, config, status, created_by, created_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,'DRAFT',$9,$10) RETURNING *`,
-      [uuid(), actor.tenantId, code, version, reqStr(b?.nameEn, 'nameEn', 200), reqStr(b?.nameAr, 'nameAr', 200),
-        str(b?.description, 'description', { max: 2000 }) ?? '', JSON.stringify(config), actor.id, now()]);
-    await auditTx(ctx, q, { tenantId: actor.tenantId, actor, action: 'TEMPLATE_CREATED', resourceType: 'TEMPLATE', resourceId: rows[0].id,
-      newState: 'DRAFT', details: { code, version } });
-    return publicTemplate(rows[0]);
-  });
+  const input: TemplateDraftInput = { code, config, nameEn: reqStr(b?.nameEn, 'nameEn', 200), nameAr: reqStr(b?.nameAr, 'nameAr', 200),
+    description: str(b?.description, 'description', { max: 2000 }) ?? '' };
+  return ctx.db.tx(async (q) => publicTemplate(await insertTemplateDraft(ctx, q, actor, input)));
 }
 
 export async function updateTemplate(ctx: Ctx, actor: Actor, id: string, b: any) {
   const t = await loadTemplate(ctx, actor.tenantId, id);
   if (t.status !== 'DRAFT') throw conflict('INVALID_STATE', 'Only DRAFT template versions can be edited; create a new version instead');
   const config = b?.config !== undefined ? parseConfig(b.config) : t.config;
-  return ctx.db.tx(async (q) => {
-    const rows = await q.query<TemplateRow>(
-      `UPDATE cycle_templates SET name_en=$1, name_ar=$2, description=$3, config=$4::jsonb WHERE id=$5 AND status='DRAFT' RETURNING *`,
-      [str(b?.nameEn, 'nameEn', { max: 200 }) ?? t.name_en, str(b?.nameAr, 'nameAr', { max: 200 }) ?? t.name_ar,
-        str(b?.description, 'description', { max: 2000 }) ?? t.description, JSON.stringify(config), id]);
-    await auditTx(ctx, q, { tenantId: actor.tenantId, actor, action: 'TEMPLATE_UPDATED', resourceType: 'TEMPLATE', resourceId: id });
-    return publicTemplate(rows[0]);
-  });
+  const input = { nameEn: str(b?.nameEn, 'nameEn', { max: 200 }) ?? t.name_en, nameAr: str(b?.nameAr, 'nameAr', { max: 200 }) ?? t.name_ar,
+    description: str(b?.description, 'description', { max: 2000 }) ?? t.description, config };
+  return ctx.db.tx(async (q) => publicTemplate(await updateTemplateDraft(ctx, q, actor, id, input)));
 }
 
 /** Validate without saving (Cycle Designer "Validate" button). */

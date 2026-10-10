@@ -8,12 +8,12 @@ import { OrchestrateClient, type InvokeResult } from './orchestrate-client.js';
 import {
   buildChatPrompt, buildClarificationPrompt, buildClassifyPrompt, buildCompliancePrompt, buildGradePrompt, buildNarrativePrompt,
   buildDocumentIntelligencePrompt, buildNoticePrompt, buildPackCheckPrompt, buildRankingPrompt, buildRepairPrompt, chatInputText, documentsText, narrativeInputText,
-  noticeInputText, CHAT_SCHEMA, DOCINTEL_SCHEMA, CLARIFICATION_SCHEMA, CLASSIFY_SCHEMA, COMPLIANCE_SCHEMA, NARRATIVE_SCHEMA, NOTICE_SCHEMA, PACK_SCHEMA,
+  noticeInputText, buildAdminBuilderPrompt, ADMIN_SCHEMA, CHAT_SCHEMA, DOCINTEL_SCHEMA, CLARIFICATION_SCHEMA, CLASSIFY_SCHEMA, COMPLIANCE_SCHEMA, NARRATIVE_SCHEMA, NOTICE_SCHEMA, PACK_SCHEMA,
   RANKING_SCHEMA,
 } from './prompts.js';
 import {
   AiOutputError, extractJsonObject, validateChat, validateClarification, validateDocumentInsight, validateClassification, validateCompliance, validateNarrative,
-  validateNotice, validatePackCheck, validateRanking, type Validated,
+  validateNotice, validatePackCheck, validateRanking, validateAdminPlan, type Validated,
 } from './parse.js';
 import { detectLanguage } from './text-utils.js';
 
@@ -164,6 +164,12 @@ export function createAiService(options: CreateAiServiceOptions = {}): AiService
     async classifyDocument(input) {
       const prompt = buildDocumentIntelligencePrompt(input, cfg.maxDocChars);
       return run('documentIntelligence', prompt, DOCINTEL_SCHEMA, (o) => validateDocumentInsight(o, input.document, input.catalogue));
+    },
+
+    async buildAdminProposal(input) {
+      // Same thread for refinements of one proposal; one JSON-repair turn; the plan is then validated by TenderFlow's services.
+      const prompt = buildAdminBuilderPrompt(input);
+      return runText('adminBuilder', prompt, ADMIN_SCHEMA, (text) => jsonThen(text, validateAdminPlan), input.threadId);
     },
 
     async chat(input) {
