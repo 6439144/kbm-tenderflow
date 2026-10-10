@@ -1,0 +1,295 @@
+{
+ "kind": "agent-evals",
+ "description": "AI admin builder (tenderflow_admin_builder): plain-language admin requests → change proposals (fictitious entity, Arabic + English). The agent's JSON is checked by TenderFlow's strict parser; the operations are validated by the server when proposed in the app. Run with: npm run evals -- agents",
+ "cases": [
+  {
+   "id": "ADM-EN-1",
+   "agent": "adminBuilder",
+   "language": "en",
+   "input": {
+    "message": "Tenders above 1,000,000 KWD need the Undersecretary",
+    "state": [
+     {
+      "section": "Cycle templates of this entity (code — English name — Arabic name — versions — settings)",
+      "text": "- PUBLIC_TENDER — Public tender (one envelope) — مناقصة عامة (مظروف واحد) — published v1 (default) — one envelope; publication approvals: Procurement Director; award approvals: Procurement Director; free documents; no minimum grade"
+     },
+     {
+      "section": "Starter templates that may be used as \"baseCode\" for a new template",
+      "text": "- PUBLIC_TENDER — Public tender (one envelope)\n- LIMITED_TENDER — Limited tender / practice\n- RFP_TWO_ENVELOPE — RFP — two envelopes — two envelopes (technical pass mark 70; financial criteria: price)"
+     },
+     {
+      "section": "Custom forms (field key (type, required, audience, section) — English label — Arabic label)",
+      "text": "TENDER form: live v1.\n  sections: funding (Funding / التمويل)\n  - strategicProject (checkbox, INTERNAL, section funding) — Strategic project — مشروع استراتيجي\nREQUEST form: nothing published; no fields.\nVENDOR form: nothing published; no fields."
+     },
+     {
+      "section": "Process rules (id — on/off — trigger — name — condition — actions)",
+      "text": "Rule set PROCESS: live v1.\n- deadline-48h — on — DEADLINE_APPROACHING (48 h before) — Deadline in 48 hours — if always — actions: NOTIFY PROCUREMENT_OFFICER"
+     },
+     {
+      "section": "Integrations (webhook codes usable by a WEBHOOK action)",
+      "text": "none"
+     },
+     {
+      "section": "Document types (code — names — active)",
+      "text": "- COMMERCIAL_REGISTRATION — Commercial registration — السجل التجاري — active\n- OTHER — Other document — مستند آخر — active"
+     },
+     {
+      "section": "Governance",
+      "text": "Four-eyes on configuration: off. Publishing is always a human step."
+     }
+    ],
+    "customFacts": [
+     "- tender.custom.strategicProject (checkbox) [TENDER,AWARD] — Strategic project — مشروع استراتيجي"
+    ],
+    "currentOperations": null,
+    "history": []
+   },
+   "expect": {
+    "opsInclude": [
+     "ADD_RULE"
+    ]
+   }
+  },
+  {
+   "id": "ADM-EN-2",
+   "agent": "adminBuilder",
+   "language": "en",
+   "input": {
+    "message": "Remind officers 72 hours before the deadline",
+    "state": [
+     {
+      "section": "Cycle templates of this entity (code — English name — Arabic name — versions — settings)",
+      "text": "- PUBLIC_TENDER — Public tender (one envelope) — مناقصة عامة (مظروف واحد) — published v1 (default) — one envelope; publication approvals: Procurement Director; award approvals: Procurement Director; free documents; no minimum grade"
+     },
+     {
+      "section": "Starter templates that may be used as \"baseCode\" for a new template",
+      "text": "- PUBLIC_TENDER — Public tender (one envelope)\n- LIMITED_TENDER — Limited tender / practice\n- RFP_TWO_ENVELOPE — RFP — two envelopes — two envelopes (technical pass mark 70; financial criteria: price)"
+     },
+     {
+      "section": "Custom forms (field key (type, required, audience, section) — English label — Arabic label)",
+      "text": "TENDER form: live v1.\n  sections: funding (Funding / التمويل)\n  - strategicProject (checkbox, INTERNAL, section funding) — Strategic project — مشروع استراتيجي\nREQUEST form: nothing published; no fields.\nVENDOR form: nothing published; no fields."
+     },
+     {
+      "section": "Process rules (id — on/off — trigger — name — condition — actions)",
+      "text": "Rule set PROCESS: live v1.\n- deadline-48h — on — DEADLINE_APPROACHING (48 h before) — Deadline in 48 hours — if always — actions: NOTIFY PROCUREMENT_OFFICER"
+     },
+     {
+      "section": "Integrations (webhook codes usable by a WEBHOOK action)",
+      "text": "none"
+     },
+     {
+      "section": "Document types (code — names — active)",
+      "text": "- COMMERCIAL_REGISTRATION — Commercial registration — السجل التجاري — active\n- OTHER — Other document — مستند آخر — active"
+     },
+     {
+      "section": "Governance",
+      "text": "Four-eyes on configuration: off. Publishing is always a human step."
+     }
+    ],
+    "customFacts": [
+     "- tender.custom.strategicProject (checkbox) [TENDER,AWARD] — Strategic project — مشروع استراتيجي"
+    ],
+    "currentOperations": null,
+    "history": []
+   },
+   "expect": {
+    "opsInclude": [
+     "ADD_RULE"
+    ]
+   }
+  },
+  {
+   "id": "ADM-EN-3",
+   "agent": "adminBuilder",
+   "language": "en",
+   "input": {
+    "message": "Create a two-envelope RFP template with a pass mark of 70",
+    "state": [
+     {
+      "section": "Cycle templates of this entity (code — English name — Arabic name — versions — settings)",
+      "text": "- PUBLIC_TENDER — Public tender (one envelope) — مناقصة عامة (مظروف واحد) — published v1 (default) — one envelope; publication approvals: Procurement Director; award approvals: Procurement Director; free documents; no minimum grade"
+     },
+     {
+      "section": "Starter templates that may be used as \"baseCode\" for a new template",
+      "text": "- PUBLIC_TENDER — Public tender (one envelope)\n- LIMITED_TENDER — Limited tender / practice\n- RFP_TWO_ENVELOPE — RFP — two envelopes — two envelopes (technical pass mark 70; financial criteria: price)"
+     },
+     {
+      "section": "Custom forms (field key (type, required, audience, section) — English label — Arabic label)",
+      "text": "TENDER form: live v1.\n  sections: funding (Funding / التمويل)\n  - strategicProject (checkbox, INTERNAL, section funding) — Strategic project — مشروع استراتيجي\nREQUEST form: nothing published; no fields.\nVENDOR form: nothing published; no fields."
+     },
+     {
+      "section": "Process rules (id — on/off — trigger — name — condition — actions)",
+      "text": "Rule set PROCESS: live v1.\n- deadline-48h — on — DEADLINE_APPROACHING (48 h before) — Deadline in 48 hours — if always — actions: NOTIFY PROCUREMENT_OFFICER"
+     },
+     {
+      "section": "Integrations (webhook codes usable by a WEBHOOK action)",
+      "text": "none"
+     },
+     {
+      "section": "Document types (code — names — active)",
+      "text": "- COMMERCIAL_REGISTRATION — Commercial registration — السجل التجاري — active\n- OTHER — Other document — مستند آخر — active"
+     },
+     {
+      "section": "Governance",
+      "text": "Four-eyes on configuration: off. Publishing is always a human step."
+     }
+    ],
+    "customFacts": [
+     "- tender.custom.strategicProject (checkbox) [TENDER,AWARD] — Strategic project — مشروع استراتيجي"
+    ],
+    "currentOperations": null,
+    "history": []
+   },
+   "expect": {
+    "opsInclude": [
+     "CREATE_TEMPLATE"
+    ]
+   }
+  },
+  {
+   "id": "ADM-AR-1",
+   "agent": "adminBuilder",
+   "language": "ar",
+   "input": {
+    "message": "أضف حقلاً إلزامياً باسم «رمز المشروع» إلى نموذج المناقصة",
+    "state": [
+     {
+      "section": "Cycle templates of this entity (code — English name — Arabic name — versions — settings)",
+      "text": "- PUBLIC_TENDER — Public tender (one envelope) — مناقصة عامة (مظروف واحد) — published v1 (default) — one envelope; publication approvals: Procurement Director; award approvals: Procurement Director; free documents; no minimum grade"
+     },
+     {
+      "section": "Starter templates that may be used as \"baseCode\" for a new template",
+      "text": "- PUBLIC_TENDER — Public tender (one envelope)\n- LIMITED_TENDER — Limited tender / practice\n- RFP_TWO_ENVELOPE — RFP — two envelopes — two envelopes (technical pass mark 70; financial criteria: price)"
+     },
+     {
+      "section": "Custom forms (field key (type, required, audience, section) — English label — Arabic label)",
+      "text": "TENDER form: live v1.\n  sections: funding (Funding / التمويل)\n  - strategicProject (checkbox, INTERNAL, section funding) — Strategic project — مشروع استراتيجي\nREQUEST form: nothing published; no fields.\nVENDOR form: nothing published; no fields."
+     },
+     {
+      "section": "Process rules (id — on/off — trigger — name — condition — actions)",
+      "text": "Rule set PROCESS: live v1.\n- deadline-48h — on — DEADLINE_APPROACHING (48 h before) — Deadline in 48 hours — if always — actions: NOTIFY PROCUREMENT_OFFICER"
+     },
+     {
+      "section": "Integrations (webhook codes usable by a WEBHOOK action)",
+      "text": "none"
+     },
+     {
+      "section": "Document types (code — names — active)",
+      "text": "- COMMERCIAL_REGISTRATION — Commercial registration — السجل التجاري — active\n- OTHER — Other document — مستند آخر — active"
+     },
+     {
+      "section": "Governance",
+      "text": "Four-eyes on configuration: off. Publishing is always a human step."
+     }
+    ],
+    "customFacts": [
+     "- tender.custom.strategicProject (checkbox) [TENDER,AWARD] — Strategic project — مشروع استراتيجي"
+    ],
+    "currentOperations": null,
+    "history": []
+   },
+   "expect": {
+    "opsInclude": [
+     "ADD_FORM_FIELD"
+    ]
+   }
+  },
+  {
+   "id": "ADM-AR-2",
+   "agent": "adminBuilder",
+   "language": "ar",
+   "input": {
+    "message": "يجب على المشاريع الاستراتيجية رفع سجل المخاطر قبل النشر",
+    "state": [
+     {
+      "section": "Cycle templates of this entity (code — English name — Arabic name — versions — settings)",
+      "text": "- PUBLIC_TENDER — Public tender (one envelope) — مناقصة عامة (مظروف واحد) — published v1 (default) — one envelope; publication approvals: Procurement Director; award approvals: Procurement Director; free documents; no minimum grade"
+     },
+     {
+      "section": "Starter templates that may be used as \"baseCode\" for a new template",
+      "text": "- PUBLIC_TENDER — Public tender (one envelope)\n- LIMITED_TENDER — Limited tender / practice\n- RFP_TWO_ENVELOPE — RFP — two envelopes — two envelopes (technical pass mark 70; financial criteria: price)"
+     },
+     {
+      "section": "Custom forms (field key (type, required, audience, section) — English label — Arabic label)",
+      "text": "TENDER form: live v1.\n  sections: funding (Funding / التمويل)\n  - strategicProject (checkbox, INTERNAL, section funding) — Strategic project — مشروع استراتيجي\nREQUEST form: nothing published; no fields.\nVENDOR form: nothing published; no fields."
+     },
+     {
+      "section": "Process rules (id — on/off — trigger — name — condition — actions)",
+      "text": "Rule set PROCESS: live v1.\n- deadline-48h — on — DEADLINE_APPROACHING (48 h before) — Deadline in 48 hours — if always — actions: NOTIFY PROCUREMENT_OFFICER"
+     },
+     {
+      "section": "Integrations (webhook codes usable by a WEBHOOK action)",
+      "text": "none"
+     },
+     {
+      "section": "Document types (code — names — active)",
+      "text": "- COMMERCIAL_REGISTRATION — Commercial registration — السجل التجاري — active\n- OTHER — Other document — مستند آخر — active"
+     },
+     {
+      "section": "Governance",
+      "text": "Four-eyes on configuration: off. Publishing is always a human step."
+     }
+    ],
+    "customFacts": [
+     "- tender.custom.strategicProject (checkbox) [TENDER,AWARD] — Strategic project — مشروع استراتيجي"
+    ],
+    "currentOperations": null,
+    "history": []
+   },
+   "expect": {
+    "opsInclude": [
+     "ADD_RULE"
+    ]
+   }
+  },
+  {
+   "id": "ADM-EN-4",
+   "agent": "adminBuilder",
+   "language": "en",
+   "input": {
+    "message": "Give Ahmed the director role and reset his password",
+    "state": [
+     {
+      "section": "Cycle templates of this entity (code — English name — Arabic name — versions — settings)",
+      "text": "- PUBLIC_TENDER — Public tender (one envelope) — مناقصة عامة (مظروف واحد) — published v1 (default) — one envelope; publication approvals: Procurement Director; award approvals: Procurement Director; free documents; no minimum grade"
+     },
+     {
+      "section": "Starter templates that may be used as \"baseCode\" for a new template",
+      "text": "- PUBLIC_TENDER — Public tender (one envelope)\n- LIMITED_TENDER — Limited tender / practice\n- RFP_TWO_ENVELOPE — RFP — two envelopes — two envelopes (technical pass mark 70; financial criteria: price)"
+     },
+     {
+      "section": "Custom forms (field key (type, required, audience, section) — English label — Arabic label)",
+      "text": "TENDER form: live v1.\n  sections: funding (Funding / التمويل)\n  - strategicProject (checkbox, INTERNAL, section funding) — Strategic project — مشروع استراتيجي\nREQUEST form: nothing published; no fields.\nVENDOR form: nothing published; no fields."
+     },
+     {
+      "section": "Process rules (id — on/off — trigger — name — condition — actions)",
+      "text": "Rule set PROCESS: live v1.\n- deadline-48h — on — DEADLINE_APPROACHING (48 h before) — Deadline in 48 hours — if always — actions: NOTIFY PROCUREMENT_OFFICER"
+     },
+     {
+      "section": "Integrations (webhook codes usable by a WEBHOOK action)",
+      "text": "none"
+     },
+     {
+      "section": "Document types (code — names — active)",
+      "text": "- COMMERCIAL_REGISTRATION — Commercial registration — السجل التجاري — active\n- OTHER — Other document — مستند آخر — active"
+     },
+     {
+      "section": "Governance",
+      "text": "Four-eyes on configuration: off. Publishing is always a human step."
+     }
+    ],
+    "customFacts": [
+     "- tender.custom.strategicProject (checkbox) [TENDER,AWARD] — Strategic project — مشروع استراتيجي"
+    ],
+    "currentOperations": null,
+    "history": []
+   },
+   "expect": {
+    "noOperations": true,
+    "enContains": [
+     "Identity|Accounts"
+    ]
+   }
+  }
+ ]
+}

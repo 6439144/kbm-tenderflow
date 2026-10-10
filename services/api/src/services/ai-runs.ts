@@ -11,7 +11,7 @@ import { loadClarification, loadTender, type TenderRow } from './tenders.js';
 import { decryptBidDocuments, financialSealed, type BidRow } from './bids.js';
 
 export type Kind = 'PACK_CHECK' | 'CLARIFICATION_DRAFT' | 'COMPLIANCE_SCREEN' | 'REQUEST_CLASSIFY' | 'GAZETTE_NOTICE' | 'RELEVANCE_MATCH'
-  | 'EVALUATION_NARRATIVE' | 'GRADE_REVIEW' | 'ASSISTANT_CHAT' | 'DOCUMENT_INTELLIGENCE';
+  | 'EVALUATION_NARRATIVE' | 'GRADE_REVIEW' | 'ASSISTANT_CHAT' | 'DOCUMENT_INTELLIGENCE' | 'ADMIN_BUILDER';
 
 export async function packDocTexts(ctx: Ctx, t: TenderRow): Promise<DocText[]> {
   const docs = await ctx.db.query<DocumentRow>(

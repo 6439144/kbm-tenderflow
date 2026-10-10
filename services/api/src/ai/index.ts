@@ -6,7 +6,10 @@ export type {
   NoticeChannel, NoticeDraft, DraftNoticeInput, RelevanceCandidate, RankedItem, RankRelevanceInput, EvaluationNarrative, NarrateEvaluationInput,
   GradeCriterion, ReviewGradeInput, ChatAnswer, ChatInput,
   DocFieldType, DocTypeField, DocTypeDef, AmountValue, DocFieldValue, ExtractedField, DocumentInsight, ClassifyDocumentInput,
+  AdminOpType, AdminOperation, AdminPlan, AdminBuilderInput, Bilingual,
 } from './types.js';
+export { ADMIN_OP_TYPES } from './types.js';
+export { parseAdminOperations, validateAdminPlan } from './parse.js';
 export { gradeCriteria, DEFAULT_GRADE_CRITERIA } from './grade-criteria.js';
 export { AiNotConfiguredError } from './types.js';
 export { createAiService } from './service.js';

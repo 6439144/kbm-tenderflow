@@ -2,8 +2,9 @@
 // document text with explicit [DOC ...] markers (budgeted), and a strict JSON-only output contract.
 // The same contracts are repeated in the agent instructions (agents/*.yaml) so both sides agree.
 
+import { ACTIONS, APPROVER_ROLES, BLOCKABLE_GATES, FACTS, LOCKED_CONTROLS, OPS, STAFF_TARGET_ROLES, TRIGGERS } from '../lowcode/catalog.js';
 import type {
-  ChatInput, ClassifyDocumentInput, ClassifyRequestInput, DocText, DraftNoticeInput, NarrateEvaluationInput, RankRelevanceInput, ReviewGradeInput,
+  AdminBuilderInput, ChatInput, ClassifyDocumentInput, ClassifyRequestInput, DocText, DraftNoticeInput, NarrateEvaluationInput, RankRelevanceInput, ReviewGradeInput,
 } from './types.js';
 import { detectLanguage, keyTerms, normalizeText } from './text-utils.js';
 
@@ -468,4 +469,142 @@ Reply again with ONLY one valid JSON object matching this schema (no markdown, n
 provided documents and copy documentId/section exactly from the [DOC ...] markers.
 
 ${schema}`;
+}
+
+// ================================================================ Admin builder (draft-first configuration changes)
+
+export const ADMIN_SCHEMA = `{
+  "reply": { "en": "<1-3 sentences in English: what you propose, or why nothing can be proposed and where it is done instead>",
+             "ar": "<the same in Arabic>" },
+  "operations": [ <zero or more operations from the OPERATION CATALOGUE, in a sensible order (sections, then fields, then rules)> ],
+  "questions": [ { "en": "<a question when something essential is unclear>", "ar": "<the same in Arabic>" } ]
+}`;
+
+/** The operation catalogue (shapes + examples). Kept in sync with services/api/src/features/admin-agent/ops.ts. */
+export const ADMIN_OPERATIONS_TEXT = `OPERATION CATALOGUE (the only operations that exist; every one creates or edits a DRAFT, never a live version):
+1. Cycle templates (Admin -> Cycle Designer)
+   {"op":"CREATE_TEMPLATE","code":"<NEW code, A-Z 0-9 _>","nameEn":"...","nameAr":"...","description":"<optional>",
+    "baseCode":"<optional: an existing template code or a starter code to start from>","changes":{<settings to change, see TEMPLATE SETTINGS>}}
+   {"op":"NEW_TEMPLATE_VERSION","code":"<EXISTING code>","nameEn":"<optional>","nameAr":"<optional>","changes":{<settings to change>}}
+   TEMPLATE SETTINGS (only these keys; objects are merged, arrays replace the whole list):
+     "scope": "FULL_CYCLE" | "PUBLICATION_AND_SALE"
+     "envelopes": "ONE" | "TWO"
+     "stages": {"requestIntake","documentPurchase","gazette","capt","complianceScreening","recordsLock"}: true|false
+     "approvals": {"request"|"publish"|"award": [ {"role":"<APPROVER ROLE>","labelEn":"...","labelAr":"...","dueHours":<optional 1-8760>} ]}  (1-5 levels)
+     "evaluation": {"technicalPassMark": <0-100, required for TWO envelopes>, "financialCriteria": ["price"]}
+     "eligibility": {"activityCodes": ["<code>"], "minGrade": 1|2|3|null}
+     "fees": {"documentPrice": <number, >0 when documentPurchase>, "currency": "KWD", "exemptionAllowed": true|false}
+     "ai": {"packCheck","clarification","compliance","gazette","relevance","narrative","requestClassify","documentIntelligence"}: true|false
+   Evaluation criteria and their weights (e.g. technical 60 / price 40) are entered on each tender, not in a template:
+   say so in "reply" when asked, and set what the template does hold (envelopes, pass mark, financial criterion key "price").
+2. Process rules (Admin -> Process Studio -> Rules; one rule set "PROCESS")
+   {"op":"ADD_RULE","rule":{"id":"<lower-case id, letters digits - _, starts with a letter>","nameEn":"...","nameAr":"...","enabled":true,
+     "trigger":"<TRIGGER key>","params":{"hoursBefore":<1-720, only for SCHEDULE triggers>},
+     "when": <CONDITION or null>, "actions":[<ACTION>, ...]}}
+   {"op":"UPDATE_RULE","ruleId":"<id of an existing rule>","changes":{<any of nameEn, nameAr, enabled, trigger, params, when, actions>}}
+   {"op":"SET_RULE_ENABLED","ruleId":"<id>","enabled":true|false}
+   CONDITION: {"fact":"<FACT key>","op":"<operator allowed for the fact type>","value":<value>} or {"all":[...]} / {"any":[...]} / {"not":{...}}
+   ACTION shapes:
+     {"type":"ADD_APPROVER","role":"<APPROVER ROLE>","labelEn":"...","labelAr":"...","dueHours":<optional>}          (GATE triggers only)
+     {"type":"BLOCK","messageEn":"...","messageAr":"..."}                                                          (GATE only)
+     {"type":"REQUIRE_FIELDS","fields":["<tender form field key>"]}                                                (GATE, tender/award)
+     {"type":"REQUIRE_DOCUMENTS","minCount":1,"titleContains":"<optional words in the pack document title>"}        (GATE, tender/award)
+     {"type":"NOTIFY","to":"ROLE"|"CREATOR"|"SUBJECT_VENDOR","role":"<STAFF ROLE, when to=ROLE>","titleEn":"...","titleAr":"..."} (EVENT/SCHEDULE)
+     {"type":"CREATE_TASK","role":"<STAFF ROLE>","titleEn":"...","titleAr":"...","dueHours":<optional>,"blocksGate":"<optional BLOCKABLE GATE>"} (EVENT/SCHEDULE)
+     {"type":"SET_FIELD","field":"<custom field key of the object's form>","value":<value>}                         (EVENT/SCHEDULE)
+   Titles may use placeholders such as {{tender.number}}, {{tender.title}}, {{tender.titleAr}}, {{tender.deadline}}, {{vendor.name}}, {{request.number}}.
+3. Custom forms TENDER / REQUEST / VENDOR (Admin -> Process Studio -> Forms)
+   {"op":"ADD_FORM_SECTION","form":"TENDER","section":{"key":"<camelCase>","titleEn":"...","titleAr":"..."}}
+   {"op":"ADD_FORM_FIELD","form":"TENDER","field":{"key":"<camelCase, e.g. projectCode>","type":"<FIELD TYPE>","labelEn":"...","labelAr":"...",
+     "required":true|false,"requiredAt":"SAVE"|"SUBMIT","audience":"PUBLIC"|"INTERNAL","section":"<optional section key>",
+     "helpEn":"<optional>","helpAr":"<optional>","min":..,"max":..,"maxLength":..,"decimals":..,"format":"<optional FORMAT>",
+     "options":[{"value":"CODE","labelEn":"...","labelAr":"..."}] (select/multiselect),"formula":"<computed only>","defaultValue":..}}
+   {"op":"UPDATE_FORM_FIELD","form":"TENDER","key":"<existing field key>","changes":{<field properties to change, not the key>}}
+   FIELD TYPES: text, textarea, number, money, percent, date, select, multiselect, checkbox, email, phone, url, computed
+   FORMATS (text only): digits, alphanumeric, iban, kwCivilId, crNumber. Keys are camelCase only (never snake_case).
+4. Document types for document intelligence (Admin -> Document types); created SWITCHED OFF until the administrator activates them
+   {"op":"ADD_DOCUMENT_TYPE","code":"<UPPER_SNAKE_CASE>","nameEn":"...","nameAr":"...","contexts":["VENDOR"|"BID_TECHNICAL"|"BID_FINANCIAL"|"TENDER_PACK"|"ADDENDUM"|"REQUEST_LETTER"|"ENTITY"],
+    "fields":[{"key":"<camelCase>","labelEn":"...","labelAr":"...","type":"text"|"date"|"amount"|"number"|"list","required":true|false}]}
+
+EXAMPLES
+- "Tenders above 1,000,000 KWD need the Undersecretary" ->
+  {"op":"ADD_RULE","rule":{"id":"undersecretary-over-1m","nameEn":"Undersecretary approval above 1,000,000 KWD","nameAr":"اعتماد الوكيل للمناقصات التي تتجاوز 1,000,000 د.ك",
+   "trigger":"TENDER_SUBMIT","when":{"fact":"tender.estimatedBudget","op":"gt","value":1000000},
+   "actions":[{"type":"ADD_APPROVER","role":"UNDERSECRETARY","labelEn":"Undersecretary","labelAr":"الوكيل"}]}}
+- "Remind officers 72 hours before the deadline" ->
+  {"op":"ADD_RULE","rule":{"id":"deadline-72h","nameEn":"Deadline in 72 hours","nameAr":"الموعد النهائي خلال 72 ساعة","trigger":"DEADLINE_APPROACHING",
+   "params":{"hoursBefore":72},"when":null,"actions":[{"type":"NOTIFY","to":"ROLE","role":"PROCUREMENT_OFFICER",
+   "titleEn":"Submission deadline within 72 hours: {{tender.number}}","titleAr":"موعد التقديم خلال 72 ساعة: {{tender.number}}"}]}}
+- "Add a required 'Project code' field to the tender form" ->
+  {"op":"ADD_FORM_FIELD","form":"TENDER","field":{"key":"projectCode","type":"text","labelEn":"Project code","labelAr":"رمز المشروع","required":true,"requiredAt":"SAVE","audience":"INTERNAL","maxLength":40}}`;
+
+/** Facts, operators, triggers, actions and roles from the low-code catalogue (lowcode/catalog.ts) as prompt text. */
+export function adminCatalogueText(customFacts: string[]): string {
+  const facts = FACTS.map((f) => `- ${f.key} (${f.type}${f.options ? `: ${f.options.map((o) => o.value).join('|')}` : ''}) [${f.scopes.join(',')}] — ${f.labelEn} — ${f.labelAr}`);
+  const ops = Object.entries(OPS).map(([t, list]) => `- ${t}: ${list.join(', ')}`);
+  const triggers = TRIGGERS.map((t) => `- ${t.key} (${t.kind}, scope ${t.scope}) — ${t.labelEn} — ${t.labelAr}`);
+  const actions = ACTIONS.map((a) => `- ${a.type} (triggers: ${a.kinds.join('/')}${a.scopes ? `; scopes: ${a.scopes.join(',')}` : ''}) — ${a.labelEn}`);
+  return [
+    'FACTS a condition may test (key (type) [scopes] — label):', ...facts,
+    customFacts.length ? "This entity's custom-field facts:" : "This entity's custom-field facts: none yet (add a form field first).", ...customFacts,
+    'OPERATORS by fact type (between takes [from,to]; in/notIn take a list; isEmpty/isNotEmpty/isTrue/isFalse take no value):', ...ops,
+    'TRIGGERS (GATE = inside the step, can block / require / add approvers; EVENT = after the step; SCHEDULE = timer):', ...triggers,
+    'ACTIONS:', ...actions,
+    `APPROVER ROLES: ${APPROVER_ROLES.join(', ')}`,
+    `STAFF ROLES (notify / task): ${STAFF_TARGET_ROLES.join(', ')}`,
+    `BLOCKABLE GATES (a task may block): ${BLOCKABLE_GATES.join(', ')}`,
+    'LOCKED CONTROLS (no operation can change them):', ...LOCKED_CONTROLS.map((l) => `- ${l.en} / ${l.ar}`),
+  ].join('\n');
+}
+
+export function buildAdminBuilderPrompt(input: AdminBuilderInput): string {
+  const lang = detectLanguage(input.message);
+  const state = input.state.map((s) => `## ${oneLine(s.section)}\n${s.text.trim() || '(none)'}`).join('\n\n');
+  const history = input.history.length
+    ? input.history.slice(-10).map((h) => `${h.role === 'admin' ? 'ADMINISTRATOR' : 'YOU'}: ${h.text.slice(0, 1500)}`).join('\n')
+    : '(this is the first message)';
+  const current = input.currentOperations
+    ? `CURRENT PROPOSAL (being revised; return the FULL updated list of operations — it replaces this one):\n${JSON.stringify(input.currentOperations)}`
+    : 'CURRENT PROPOSAL: none (new request).';
+  return `TASK: TENDERFLOW ADMIN BUILDER — turn the administrator's request into a structured change proposal (draft-first).
+You work for the administrator of ONE government entity, with that administrator's permissions. TenderFlow validates every operation
+with its own rules, shows the exact change to the administrator, and creates DRAFTS only when the administrator clicks "Create drafts".
+You never publish, approve or apply anything yourself; publishing stays a human step in Cycle Designer / Process Studio.
+
+${ADMIN_OPERATIONS_TEXT}
+
+LOW-CODE CATALOGUE
+${adminCatalogueText(input.customFacts)}
+
+OUT OF SCOPE — return "operations": [] and explain in "reply" (both languages) where it is done instead:
+- user accounts, roles, passwords, sign-in, MFA, single sign-on -> "Admin -> Identity & access" / "Admin -> Accounts" (security-sensitive; never by AI)
+- anything that would weaken a LOCKED CONTROL (decrypt or open bids early, let someone other than the chair open, skip or remove an approval,
+  let the creator approve, let the recommender approve the award, edit or delete audit records): refuse plainly
+- publishing, approving, returning, opening bids, scoring, awarding, editing tenders, bids or vendors
+- notification texts (Admin -> Notifications), entity settings such as four-eyes or numbering (Admin -> Entity settings),
+  integrations / webhooks (Process Studio -> Integrations)
+
+CURRENT CONFIGURATION OF THIS ENTITY (from TenderFlow; use these codes, keys and rule ids exactly):
+${state}
+
+${current}
+
+CONVERSATION SO FAR:
+${history}
+
+ADMINISTRATOR'S REQUEST (language: ${lang === 'ar' ? 'Arabic' : 'English'}):
+${input.message}
+
+RULES (mandatory):
+1. Return ONLY one JSON object matching the OUTPUT SCHEMA. No markdown, no code fences, no text before or after it.
+2. "reply.en" in English and "reply.ar" in Arabic, always both. Keep them short and factual; never claim that anything was created or saved.
+3. Use only operations, keys, codes, facts, operators, triggers, action types and roles listed above. Never invent a rule id, field key or
+   template code that should already exist — check CURRENT CONFIGURATION. A new template code must not exist yet.
+4. Amounts are plain numbers in the entity's currency (1000000, not "1,000,000 KWD" or "1M"). Hours and days are whole numbers.
+5. Every user-visible text you put in an operation (names, labels, messages, titles) needs both English and Arabic.
+6. If an essential detail is missing, still propose what is clear and ask in "questions" (both languages); if nothing is clear, return no operations.
+7. Rules may only ADD controls. Prefer the smallest change that does what was asked; never remove or switch off a rule unless explicitly asked.
+
+OUTPUT SCHEMA:
+${ADMIN_SCHEMA}`;
 }

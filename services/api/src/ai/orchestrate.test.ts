@@ -23,6 +23,7 @@ const AGENT_IDS: Record<string, string> = {
   tenderflow_grade_reviewer: '88888888-8888-4888-8888-888888888888',
   tenderflow_assistant: '99999999-9999-4999-8999-999999999999',
   tenderflow_document_intelligence: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  tenderflow_admin_builder: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
 };
 
 type Reply = string | { status: 'failed'; error: string } | { hang: true };

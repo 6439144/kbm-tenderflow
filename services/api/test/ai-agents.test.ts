@@ -263,6 +263,54 @@ describe('configuration', () => {
   });
 });
 
+/** Minimal operations of each type that pass the strict shape check (content is validated by the server, not here). */
+const MIN_OPS: Record<string, unknown> = {
+  ADD_RULE: { op: 'ADD_RULE', rule: { id: 'r1', nameEn: 'Rule', nameAr: 'قاعدة', trigger: 'TENDER_SUBMIT', when: null, actions: [] } },
+  ADD_FORM_FIELD: { op: 'ADD_FORM_FIELD', form: 'TENDER', field: { key: 'projectCode', type: 'text', labelEn: 'Project code', labelAr: 'رمز المشروع' } },
+  CREATE_TEMPLATE: { op: 'CREATE_TEMPLATE', code: 'RFP_X', nameEn: 'RFP', nameAr: 'طلب عروض', changes: { envelopes: 'TWO' } },
+};
+
+describe('admin builder (buildAdminProposal)', () => {
+  const input = { message: 'Tenders above 1,000,000 KWD need the Undersecretary', state: [{ section: 'Cycle templates', text: '- PUBLIC_TENDER — Public tender' }],
+    customFacts: ['- tender.custom.strategicProject (checkbox) [TENDER,AWARD] — Strategic project — مشروع استراتيجي'], currentOperations: null, history: [] };
+  const good = { reply: { en: 'Adds an Undersecretary approval above 1,000,000 KWD.', ar: 'يضيف اعتماد الوكيل فوق 1,000,000 د.ك.' }, questions: [],
+    operations: [{ op: 'ADD_RULE', rule: { id: 'us-1m', nameEn: 'US over 1M', nameAr: 'الوكيل فوق مليون', trigger: 'TENDER_SUBMIT', when: { fact: 'tender.estimatedBudget', op: 'gt', value: 1000000 },
+      actions: [{ type: 'ADD_APPROVER', role: 'UNDERSECRETARY', labelEn: 'Undersecretary', labelAr: 'الوكيل' }] } }] };
+
+  test('valid plan; the prompt carries the operation catalogue, the low-code catalogue, the state and the request', async () => {
+    fake.queue.push(J(good));
+    const res = await svc().buildAdminProposal(input);
+    assert.equal(res.agent, 'tenderflow_admin_builder');
+    assert.equal(res.output.operations.length, 1);
+    assert.deepEqual(res.citations, []);
+    const p = fake.calls.at(-1)!.prompt;
+    for (const s of ['OPERATION CATALOGUE', 'tender.estimatedBudget', 'DEADLINE_APPROACHING', 'ADD_APPROVER', 'LOCKED CONTROLS', 'PUBLIC_TENDER',
+      'tender.custom.strategicProject', 'Identity & access', input.message]) assert.ok(p.includes(s), s);
+  });
+
+  test('unknown operation or key → repair turn on the same thread; still invalid → AI_INVALID_OUTPUT', async () => {
+    fake.queue.push(J({ ...good, operations: [{ op: 'DELETE_AUDIT' }] }), J(good));
+    const ok = await svc().buildAdminProposal(input);
+    assert.equal(ok.output.operations[0].op, 'ADD_RULE');
+    assert.equal(fake.calls.at(-1)!.continued, true);
+    assert.match(fake.calls.at(-1)!.prompt, /DELETE_AUDIT/);
+    fake.queue.push(J({ ...good, operations: [{ ...good.operations[0], publishNow: true }] }), J({ reply: { en: 'x' }, operations: [] }));
+    await assert.rejects(svc().buildAdminProposal(input), (e: any) => e.code === 'AI_INVALID_OUTPUT' && /reply\.ar/.test(e.message));
+  });
+
+  test('a refinement continues the given thread', async () => {
+    fake.queue.push(J(good));
+    const first = await svc().buildAdminProposal(input);
+    const thread = (first.raw as any).threadId;
+    fake.queue.push(J(good));
+    await svc().buildAdminProposal({ ...input, message: 'make it 2 million', threadId: thread, currentOperations: good.operations as any, history: [{ role: 'admin', text: input.message }] });
+    const last = fake.calls.at(-1)!;
+    assert.equal(last.continued, true);
+    assert.equal(last.threadId, thread);
+    assert.match(last.prompt, /CURRENT PROPOSAL \(being revised/);
+  });
+});
+
 describe('Phase 1 agent eval set (agents/evals/agents)', () => {
   test('every case validates, runs through the production service and is scored', async () => {
     const { readFileSync, readdirSync } = await import('node:fs');
@@ -296,6 +344,8 @@ describe('Phase 1 agent eval set (agents/evals/agents)', () => {
             case 'assistant': return J({ answer: e.notFound ? 'Not in the context.' : (e.contains ?? []).map((k) => k.split('|')[0]).join(' '), notFound: e.notFound ?? false, citations: e.notFound ? [] : m.slice(0, 1) });
             case 'documentIntelligence': return J({ docType: e.docType, language: c.language, summaryEn: 'A document.', summaryAr: 'مستند.', citations: m.slice(0, 1),
               fields: Object.entries(e.fields ?? {}).map(([key, f]) => ({ key, value: f.raw ?? String(f.value), citation: { section: f.section, quote: f.quote } })) });
+            case 'adminBuilder': return J({ reply: { en: `Proposal. ${(e.enContains ?? []).map((k) => k.split('|')[0]).join(' ')}`, ar: 'اقتراح.' }, questions: [],
+              operations: e.noOperations ? [] : (e.opsInclude ?? []).map((op) => MIN_OPS[op]) });
           }
         };
         const res = await runAgentCase(ai, c);
@@ -304,7 +354,7 @@ describe('Phase 1 agent eval set (agents/evals/agents)', () => {
       }
     }
     assert.ok(n >= 12);
-    assert.deepEqual([...agents].sort(), ['assistant', 'documentIntelligence', 'evaluationNarrator', 'gradeReviewer', 'noticeDrafter', 'relevanceMatcher', 'requestClassifier']);
+    assert.deepEqual([...agents].sort(), ['adminBuilder', 'assistant', 'documentIntelligence', 'evaluationNarrator', 'gradeReviewer', 'noticeDrafter', 'relevanceMatcher', 'requestClassifier']);
     assert.ok(langs.has('ar') && langs.has('en'));
   });
 

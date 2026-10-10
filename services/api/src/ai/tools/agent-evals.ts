@@ -2,12 +2,12 @@
 // AiService (so prompts, validation and the repair turn are the production ones) and scoring. Used by
 // src/tools/run-evals.ts and by the unit tests (with the fake Orchestrate server).
 import type {
-  AiResult, AiService, ChatInput, ClassifyDocumentInput, ClassifyRequestInput, DraftNoticeInput, NarrateEvaluationInput, RankRelevanceInput, ReviewGradeInput,
+  AdminBuilderInput, AiResult, AiService, ChatInput, ClassifyDocumentInput, ClassifyRequestInput, DraftNoticeInput, NarrateEvaluationInput, RankRelevanceInput, ReviewGradeInput,
 } from '../types.js';
 import { normalizeText } from '../text-utils.js';
 
-export type AgentEvalKind = 'requestClassifier' | 'noticeDrafter' | 'relevanceMatcher' | 'evaluationNarrator' | 'gradeReviewer' | 'assistant' | 'documentIntelligence';
-const KINDS: AgentEvalKind[] = ['requestClassifier', 'noticeDrafter', 'relevanceMatcher', 'evaluationNarrator', 'gradeReviewer', 'assistant', 'documentIntelligence'];
+export type AgentEvalKind = 'requestClassifier' | 'noticeDrafter' | 'relevanceMatcher' | 'evaluationNarrator' | 'gradeReviewer' | 'assistant' | 'documentIntelligence' | 'adminBuilder';
+const KINDS: AgentEvalKind[] = ['requestClassifier', 'noticeDrafter', 'relevanceMatcher', 'evaluationNarrator', 'gradeReviewer', 'assistant', 'documentIntelligence', 'adminBuilder'];
 
 /** Expected extracted field: the normalised value TenderFlow should produce, and where it is written (section + quote). */
 export interface ExpectedField { value: string | number; section: string; quote: string; raw?: string }
@@ -26,6 +26,8 @@ export interface AgentEvalExpect {
   docType?: string;                      // document intelligence
   fields?: Record<string, ExpectedField>;
   noFields?: boolean;
+  opsInclude?: string[];                 // admin builder: each op type must be proposed
+  noOperations?: boolean;                // admin builder: out-of-scope request → no operations
 }
 export interface AgentEvalCase { id: string; agent: AgentEvalKind; language: string; input: unknown; expect: AgentEvalExpect }
 export interface AgentEvalFile { kind: 'agent-evals'; description?: string; cases: AgentEvalCase[] }
@@ -55,6 +57,7 @@ export function runAgentCase(ai: AiService, c: AgentEvalCase): Promise<AiResult<
     case 'gradeReviewer': return ai.reviewGrade(c.input as ReviewGradeInput);
     case 'assistant': return ai.chat(c.input as ChatInput);
     case 'documentIntelligence': return ai.classifyDocument(c.input as ClassifyDocumentInput);
+    case 'adminBuilder': return ai.buildAdminProposal(c.input as AdminBuilderInput);
   }
 }
 
@@ -69,8 +72,8 @@ export function scoreAgentCase(c: AgentEvalCase, output: any): AgentEvalScore {
   if (e.activityCodesInclude) for (const k of e.activityCodesInclude) add(`activityCode ${k}`, (output.activityCodes ?? []).includes(k), `got ${(output.activityCodes ?? []).join(',')}`);
   if (e.urgency) add('urgency', output.urgency === e.urgency, `got ${output.urgency}`);
   if (e.estimatedBudget !== undefined) add('estimatedBudget', output.estimatedBudget === e.estimatedBudget, `got ${output.estimatedBudget}`);
-  const ar = output.noticeAr ?? output.narrativeAr ?? output.summaryAr ?? '';
-  const en = output.noticeEn ?? output.narrativeEn ?? output.summaryEn ?? '';
+  const ar = output.noticeAr ?? output.narrativeAr ?? output.summaryAr ?? output.reply?.ar ?? '';
+  const en = output.noticeEn ?? output.narrativeEn ?? output.summaryEn ?? output.reply?.en ?? '';
   for (const k of e.arContains ?? []) add(`ar contains "${k}"`, has(ar, k));
   for (const k of e.enContains ?? []) add(`en contains "${k}"`, has(en, k));
   for (const k of e.contains ?? []) add(`answer contains "${k}"`, has(String(output.answer ?? ''), k));
@@ -90,5 +93,8 @@ export function scoreAgentCase(c: AgentEvalCase, output: any): AgentEvalScore {
     add(`field ${key}=${exp.value}`, ok, `got ${JSON.stringify(got)}`);
   }
   if (e.noFields) add('no fields', (output.fields ?? []).length === 0, `got ${(output.fields ?? []).length}`);
+  const ops = (output.operations ?? []).map((o: any) => o.op);
+  for (const op of e.opsInclude ?? []) add(`proposes ${op}`, ops.includes(op), `got ${ops.join(',') || 'none'}`);
+  if (e.noOperations) add('no operations', ops.length === 0, `got ${ops.join(',')}`);
   return { pass: checks.every((x) => x.ok), checks };
 }

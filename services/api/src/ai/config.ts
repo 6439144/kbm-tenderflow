@@ -14,6 +14,7 @@ export const DEFAULT_AGENT_NAMES = {
   gradeReviewer: 'tenderflow_grade_reviewer',
   documentIntelligence: 'tenderflow_document_intelligence',
   assistant: 'tenderflow_assistant',
+  adminBuilder: 'tenderflow_admin_builder',
 } as const;
 
 /** Environment variable that overrides each agent reference (name or id). */
@@ -28,6 +29,7 @@ export const AGENT_ENV: Record<keyof typeof DEFAULT_AGENT_NAMES, string> = {
   gradeReviewer: 'WXO_AGENT_GRADE_REVIEWER',
   documentIntelligence: 'WXO_AGENT_DOCUMENT_INTELLIGENCE',
   assistant: 'WXO_AGENT_ASSISTANT',
+  adminBuilder: 'WXO_AGENT_ADMIN_BUILDER',
 };
 
 export type AgentRole = keyof typeof DEFAULT_AGENT_NAMES;

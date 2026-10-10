@@ -11,6 +11,7 @@ export const FAKE_API_KEY = 'fake-api-key-SECRET-xyz';
 export const AGENT_NAMES = [
   'tenderflow_pack_checker', 'tenderflow_clarification_assistant', 'tenderflow_compliance_screener', 'tenderflow_request_classifier',
   'tenderflow_notice_drafter', 'tenderflow_relevance_matcher', 'tenderflow_evaluation_narrator', 'tenderflow_grade_reviewer', 'tenderflow_document_intelligence', 'tenderflow_assistant',
+  'tenderflow_admin_builder',
 ];
 
 export interface FakeCall { agentName: string; agentId: string; prompt: string; threadId: string; continued: boolean }

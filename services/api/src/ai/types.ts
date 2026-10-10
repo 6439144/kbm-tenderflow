@@ -98,6 +98,32 @@ export interface ClassifyDocumentInput {
   catalogue: DocTypeDef[];
 }
 
+// ---- Admin builder (plain-language admin request → structured, validated change proposal; drafts only) ----
+/** Operations the admin builder may propose. Each is validated and applied by TenderFlow's own services, as DRAFTS. */
+export const ADMIN_OP_TYPES = [
+  'CREATE_TEMPLATE', 'NEW_TEMPLATE_VERSION', 'ADD_RULE', 'UPDATE_RULE', 'SET_RULE_ENABLED',
+  'ADD_FORM_FIELD', 'UPDATE_FORM_FIELD', 'ADD_FORM_SECTION', 'ADD_DOCUMENT_TYPE',
+] as const;
+export type AdminOpType = (typeof ADMIN_OP_TYPES)[number];
+/** One proposed operation as the agent (or the Orchestrate tool) sent it; the shape per op is checked by parse.ts. */
+export interface AdminOperation { op: AdminOpType; [key: string]: unknown }
+export interface Bilingual { en: string; ar: string }
+export interface AdminPlan { reply: Bilingual; operations: AdminOperation[]; questions: Bilingual[] }
+export interface AdminBuilderInput {
+  /** The administrator's latest message. */
+  message: string;
+  /** Continue the Orchestrate thread of this proposal (owned by the same administrator; checked by the caller). */
+  threadId?: string;
+  /** The entity's current configuration as plain text sections, built by TenderFlow for THIS entity only (no secrets, no bid data). */
+  state: { section: string; text: string }[];
+  /** Custom-field facts of this entity's published or draft forms, rendered as catalogue lines. */
+  customFacts: string[];
+  /** The operations of the proposal being refined (null for a new request). */
+  currentOperations: AdminOperation[] | null;
+  /** Earlier turns of this proposal's conversation. */
+  history: { role: 'admin' | 'agent'; text: string }[];
+}
+
 export interface AiService {
   isConfigured(): boolean;
   ping(): Promise<{ ok: boolean; detail: string }>;
@@ -113,5 +139,6 @@ export interface AiService {
   reviewGrade(input: ReviewGradeInput): Promise<AiResult<{ items: ComplianceItem[] }>>;
   chat(input: ChatInput): Promise<AiResult<ChatAnswer>>;
   classifyDocument(input: ClassifyDocumentInput): Promise<AiResult<DocumentInsight>>;
+  buildAdminProposal(input: AdminBuilderInput): Promise<AiResult<AdminPlan>>;
 }
 export class AiNotConfiguredError extends Error { code = 'AI_NOT_CONFIGURED'; constructor(msg = 'watsonx Orchestrate is not configured (WXO_INSTANCE_URL / WXO_API_KEY).') { super(msg); } }
