@@ -1,4 +1,4 @@
-# TenderFlow (KBM) — v1.0.0-rc3
+# TenderFlow (KBM) — v1.0.0-rc5
 
 TenderFlow is a generic, configurable public-tendering product for government entities and regulated enterprises.
 Each entity runs **its own tender cycle** from a versioned template (stages on/off, N-level approval chains, one or
@@ -19,11 +19,15 @@ approver ≠ creator, award approver ≠ recommender, append-only HMAC-chained a
   as a watermarked copy. Editable bilingual notifications go out by in-app, e-mail and SMS, with a delivery log.
   Approval service levels escalate automatically. Every role has a dashboard, there are procurement analytics, an
   auditor evidence pack, and a public tender board across entities.
+- **Low-code Process Studio:** each entity customises its process without code — custom fields and calculated values on
+  tender, request and vendor forms; visual rules that route approvals, stop steps until conditions are met, create tasks,
+  notify and call other systems through signed webhooks; drafts, simulation, versioning and four-eyes publishing; packages
+  to roll a process out to another entity. The integrity rules above can never be weakened by a rule.
 - Both IBM services are optional at start-up: without them the product runs on a local file store and every AI feature says
   "not connected" — never fake output.
 
 Docs: [BUILD-SPEC](docs/BUILD-SPEC.md) · [Installation & operations (Windows, OpenShift, PostgreSQL, backups, upgrades)](docs/INSTALLATION-AND-OPERATIONS.md) · [Implemented user stories](docs/USER-STORIES.md) ·
-[What is verified (rc3)](docs/release-notes-v1.0.0-rc3.md) · [MOI reference configuration](docs/MOI-REFERENCE-CONFIGURATION.md) ·
+[What is verified (rc5)](docs/release-notes-v1.0.0-rc5.md) · [Low-code Process Studio](docs/LOW-CODE-STUDIO.md) · [MOI reference configuration](docs/MOI-REFERENCE-CONFIGURATION.md) ·
 [Security](docs/SECURITY-FEATURES.md) · [Notifications & escalation](docs/NOTIFICATIONS-AND-ESCALATION.md) · [Analytics & evidence](docs/ANALYTICS-AND-EVIDENCE.md) · FileNet: [README](docs/filenet/README.md), [showcase](docs/filenet/SHOWCASE.md) ·
 AI agents: [agents/README.md](agents/README.md) · [Document intelligence](docs/DOCUMENT-INTELLIGENCE.md)
 

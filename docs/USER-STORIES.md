@@ -228,6 +228,57 @@ FileNet storage itself (upload, download, Arabic text, 2 MB files, SHA-256 match
 | 123 | As an administrator or auditor, I land on my dashboard after sign-in. | Browser |
 | 124 | As a vendor or entity, a KNET payment is never recorded until a real KNET adapter exists (needs the merchant account and spec); the TEST gateway stays clearly labelled. | Test |
 
+## 20. IBM FileNet as the enterprise system of record (rc5)
+
+| # | User story | Verified by |
+|---|---|---|
+| 125 | As any staff user, I open the exact FileNet version of a document from its evidence panel in IBM Content Navigator (link configured or found on the FileNet server, checked without credentials), or open ACCE, or copy the object ID; each click is audited. | Test (fake FileNet); live: Navigator URL to confirm |
+| 126 | As an administrator, I switch on the TenderFlow document class model (TF_Document and 5 subclasses with TF_* properties); a class or property that does not exist yet is skipped and the document falls back to the configured class, so uploads never break. | Test; live after ACCE runbook §6 |
+| 127 | As the entity, each document carries a confidentiality level (PUBLIC, INTERNAL, SEALED, COMMITTEE, AUDIT) written to FileNet as a permission list; sealed bid envelopes become COMMITTEE only when the chair opens them; failed changes are retried by a background job and read back. | Test; live after ACCE runbook §7 |
+| 128 | As staff, I search FileNet (CE SQL) by tender number, document type and text from the "FileNet search" page; every query is limited to my entity and the current versions, all values are whitelisted, and results are filtered again by TenderFlow's access rules. | Test |
+| 129 | As an administrator, the watsonx Orchestrate classification of a document is written back to FileNet (TF_AiClassification, TF_AiConfidence). | Test |
+| 130 | As an administrator or auditor, the FileNet health page shows the class-model status and the Navigator check; `verify:filenet` reports each step as PASS/FAIL/SKIP with a reason, including classes, permissions, search, Navigator and AI properties. | Test; live run pending |
+
+## 21. Security hardening and protected viewer (rc5)
+
+| # | User story | Verified by |
+|---|---|---|
+| 131 | As the entity, 5 failed password or second-factor attempts within 15 minutes lock the sign-in for 15 minutes (configurable). The response is the same for unknown users, the lock is audited, and an administrator can unlock from Admin → Users. | Test, Browser |
+| 132 | As the entity, the web app and API send a strict Content-Security-Policy (no inline or remote scripts) and other security headers. | Test, Browser |
+| 133 | As an operator, `TRUST_PROXY` (off by default) makes the client address correct behind the OpenShift router without letting clients spoof it. | Test |
+| 134 | As a user signing in with the directory (OIDC), the sign-in is bound to my browser (signed state cookie); a replayed or foreign callback is refused. | Test |
+| 135 | As a reader of a protected document, I view it in the pdf.js viewer with a server-side watermark; the bytes come through a single-use, 60-second grant, are never cached and have no download name; sealed bids stay sealed; every view is audited. | Test, Browser |
+| 136 | As the public, `/ready` shows only ready / not ready; details are for a signed-in administrator or auditor. | Test |
+
+## 22. Production operations on OpenShift (rc5)
+
+| # | User story | Verified by |
+|---|---|---|
+| 137 | As an operator, I build a UBI 9 / Node 22 container (non-root, OpenShift arbitrary UID) and deploy it with Kustomize overlays for demo and production (probes, route with TLS, PVC, network policy, PDB). | Manifests rendered and schema-checked; image build not run |
+| 138 | As an operator, with `TF_ENV=production` the server refuses to start with unsafe settings (demo mode, embedded database, weak or missing keys, http public URL, plain-http FileNet) and lists every reason. | Test |
+| 139 | As an operator, `npm run config:check` prints every setting check (OK/WARN/FAIL) without revealing secrets. | Test |
+| 140 | As an operator, `npm run entity:create` creates a new government entity with its first administrator, starter cycle templates, document types, notification templates and service levels, idempotently and audited. | Test |
+| 141 | As an operator, several pods can start together safely: migrations run under a database lock, the token-signing key is created once, and SIGTERM drains gracefully. `/api/v1/version` reports the build. | Test (PGlite); PostgreSQL case with TEST_DATABASE_URL |
+
+## 23. Low-code Process Studio (rc5) — docs/LOW-CODE-STUDIO.md
+
+| # | User story | Verified by |
+|---|---|---|
+| 142 | As an entity administrator, I add custom fields to the tender, request and vendor forms (14 field types, sections, required at save or at submission, public or internal, ranges, formats, conditional visibility) with a live bilingual preview, without code. | Test, Browser |
+| 143 | As an entity administrator, I define calculated fields with a safe formula (e.g. bid bond = round(budget × % / 100, 3)); the server computes the stored value. | Test, Browser |
+| 144 | As an officer, I fill in the entity's custom fields when I create or edit a tender; required fields are checked before approval; vendors see only public fields. | Test, Browser |
+| 145 | As a vendor, I fill in the entity's public registration fields; staff see and edit internal fields (e.g. a risk rating), audited. | Test, Browser |
+| 146 | As an entity administrator, I build rules visually — When (trigger) · If (conditions with all/any groups) · Then (actions) — and read them back as a plain-language sentence in English and Arabic. | Browser |
+| 147 | As an entity administrator, I route approvals conditionally (e.g. above 500,000 KWD add the Undersecretary; recommending a bid that is not the top-scored adds an approval level). The added level appears in the tender's chain marked as added by a rule, and segregation of duties still applies. | Test, Browser |
+| 148 | As an entity administrator, I stop a step until conditions are met (block with a bilingual message, require fields or pack documents); the officer sees beforehand what is missing, and a stopped attempt is audited. | Test, Browser |
+| 149 | As an entity administrator, I automate follow-ups after a step: notify a role, the creator or the vendor, create a task (optionally one that must be done before publication or the award recommendation), call an integration, or set a field. Automations run from the committed audit trail and never slow or fail the user's action. | Test |
+| 150 | As a staff member, I see my tasks (dashboard and "My tasks"), with due dates and overdue marking, and complete them with a note. | Test, Browser |
+| 151 | As an entity administrator, I schedule reminders N hours before a submission deadline (once per tender). | Test (job) |
+| 152 | As an entity administrator, I connect other systems with signed webhooks (HMAC-SHA256), with a test button, delivery log, retries, secret rotation and SSRF protection; events never contain bid content. | Test, Browser |
+| 153 | As an entity administrator, I work in drafts: check, simulate against sample values or a real tender, publish (optionally four-eyes), discard, and see the version history with what changed. Running tenders keep the rules and form version they started with. | Test, Browser |
+| 154 | As an administrator or auditor, I see the process map (stages with locked integrity controls and the rules attached to each stage) and the automation log. | Browser |
+| 155 | As a platform operator, I export an entity's process as a package (no secrets) and import it into another entity as drafts after a preview, with a checksum warning when it was edited. | Test, Browser |
+
 ## Not yet built (roadmap — needs MOI or third-party access, or after the IBM review)
 
 - KNET payments (needs MOI's merchant account and KNET's integration specification, BRD DEP-004)
@@ -238,3 +289,4 @@ FileNet storage itself (upload, download, Arabic text, 2 MB files, SHA-256 match
 - Refunds, contracts and guarantees
 - Multi-step upgrade approval (waits on MOI's DEP-003)
 - Custom roles defined by an entity
+- Low-code: a free-form BPMN designer (new stages between the fixed ones); per-request conditional routing; rules on bid-level facts after opening

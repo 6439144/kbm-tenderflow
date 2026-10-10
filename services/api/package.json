@@ -1,6 +1,6 @@
 {
   "name": "@tenderflow/api",
-  "version": "1.0.0-rc3",
+  "version": "1.0.0-rc5",
   "description": "TenderFlow API service (REST API + static web host)",
   "main": "./dist/server.js",
   "type": "module",
