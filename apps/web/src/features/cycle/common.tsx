@@ -67,6 +67,7 @@ export function StageStrip({
   compact,
   legend,
   label,
+  onStageClick,
 }: {
   stages: StageInfo[];
   cfg?: CycleConfig | null;
@@ -75,6 +76,8 @@ export function StageStrip({
   compact?: boolean;
   legend?: boolean;
   label?: string;
+  /** Designer: makes each stage a button that jumps to the settings that shape it. */
+  onStageClick?: (key: string) => void;
 }) {
   const { t, te } = useI18n();
   const { stageDetail } = useCycleFmt();
@@ -85,13 +88,8 @@ export function StageStrip({
         {list.map((s) => {
           const st = states?.[s.key];
           const detail = stageDetail(s, cfg);
-          return (
-            <li
-              key={s.key}
-              className={`cyc-chip cyc-${s.kind.toLowerCase()} ${s.enabled ? '' : 'cyc-off'} ${st ? `cyc-st-${st}` : ''}`}
-              aria-current={st === 'current' ? 'step' : undefined}
-              title={`${te('cycle.kind.', s.kind)}${s.enabled ? '' : ` — ${t('cycle.kind.OFF')}`}`}
-            >
+          const body = (
+            <>
               <span className="cyc-chip-label">
                 {st === 'done' && (
                   <span className="cyc-tick" aria-hidden="true">
@@ -107,6 +105,22 @@ export function StageStrip({
                 {s.enabled ? '' : `, ${t('cycle.kind.OFF')}`}
                 {st ? `, ${te('cycle.state.', st)}` : ''})
               </span>
+            </>
+          );
+          return (
+            <li
+              key={s.key}
+              className={`cyc-chip cyc-${s.kind.toLowerCase()} ${s.enabled ? '' : 'cyc-off'} ${st ? `cyc-st-${st}` : ''}`}
+              aria-current={st === 'current' ? 'step' : undefined}
+              title={`${te('cycle.kind.', s.kind)}${s.enabled ? '' : ` — ${t('cycle.kind.OFF')}`}`}
+            >
+              {onStageClick ? (
+                <button type="button" className="cyc-chip-btn" onClick={() => onStageClick(s.key)} title={t('ux.stage.jump')}>
+                  {body}
+                </button>
+              ) : (
+                body
+              )}
             </li>
           );
         })}

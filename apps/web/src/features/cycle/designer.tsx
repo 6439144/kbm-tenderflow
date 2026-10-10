@@ -1,19 +1,26 @@
 // Cycle Designer (/admin/cycle): versioned tender-cycle templates with a live, server-validated preview.
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { platform, type ApprovalLevel, type CycleConfig, type CycleTemplate, type StageInfo } from '../../api-platform';
+// Usability layer for non-technical procurement administrators: a guided "new template" wizard, a plain-language
+// summary, stages that jump to their settings, inline validation next to the setting it concerns, a sticky action bar,
+// an unsaved-changes guard and a comparison with the live version. Every save still goes through the server's
+// single validator (parseConfig); nothing here relaxes an integrity control.
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { platform, type CycleConfig, type CycleTemplate, type StageInfo } from '../../api-platform';
 import { useI18n, type TKey } from '../../i18n';
-import { AsyncView, Badge, Button, Card, EmptyState, ErrorBox, Field, Modal, Spinner, useAsync, useToast } from '../../components/ui';
+import { AsyncView, Badge, Button, Card, EmptyState, ErrorBox, Field, Modal, Spinner, Table, useAsync, useToast } from '../../components/ui';
 import {
-  AI_KEYS,
-  APPROVER_ROLES,
-  GRADES,
-  IntegrityRules,
-  STAGE_TOGGLES,
-  StageStrip,
-  TPL_TONE,
-  roleLabels,
-} from './common';
-import { DueHoursField, OutOfScopeNote, ScopeCard, bidsInScope } from '../moi';
+  CYCLE_TOPICS,
+  DescribeChangeSlot,
+  GettingStarted,
+  HelpButton,
+  HelpDrawer,
+  useGettingStarted,
+  useUnsavedGuard,
+} from '../../components/ux';
+import { AI_KEYS, IntegrityRules, StageStrip, TPL_TONE, roleLabels } from './common';
+import { ChainEditor } from './chain';
+import { STAGE_SECTION, focusSection, sectionId, useConfigDiff, useIssueReader, usePlainSummary, type Issue, type Section } from './summary';
+import { EligibilityEditor, FeeEditor, NewTemplateWizard, PassMarkInput, StageToggleCards } from './wizard';
+import { OutOfScopeNote, ScopeCard, bidsInScope } from '../moi';
 
 interface Draft {
   id: string | null;
@@ -57,7 +64,7 @@ const fromTemplate = (x: CycleTemplate): Draft => ({
 });
 const fingerprint = (d: Draft) => JSON.stringify([d.code, d.nameEn, d.nameAr, d.description, d.config]);
 
-export function CycleDesignerPage() {
+export function CycleDesignerPage({ headerExtras }: { /** Slot for the separately built "describe a change" feature. */ headerExtras?: ReactNode } = {}) {
   const { t } = useI18n();
   const toast = useToast();
   const list = useAsync(() => platform.templates(true), []);
@@ -66,12 +73,21 @@ export function CycleDesignerPage() {
   const [base, setBase] = useState<string>('');
   const [installing, setInstalling] = useState(false);
   const [installErr, setInstallErr] = useState<unknown>(null);
+  const [wizard, setWizard] = useState(false);
+  const [help, setHelp] = useState(false);
+  const gs = useGettingStarted('cycle');
   const pendingSelect = useRef<string | null>(null);
+  const dirty = !!draft && fingerprint(draft) !== base;
+  const guard = useUnsavedGuard(dirty, t('ux.unsaved.confirm'));
 
   const select = (x: CycleTemplate) => {
     const d = fromTemplate(x);
     setDraft(d);
     setBase(fingerprint(d));
+  };
+  const pick = (x: CycleTemplate) => {
+    if (x.id === draft?.id || !guard.confirmLeave()) return;
+    select(x);
   };
 
   // First load: open the entity's default template; after a save, open the saved version.
@@ -102,26 +118,24 @@ export function CycleDesignerPage() {
     }
   };
 
-  const startNew = () => {
-    const d: Draft = {
-      id: null,
-      code: '',
-      version: null,
-      status: 'NEW',
-      isDefault: false,
-      nameEn: '',
-      nameAr: '',
-      description: '',
-      config: clone(draft?.config ?? BLANK),
-    };
+  /** Advanced: start a new template from the settings currently on screen (the wizard is the guided way). */
+  const startFromCurrent = () => {
+    if (!guard.confirmLeave()) return;
+    const d: Draft = { id: null, code: '', version: null, status: 'NEW', isDefault: false, nameEn: '', nameAr: '', description: '', config: clone(draft?.config ?? BLANK) };
     setDraft(d);
     setBase('');
+  };
+  const openWizard = () => {
+    if (guard.confirmLeave()) setWizard(true);
   };
 
   const afterSave = (id: string) => {
     pendingSelect.current = id;
     list.reload();
   };
+
+  const templates = list.data ?? [];
+  const live = draft ? templates.find((x) => x.code === draft.code && x.status === 'PUBLISHED') ?? null : null;
 
   return (
     <div className="stack">
@@ -130,10 +144,35 @@ export function CycleDesignerPage() {
           <h1>{t('cycle.d.title')}</h1>
           <p className="muted cyc-lead">{t('cycle.d.subtitle')}</p>
         </div>
-        <Button variant="secondary" onClick={startNew} disabled={!list.data || list.data.length === 0}>
-          {t('cycle.d.new')}
-        </Button>
+        <div className="row wrap ux-head-actions">
+          <DescribeChangeSlot>{headerExtras}</DescribeChangeSlot>
+          <HelpButton onClick={() => setHelp(true)} />
+          <Button onClick={openWizard} disabled={!list.data}>
+            + {t('cycle.d.new')}
+          </Button>
+        </div>
       </header>
+
+      {!gs.hidden && list.data && (
+        <GettingStarted
+          title={t('ux.gs.cycle.title')}
+          intro={t('ux.gs.cycle.intro')}
+          onDismiss={gs.dismiss}
+          items={[
+            {
+              key: 'have',
+              label: t('ux.gs.cycle.have'),
+              hint: t('ux.gs.cycle.haveHint'),
+              done: templates.length > 0,
+              action: templates.length ? undefined : { label: t('cycle.d.install'), onClick: install },
+            },
+            { key: 'wizard', label: t('ux.gs.cycle.wizard'), hint: t('ux.gs.cycle.wizardHint'), action: { label: t('cycle.d.new'), onClick: openWizard } },
+            { key: 'read', label: t('ux.gs.cycle.read'), hint: t('ux.gs.cycle.readHint') },
+            { key: 'publish', label: t('ux.gs.cycle.publish'), hint: t('ux.gs.cycle.publishHint'), done: templates.some((x) => x.isDefault) },
+          ]}
+        />
+      )}
+
       <div className="cyc-designer">
         <aside className="stack">
           <Card title={t('cycle.d.templates')} actions={<Button variant="ghost" onClick={list.reload}>{t('common.refresh')}</Button>}>
@@ -151,10 +190,15 @@ export function CycleDesignerPage() {
                 </>
               }
             >
-              {(xs) => <TemplateList items={xs} selectedId={draft?.id ?? null} onSelect={select} />}
+              {(xs) => <TemplateList items={xs} selectedId={draft?.id ?? null} onSelect={pick} />}
             </AsyncView>
+            {templates.length > 0 && (
+              <Button variant="ghost" className="btn-sm cyc-mt" onClick={startFromCurrent} title={t('ux.d.fromCurrentHint')}>
+                {t('ux.d.fromCurrent')}
+              </Button>
+            )}
           </Card>
-          <Card title={t('cycle.d.integrity')}>
+          <Card title={t('cycle.d.integrity')} id={sectionId('integrity')}>
             <p className="muted small">{t('cycle.d.integrityHint')}</p>
             <IntegrityRules />
           </Card>
@@ -173,13 +217,27 @@ export function CycleDesignerPage() {
               key={draft.id ?? 'new'}
               draft={draft}
               setDraft={setDraft}
-              dirty={fingerprint(draft) !== base}
+              dirty={dirty}
+              live={live}
               activityCodes={codes.data ?? []}
               onSaved={afterSave}
             />
           )}
         </div>
       </div>
+
+      <NewTemplateWizard
+        open={wizard}
+        onClose={() => setWizard(false)}
+        existing={templates}
+        activityCodes={codes.data ?? []}
+        onCreated={(id) => {
+          setWizard(false);
+          toast(t('ux.wiz.created'));
+          afterSave(id);
+        }}
+      />
+      <HelpDrawer open={help} onClose={() => setHelp(false)} topics={CYCLE_TOPICS} intro={t('ux.help.cycleIntro')} onShowGettingStarted={gs.hidden ? gs.show : undefined} />
     </div>
   );
 }
@@ -223,21 +281,49 @@ function TemplateList({ items, selectedId, onSelect }: { items: CycleTemplate[];
   );
 }
 
+/** Inline problem shown at the top of the settings card it concerns. */
+function SectionIssues({ issues, section }: { issues: Issue[]; section: Section }) {
+  const { t } = useI18n();
+  const xs = issues.filter((x) => x.section === section);
+  if (!xs.length) return null;
+  return (
+    <div className="alert alert-danger ux-inline-issue" role="alert">
+      <div>
+        {xs.map((x, i) => (
+          <div key={i}>
+            <strong>{x.text}</strong>
+            {x.server && x.server !== x.text && (
+              <div className="muted small" dir="ltr" lang="en">
+                {t('ux.err.serverSays')} {x.server}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function Editor({
   draft,
   setDraft,
   dirty,
+  live,
   activityCodes,
   onSaved,
 }: {
   draft: Draft;
   setDraft: (d: Draft) => void;
   dirty: boolean;
+  live: CycleTemplate | null;
   activityCodes: { code: string; nameEn: string; nameAr: string }[];
   onSaved: (id: string) => void;
 }) {
   const { t, te, pick } = useI18n();
   const toast = useToast();
+  const plain = usePlainSummary();
+  const readIssue = useIssueReader();
+  const diff = useConfigDiff();
   const c = draft.config;
   const setCfg = (patch: (cfg: CycleConfig) => void) => {
     const next = clone(c);
@@ -277,7 +363,9 @@ function Editor({
   const [err, setErr] = useState<unknown>(null);
   const [validation, setValidation] = useState<{ valid: boolean; error?: string } | null>(null);
   const [publishOpen, setPublishOpen] = useState(false);
+  const [compareOpen, setCompareOpen] = useState(false);
   const [makeDefault, setMakeDefault] = useState(false);
+  useEffect(() => setValidation(null), [cfgKey]);
 
   const run = async (key: string, fn: () => Promise<void>) => {
     setBusy(key);
@@ -321,79 +409,116 @@ function Editor({
       onSaved(x.id);
     });
 
-  const namesOk = draft.nameEn.trim() && draft.nameAr.trim() && /^[A-Za-z0-9_]{2,60}$/.test(draft.code.trim());
+  const codeOk = /^[A-Za-z0-9_]{2,60}$/.test(draft.code.trim());
+  const namesOk = !!(draft.nameEn.trim() && draft.nameAr.trim() && codeOk);
   const stages = preview?.valid ? preview.stages ?? lastGood : lastGood;
+
+  // ---- problems: names / code (checked here, before saving) + the live server validation
+  const issues: Issue[] = [
+    ...(!draft.nameEn.trim() || !draft.nameAr.trim() ? [{ section: 'identity' as const, text: t('ux.wiz.namesNeeded') }] : []),
+    ...(isNew && !codeOk ? [{ section: 'identity' as const, text: t('cycle.d.codeHint') }] : []),
+    ...(preview && !preview.valid && preview.error ? [readIssue(preview.error)] : []),
+  ];
+  const sectionTitle: Record<Section, string> = {
+    identity: t('cycle.d.identity'), scope: t('moi.scope.title'), stages: t('cycle.d.stages'), envelopes: t('cycle.d.envelopes'), approvals: t('cycle.d.approvals'),
+    eligibility: t('cycle.d.eligibility'), fees: t('cycle.d.fees'), ai: t('cycle.d.ai'), integrity: t('cycle.d.integrity'),
+  };
+  const canCompare = !!live && (live.id !== draft.id || dirty);
+  const changes = canCompare && live ? diff(live.config, c) : null;
+  const summary = plain(c, activityCodes);
 
   return (
     <>
-      <Card className="cyc-editor-head">
-        <div className="row spread wrap">
-          <div>
-            <div className="row wrap">
-              <h2 className="cyc-h2">{isNew ? t('cycle.d.newTitle') : pick(draft.nameEn, draft.nameAr)}</h2>
-              {!isNew && <Badge tone={TPL_TONE[draft.status]} label={te('cycle.tplStatus.', draft.status)} />}
-              {draft.isDefault && <Badge tone="primary" label={t('cycle.default')} />}
-              {dirty && <Badge tone="warn" label={t('cycle.d.unsaved')} />}
-            </div>
-            {!isNew && (
-              <div className="muted small" dir="ltr">
-                {draft.code} · v{draft.version}
-              </div>
-            )}
+      <div className="cyc-actionbar" role="region" aria-label={t('ux.d.actions')}>
+        <div className="cyc-actionbar-title">
+          <div className="row wrap">
+            <h2 className="cyc-h2">{isNew ? t('cycle.d.newTitle') : pick(draft.nameEn, draft.nameAr)}</h2>
+            {!isNew && <Badge tone={TPL_TONE[draft.status]} label={te('cycle.tplStatus.', draft.status)} />}
+            {draft.isDefault && <Badge tone="primary" label={t('cycle.default')} />}
+            {dirty && <Badge tone="warn" label={t('cycle.d.unsaved')} />}
           </div>
-          <div className="row wrap cyc-actions">
-            <Button variant="secondary" busy={busy === 'validate'} onClick={validate}>
-              {t('cycle.d.validate')}
-            </Button>
-            {isDraftVersion && (
-              <Button variant="secondary" busy={busy === 'draft'} onClick={saveDraft} disabled={!dirty}>
-                {t('cycle.d.saveDraft')}
-              </Button>
-            )}
-            <Button
-              variant={isDraftVersion ? 'secondary' : 'primary'}
-              busy={busy === 'version'}
-              onClick={saveNewVersion}
-              disabled={!namesOk}
-              disabledReason={!namesOk ? t('cycle.d.namesRequired') : undefined}
-            >
-              {isNew ? t('cycle.d.create') : t('cycle.d.saveVersion')}
-            </Button>
-            {isDraftVersion && (
-              <Button
-                onClick={() => {
-                  setMakeDefault(false);
-                  setPublishOpen(true);
-                }}
-                disabled={dirty}
-                disabledReason={dirty ? t('cycle.d.saveFirst') : undefined}
-              >
-                {t('cycle.d.publish')}
-              </Button>
-            )}
-            {draft.status === 'PUBLISHED' && !draft.isDefault && (
-              <Button variant="secondary" busy={busy === 'default'} onClick={setDefault}>
-                {t('cycle.d.setDefault')}
-              </Button>
+          <div className="muted small">
+            {!isNew && (
+              <span dir="ltr">
+                {draft.code} · v{draft.version}
+              </span>
+            )}{' '}
+            {previewBusy ? (
+              <span>{t('ux.d.checking')}</span>
+            ) : issues.length ? (
+              <a href={`#${sectionId(issues[0].section)}`} className="ux-problem-link" onClick={(e) => { e.preventDefault(); focusSection(issues[0].section); }}>
+                ⚠ {t('ux.d.problems', { n: issues.length })}
+              </a>
+            ) : (
+              <span className="ux-ok">✓ {t('ux.d.noProblems')}</span>
             )}
           </div>
         </div>
-        {err ? <ErrorBox error={err} /> : null}
-        {validation &&
-          (validation.valid ? (
-            <div className="alert alert-success" role="status">
-              {t('cycle.d.valid')}
-            </div>
-          ) : (
-            <div className="alert alert-danger" role="alert">
-              <div>
-                <strong>{t('cycle.d.invalid')}</strong>
-                <div className="alert-msg">{validation.error}</div>
+        <div className="row wrap cyc-actions">
+          {canCompare && (
+            <Button variant="ghost" onClick={() => setCompareOpen(true)}>
+              {t('ux.cmp.open', { v: live!.version })}
+            </Button>
+          )}
+          <Button variant="secondary" busy={busy === 'validate'} onClick={validate}>
+            {t('cycle.d.validate')}
+          </Button>
+          {isDraftVersion && (
+            <Button variant="secondary" busy={busy === 'draft'} onClick={saveDraft} disabled={!dirty} disabledReason={!dirty ? t('ux.d.nothingToSave') : undefined}>
+              {t('cycle.d.saveDraft')}
+            </Button>
+          )}
+          <Button
+            variant={isDraftVersion ? 'secondary' : 'primary'}
+            busy={busy === 'version'}
+            onClick={saveNewVersion}
+            disabled={!namesOk}
+            disabledReason={!namesOk ? t('cycle.d.namesRequired') : undefined}
+          >
+            {isNew ? t('cycle.d.create') : t('cycle.d.saveVersion')}
+          </Button>
+          {isDraftVersion && (
+            <Button
+              onClick={() => {
+                setMakeDefault(false);
+                setPublishOpen(true);
+              }}
+              disabled={dirty}
+              disabledReason={dirty ? t('cycle.d.saveFirst') : undefined}
+            >
+              {t('cycle.d.publish')}
+            </Button>
+          )}
+          {draft.status === 'PUBLISHED' && !draft.isDefault && (
+            <Button variant="secondary" busy={busy === 'default'} onClick={setDefault}>
+              {t('cycle.d.setDefault')}
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {(err || validation || (!isNew && draft.status !== 'DRAFT')) && (
+        <Card className="cyc-editor-head">
+          {err ? <ErrorBox error={err} /> : null}
+          {validation &&
+            (validation.valid ? (
+              <div className="alert alert-success" role="status">
+                {t('cycle.d.valid')}
               </div>
-            </div>
-          ))}
-        {!isNew && draft.status !== 'DRAFT' && <p className="muted small cyc-mt">{t('cycle.d.publishedNote')}</p>}
-      </Card>
+            ) : (
+              <div className="alert alert-danger" role="alert">
+                <div>
+                  <strong>{t('cycle.d.invalid')}</strong>
+                  <div className="alert-msg">{readIssue(validation.error ?? '').text}</div>
+                  <div className="muted small" dir="ltr" lang="en">
+                    {t('ux.err.serverSays')} {validation.error}
+                  </div>
+                </div>
+              </div>
+            ))}
+          {!isNew && draft.status !== 'DRAFT' && <p className="muted small">{t('cycle.d.publishedNote')}</p>}
+        </Card>
+      )}
 
       <Card
         title={
@@ -407,15 +532,68 @@ function Editor({
           <div className="alert alert-danger" role="alert">
             <div>
               <strong>{t('cycle.d.previewInvalid')}</strong>
-              <div className="alert-msg">{preview.error}</div>
+              <div className="alert-msg">{readIssue(preview.error ?? '').text}</div>
             </div>
           </div>
         )}
-        {stages ? <StageStrip stages={stages} cfg={preview?.valid ? c : null} legend /> : <Spinner />}
+        <p className="muted small">{t('ux.d.stripHint')}</p>
+        {stages ? (
+          <StageStrip stages={stages} cfg={preview?.valid ? c : null} legend onStageClick={(k) => focusSection(STAGE_SECTION[k] ?? 'stages')} />
+        ) : (
+          <Spinner />
+        )}
       </Card>
 
-      <Card title={t('cycle.d.identity')}>
+      <div className="cyc-overview">
+        <Card title={t('ux.sum.title')} className="ux-summary-card">
+          <ul className="ux-summary-list" aria-live="polite">
+            {summary.map((x) => (
+              <li key={x.key}>
+                <span aria-hidden="true" className="ux-sum-icon">
+                  {x.icon}
+                </span>
+                <span>{x.text}</span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+        <Card title={t('ux.d.jump')} className="ux-jump-card">
+          {issues.length > 0 && (
+            <ul className="ux-issues" aria-label={t('ux.d.problems', { n: issues.length })}>
+              {issues.map((x, i) => (
+                <li key={i}>
+                  <button type="button" className="ux-link" onClick={() => focusSection(x.section)}>
+                    {sectionTitle[x.section]}
+                  </button>
+                  : {x.text}
+                </li>
+              ))}
+            </ul>
+          )}
+          <nav aria-label={t('ux.d.jump')}>
+            <ul className="ux-jump-list">
+              {(['identity', 'scope', 'stages', 'envelopes', 'approvals', 'eligibility', 'fees', 'ai'] as Section[]).map((s) => (
+                <li key={s}>
+                  <button type="button" className={`ux-link ${issues.some((x) => x.section === s) ? 'has-issue' : ''}`} onClick={() => focusSection(s)}>
+                    {issues.some((x) => x.section === s) ? '⚠ ' : ''}
+                    {sectionTitle[s]}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        </Card>
+      </div>
+
+      <Card title={t('cycle.d.identity')} id={sectionId('identity')}>
+        <SectionIssues issues={issues} section="identity" />
         <div className="grid-2">
+          <Field label={t('cycle.d.nameEn')} required>
+            {(id) => <input id={id} value={draft.nameEn} onChange={(e) => setDraft({ ...draft, nameEn: e.target.value })} dir="ltr" lang="en" />}
+          </Field>
+          <Field label={t('cycle.d.nameAr')} required>
+            {(id) => <input id={id} value={draft.nameAr} onChange={(e) => setDraft({ ...draft, nameAr: e.target.value })} dir="rtl" lang="ar" />}
+          </Field>
           <Field label={t('cycle.d.code')} required hint={isNew ? t('cycle.d.codeHint') : t('cycle.d.codeLocked')}>
             {(id, d) => (
               <input
@@ -431,36 +609,23 @@ function Editor({
           <Field label={t('cycle.d.description')}>
             {(id) => <input id={id} value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} />}
           </Field>
-          <Field label={t('cycle.d.nameEn')} required>
-            {(id) => <input id={id} value={draft.nameEn} onChange={(e) => setDraft({ ...draft, nameEn: e.target.value })} dir="ltr" lang="en" />}
-          </Field>
-          <Field label={t('cycle.d.nameAr')} required>
-            {(id) => <input id={id} value={draft.nameAr} onChange={(e) => setDraft({ ...draft, nameAr: e.target.value })} dir="rtl" lang="ar" />}
-          </Field>
         </div>
       </Card>
 
-      <ScopeCard value={c.scope} onChange={(v) => setCfg((x) => void (x.scope = v))} />
+      <div id={sectionId('scope')} tabIndex={-1} className="ux-section-anchor">
+        <SectionIssues issues={issues} section="scope" />
+        <ScopeCard value={c.scope} onChange={(v) => setCfg((x) => void (x.scope = v))} />
+      </div>
 
       <div className="cyc-config-grid">
-        <Card title={t('cycle.d.stages')}>
+        <Card title={t('cycle.d.stages')} id={sectionId('stages')} className="cyc-span-2">
+          <SectionIssues issues={issues} section="stages" />
           <p className="muted small">{t('cycle.d.stagesHint')}</p>
-          <ul className="cyc-toggles">
-            {STAGE_TOGGLES.map((k) => (
-              <li key={k}>
-                <label className="cyc-switch">
-                  <input type="checkbox" checked={c.stages[k]} onChange={(e) => setCfg((x) => void (x.stages[k] = e.target.checked))} />
-                  <span>
-                    <strong>{t(`cycle.toggle.${k}` as TKey)}</strong>
-                    <span className="muted small">{t(`cycle.toggleHint.${k}` as TKey)}</span>
-                  </span>
-                </label>
-              </li>
-            ))}
-          </ul>
+          <StageToggleCards cfg={c} set={setCfg} />
         </Card>
 
-        <Card title={t('cycle.d.envelopes')}>
+        <Card title={t('cycle.d.envelopes')} id={sectionId('envelopes')}>
+          <SectionIssues issues={issues} section="envelopes" />
           {!bidsInScope(c) && <OutOfScopeNote />}
           <div className="segmented" role="radiogroup" aria-label={t('cycle.d.envelopes')}>
             {(['ONE', 'TWO'] as const).map((v) => (
@@ -485,144 +650,39 @@ function Editor({
             ))}
           </div>
           <p className="muted small">{t(c.envelopes === 'TWO' ? 'cycle.envHint.TWO' : 'cycle.envHint.ONE')}</p>
-          {c.envelopes === 'TWO' && (
-            <div className="grid-2">
-              <Field label={t('cycle.d.passMark')} required hint={t('cycle.d.passMarkHint')}>
-                {(id, d) => (
-                  <input
-                    id={id}
-                    aria-describedby={d}
-                    type="number"
-                    min={0}
-                    max={100}
-                    dir="ltr"
-                    value={c.evaluation.technicalPassMark ?? ''}
-                    onChange={(e) => setCfg((x) => void (x.evaluation.technicalPassMark = e.target.value === '' ? null : Number(e.target.value)))}
-                  />
-                )}
-              </Field>
-              <Field label={t('cycle.d.finKeys')} required hint={t('cycle.d.finKeysHint')}>
-                {(id, d) => (
-                  <input
-                    id={id}
-                    aria-describedby={d}
-                    dir="ltr"
-                    value={c.evaluation.financialCriteria.join(', ')}
-                    onChange={(e) =>
-                      setCfg(
-                        (x) =>
-                          void (x.evaluation.financialCriteria = e.target.value
-                            .split(/[,\s]+/)
-                            .map((s) => s.trim())
-                            .filter(Boolean)),
-                      )
-                    }
-                  />
-                )}
-              </Field>
-            </div>
-          )}
+          {c.envelopes === 'TWO' && <PassMarkInput cfg={c} set={setCfg} />}
         </Card>
 
-        <Card title={t('cycle.d.approvals')} className="cyc-span-2">
+        <Card title={t('cycle.d.fees')} id={sectionId('fees')}>
+          <SectionIssues issues={issues} section="fees" />
+          <FeeEditor cfg={c} set={setCfg} bare />
+        </Card>
+
+        <Card title={t('cycle.d.approvals')} className="cyc-span-2" id={sectionId('approvals')}>
+          <SectionIssues issues={issues} section="approvals" />
           <p className="muted small">{t('cycle.d.approvalsHint')}</p>
           <div className="cyc-chains">
-            {(['request', 'publish', 'award'] as const).filter((k) => k !== 'award' || bidsInScope(c)).map((k) => (
-              <ChainEditor key={k} title={t(`cycle.gate.${k}` as TKey)} value={c.approvals[k]} onChange={(v) => setCfg((x) => void (x.approvals[k] = v))} />
-            ))}
+            {(['request', 'publish', 'award'] as const)
+              .filter((k) => k !== 'award' || bidsInScope(c))
+              .map((k) => (
+                <ChainEditor
+                  key={k}
+                  title={t(`cycle.gate.${k}` as TKey)}
+                  hint={t(`ux.chain.hint.${k}` as TKey) + (k === 'request' && !c.stages.requestIntake ? ` ${t('ux.chain.requestOff')}` : '')}
+                  value={c.approvals[k]}
+                  invalid={issues.some((x) => x.section === 'approvals' && x.server?.includes(`approvals.${k}`))}
+                  onChange={(v) => setCfg((x) => void (x.approvals[k] = v))}
+                />
+              ))}
           </div>
         </Card>
 
-        <Card title={t('cycle.d.eligibility')}>
-          <p className="muted small">{t('cycle.d.eligibilityHint')}</p>
-          <fieldset className="cyc-fieldset">
-            <legend>{t('cycle.activityCodes')}</legend>
-            {activityCodes.length === 0 ? (
-              <p className="muted small">{t('cycle.e.noCodes')}</p>
-            ) : (
-              <div className="checks">
-                {activityCodes.map((a) => (
-                  <label key={a.code} className="check">
-                    <input
-                      type="checkbox"
-                      checked={c.eligibility.activityCodes.includes(a.code)}
-                      onChange={(e) =>
-                        setCfg((x) => {
-                          const s = new Set(x.eligibility.activityCodes);
-                          if (e.target.checked) s.add(a.code);
-                          else s.delete(a.code);
-                          x.eligibility.activityCodes = [...s].sort();
-                        })
-                      }
-                    />
-                    <span>
-                      <span dir="ltr">{a.code}</span> — {pick(a.nameEn, a.nameAr)}
-                    </span>
-                  </label>
-                ))}
-              </div>
-            )}
-          </fieldset>
-          <Field label={t('cycle.minGrade')}>
-            {(id) => (
-              <select
-                id={id}
-                value={c.eligibility.minGrade ?? ''}
-                onChange={(e) => setCfg((x) => void (x.eligibility.minGrade = e.target.value === '' ? null : Number(e.target.value)))}
-              >
-                <option value="">{t('cycle.grade.none')}</option>
-                {GRADES.map((g) => (
-                  <option key={g} value={g}>
-                    {t(`cycle.grade.${g}` as TKey)}
-                  </option>
-                ))}
-              </select>
-            )}
-          </Field>
+        <Card title={t('cycle.d.eligibility')} id={sectionId('eligibility')}>
+          <SectionIssues issues={issues} section="eligibility" />
+          <EligibilityEditor cfg={c} set={setCfg} activityCodes={activityCodes} bare />
         </Card>
 
-        <Card title={t('cycle.d.fees')}>
-          {!c.stages.documentPurchase && <p className="muted small">{t('cycle.d.feesOff')}</p>}
-          <div className="grid-2">
-            <Field label={t('cycle.d.price')} required={c.stages.documentPurchase}>
-              {(id) => (
-                <input
-                  id={id}
-                  type="number"
-                  min={0}
-                  step="0.001"
-                  dir="ltr"
-                  disabled={!c.stages.documentPurchase}
-                  value={c.fees.documentPrice}
-                  onChange={(e) => setCfg((x) => void (x.fees.documentPrice = e.target.value === '' ? 0 : Number(e.target.value)))}
-                />
-              )}
-            </Field>
-            <Field label={t('cycle.d.currency')}>
-              {(id) => (
-                <input
-                  id={id}
-                  maxLength={3}
-                  dir="ltr"
-                  disabled={!c.stages.documentPurchase}
-                  value={c.fees.currency}
-                  onChange={(e) => setCfg((x) => void (x.fees.currency = e.target.value.toUpperCase()))}
-                />
-              )}
-            </Field>
-          </div>
-          <label className="check">
-            <input
-              type="checkbox"
-              disabled={!c.stages.documentPurchase}
-              checked={c.fees.exemptionAllowed}
-              onChange={(e) => setCfg((x) => void (x.fees.exemptionAllowed = e.target.checked))}
-            />
-            <span>{t('cycle.d.exemption')}</span>
-          </label>
-        </Card>
-
-        <Card title={t('cycle.d.ai')} className="cyc-span-2">
+        <Card title={t('cycle.d.ai')} id={sectionId('ai')}>
           <p className="muted small">{t('cycle.d.aiHint')}</p>
           <div className="checks">
             {AI_KEYS.map((k) => (
@@ -652,91 +712,43 @@ function Editor({
       >
         {err ? <ErrorBox error={err} /> : null}
         <p>{t('cycle.d.publishBody', { code: draft.code, version: draft.version ?? '' })}</p>
+        {changes && (
+          <p className="muted small">{changes.length ? t('ux.cmp.count', { n: changes.length, v: live!.version }) : t('ux.cmp.none', { v: live!.version })}</p>
+        )}
         <label className="check">
           <input type="checkbox" checked={makeDefault} onChange={(e) => setMakeDefault(e.target.checked)} />
           <span>{t('cycle.d.makeDefault')}</span>
         </label>
       </Modal>
-    </>
-  );
-}
 
-function ChainEditor({ title, value, onChange }: { title: string; value: ApprovalLevel[]; onChange: (v: ApprovalLevel[]) => void }) {
-  const { t, te } = useI18n();
-  const set = (i: number, patch: Partial<ApprovalLevel>) => onChange(value.map((l, j) => (j === i ? { ...l, ...patch } : l)));
-  const move = (i: number, d: -1 | 1) => {
-    const j = i + d;
-    if (j < 0 || j >= value.length) return;
-    const next = [...value];
-    [next[i], next[j]] = [next[j], next[i]];
-    onChange(next);
-  };
-  return (
-    <div className="cyc-chain-editor">
-      <div className="row spread">
-        <h3>{title}</h3>
-        <span className="muted small">{t('cycle.levels', { n: value.length })}</span>
-      </div>
-      <ol className="cyc-chain-rows">
-        {value.map((l, i) => (
-          <li key={i} className="cyc-chain-row">
-            <span className="cyc-chain-idx" aria-hidden="true">
-              {i + 1}
-            </span>
-            <div className="cyc-chain-fields">
-              <Field label={t('cycle.d.role')}>
-                {(id) => (
-                  <select
-                    id={id}
-                    value={l.role}
-                    onChange={(e) => {
-                      const role = e.target.value;
-                      const prev = roleLabels(l.role);
-                      const autoLabels = l.labelEn === prev.labelEn && l.labelAr === prev.labelAr;
-                      set(i, autoLabels ? { role, ...roleLabels(role) } : { role });
-                    }}
-                  >
-                    {APPROVER_ROLES.map((r) => (
-                      <option key={r} value={r}>
-                        {te('role.', r)}
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </Field>
-              <Field label={t('cycle.d.labelEn')}>{(id) => <input id={id} value={l.labelEn} onChange={(e) => set(i, { labelEn: e.target.value })} dir="ltr" />}</Field>
-              <Field label={t('cycle.d.labelAr')}>{(id) => <input id={id} value={l.labelAr} onChange={(e) => set(i, { labelAr: e.target.value })} dir="rtl" />}</Field>
-              <DueHoursField value={l.dueHours} onChange={(h) => set(i, { dueHours: h })} />
-            </div>
-            <div className="cyc-chain-btns">
-              <button type="button" className="btn btn-ghost cyc-icon" onClick={() => move(i, -1)} disabled={i === 0} aria-label={t('cycle.d.moveUp', { n: i + 1 })}>
-                ▲
-              </button>
-              <button
-                type="button"
-                className="btn btn-ghost cyc-icon"
-                onClick={() => move(i, 1)}
-                disabled={i === value.length - 1}
-                aria-label={t('cycle.d.moveDown', { n: i + 1 })}
-              >
-                ▼
-              </button>
-              <button
-                type="button"
-                className="btn btn-ghost cyc-icon"
-                onClick={() => onChange(value.filter((_, j) => j !== i))}
-                disabled={value.length <= 1}
-                aria-label={t('cycle.d.removeLevel', { n: i + 1 })}
-              >
-                ✕
-              </button>
-            </div>
-          </li>
-        ))}
-      </ol>
-      <Button variant="secondary" disabled={value.length >= 5} onClick={() => onChange([...value, { role: 'UNDERSECRETARY', ...roleLabels('UNDERSECRETARY') }])}>
-        {t('cycle.d.addLevel')}
-      </Button>
-    </div>
+      <Modal open={compareOpen && !!live} wide title={t('ux.cmp.title', { v: live?.version ?? '' })} onClose={() => setCompareOpen(false)}>
+        {live && changes && (
+          <div className="stack">
+            <p className="muted">{t('ux.cmp.intro', { code: live.code, v: live.version })}</p>
+            {(live.nameEn !== draft.nameEn || live.nameAr !== draft.nameAr) && (
+              <p className="small">
+                {t('ux.cmp.renamed', { before: pick(live.nameEn, live.nameAr), after: pick(draft.nameEn, draft.nameAr) })}
+              </p>
+            )}
+            {!changes.length ? (
+              <EmptyState message={t('ux.cmp.none', { v: live.version })} />
+            ) : (
+              <Table head={[t('ux.cmp.setting'), t('ux.cmp.live', { v: live.version }), t('ux.cmp.this'), '']} caption={t('ux.cmp.title', { v: live.version })}>
+                {changes.map((r) => (
+                  <tr key={r.key}>
+                    <th scope="row">{r.label}</th>
+                    <td className={r.kind === 'added' ? 'muted' : 'ux-before'}>{r.before}</td>
+                    <td className={r.kind === 'removed' ? 'muted' : 'ux-after'}>{r.after}</td>
+                    <td>
+                      <Badge tone={r.kind === 'added' ? 'success' : r.kind === 'removed' ? 'danger' : 'warn'} label={t(`ux.cmp.kind.${r.kind}` as TKey)} />
+                    </td>
+                  </tr>
+                ))}
+              </Table>
+            )}
+          </div>
+        )}
+      </Modal>
+    </>
   );
 }

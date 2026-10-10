@@ -519,23 +519,43 @@ interface ToastItem {
   id: number;
   kind: 'success' | 'error' | 'info';
   text: string;
+  action?: ToastAction;
 }
-const ToastCtx = createContext<(text: string, kind?: ToastItem['kind']) => void>(() => undefined);
+/** Optional button on a toast (e.g. "Undo" after a delete). The toast stays a little longer when it has one. */
+export interface ToastAction {
+  label: string;
+  onClick: () => void;
+}
+type PushToast = (text: string, kind?: ToastItem['kind'], action?: ToastAction) => void;
+const ToastCtx = createContext<PushToast>(() => undefined);
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<ToastItem[]>([]);
-  const push = useCallback((text: string, kind: ToastItem['kind'] = 'success') => {
+  const drop = useCallback((id: number) => setItems((xs) => xs.filter((x) => x.id !== id)), []);
+  const push = useCallback<PushToast>((text, kind = 'success', action) => {
     const id = Date.now() + Math.random();
-    setItems((xs) => [...xs, { id, kind, text }]);
-    setTimeout(() => setItems((xs) => xs.filter((x) => x.id !== id)), 5000);
-  }, []);
+    setItems((xs) => [...xs, { id, kind, text, action }]);
+    setTimeout(() => drop(id), action ? 10000 : 5000);
+  }, [drop]);
   return (
     <ToastCtx.Provider value={push}>
       {children}
       <div className="toasts" aria-live="polite" role="status">
         {items.map((x) => (
-          <div key={x.id} className={`toast toast-${x.kind}`}>
-            {x.text}
+          <div key={x.id} className={`toast toast-${x.kind} ${x.action ? 'toast-has-action' : ''}`}>
+            <span>{x.text}</span>
+            {x.action && (
+              <button
+                type="button"
+                className="toast-action"
+                onClick={() => {
+                  x.action?.onClick();
+                  drop(x.id);
+                }}
+              >
+                {x.action.label}
+              </button>
+            )}
           </div>
         ))}
       </div>
