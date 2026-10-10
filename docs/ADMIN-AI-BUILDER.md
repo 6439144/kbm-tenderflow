@@ -24,8 +24,9 @@ Examples it handles:
   validation badge, reasons and warnings, and a field-level diff ("Show the exact change"). Buttons **Create drafts** /
   **Discard**; after applying, links to the created drafts. Proposal history below. `?proposal=<id>` opens a proposal.
 - **`<DescribeChangeButton scope="template" | "process" | "forms" />`** (`apps/web/src/features/adminagent`): a compact
-  modal version for the Cycle Designer and Process Studio headers (props: `scope`, optional `onApplied(refs)`, `label`,
-  `variant`; renders nothing for non-administrators). It is exported but not yet placed in those pages.
+  modal version shown as **Describe a change** in the Cycle Designer header (`scope="template"`) and the Process Studio
+  header (`scope="process"`) since rc6 (props: `scope`, optional `onApplied(refs)`, `label`, `variant`; renders nothing
+  for non-administrators). After **Create drafts** the page reloads so the new drafts appear.
 - **Assistant dock**: administrators see a "Build with AI" entry that opens the page.
 
 ## Safety model

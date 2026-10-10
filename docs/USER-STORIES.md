@@ -1,11 +1,12 @@
-# TenderFlow v1.0.0-rc3 — implemented user stories
+# TenderFlow v1.0.0-rc6 — implemented user stories
 
-As of 10 Oct 2026. 124 user stories are implemented: 79 in rc2 and 45 added in rc3 (sections 14–18).
+As of 10 Oct 2026. 189 user stories are implemented: 79 in rc2, 45 added in rc3 (sections 14–18), 31 added in rc5
+(sections 20–23, stories 125–155) and 34 added in rc6 (sections 24–26, stories 156–189).
 
 How each story was verified:
-- **Test**: covered by automated API, integration or unit tests. 214 tests pass: 174 API/integration and 40 AI unit tests.
-- **Browser**: walked through in Chromium with a script, on freshly seeded demo data, in English and Arabic where noted. Four scripted walk-throughs pass with no console errors.
-- **Live IBM**: not yet run against the TechZone FileNet or watsonx Orchestrate instance. These were built and tested against local fake servers that follow IBM's published APIs, and must be verified on the Windows machine. The commands are in the README.
+- **Test**: covered by automated API, integration or unit tests. In rc6: 279 API/integration tests (278 pass, 1 skipped — PostgreSQL-only, needs `TEST_DATABASE_URL`) and 40 AI unit tests (all pass).
+- **Browser**: walked through in Chromium with a script, on freshly seeded demo data, in English and Arabic where noted. The rc6 screens were checked with scripted screenshots (`scripts/dev/designer-shots.mts`, `admin-agent-shots.mts`, `dedicated-shots.mts`); the rc6 web usability features have no automated UI tests.
+- **Live IBM**: not yet run against the TechZone FileNet or watsonx Orchestrate instance. These were built and tested against local fake servers that follow IBM's published APIs, and must be verified on the Windows machine. The commands are in the README. The AI admin builder (section 25) has been tested only against the test-only fake Orchestrate.
 
 FileNet storage itself (upload, download, Arabic text, 2 MB files, SHA-256 match) was **verified live against TechZone on 9 Oct 2026** (`npm run verify:filenet`).
 
@@ -279,6 +280,66 @@ FileNet storage itself (upload, download, Arabic text, 2 MB files, SHA-256 match
 | 154 | As an administrator or auditor, I see the process map (stages with locked integrity controls and the rules attached to each stage) and the automation log. | Browser |
 | 155 | As a platform operator, I export an entity's process as a package (no secrets) and import it into another entity as drafts after a preview, with a checksum warning when it was edited. | Test, Browser |
 
+## 24. Guided configuration — Cycle Designer and Process Studio (rc6) — docs/LOW-CODE-STUDIO.md
+
+Web-only changes on top of the existing APIs; the server validates every save, check and publish as before. "Browser" here
+means scripted screenshots in English and Arabic (RTL) against the real API (`scripts/dev/designer-shots.mts`); there is no
+automated UI test for these screens. API and web typecheck and the production build are clean.
+
+| # | User story | Verified by |
+|---|---|---|
+| 156 | As a tenant admin, I create a new cycle template with a six-step wizard (starting point: starter, copy of one of my templates or blank → envelopes and pass mark → approvals with presets and due times in days + hours → stages as on/off cards → eligibility and fees → review with the summary, stage strip and the server's validation); the result is a DRAFT. | Browser; server validation: existing template tests |
+| 157 | As a tenant admin, I read my template "in plain words" (a live summary of scope, approvals, notices, fees, envelopes, eligibility, AI helpers and records lock) and click a stage in the stage strip to jump to the settings that shape it. | Browser |
+| 158 | As a tenant admin, I see each validation problem next to the card it concerns (friendly text in my language plus the server's message), with a "jump to" list and a sticky action bar that counts the problems. | Browser |
+| 159 | As a tenant admin, I am warned before I lose unsaved edits when I close the tab, follow an in-app link or switch template (the browser Back button is not caught). | Browser |
+| 160 | As a tenant admin, I compare a draft with the live version in a table before I publish it. | Browser |
+| 161 | As a tenant admin, I reorder approval levels by drag and drop (the ↑/↓ buttons still work from the keyboard) and start from quick presets. | Browser |
+| 162 | As a tenant admin, I start a rule from a recipe (extra approval above an amount, require a field when…, require a document before publication, minimum bidding days, remind before the deadline, notify a role, task before award, call an integration, blank); a recipe that needs a published field or an integration I do not have is shown disabled with the reason. | Browser |
+| 163 | As a tenant admin, I build a rule step by step (When → If → Then → Name & review) with the plain-language sentence always visible, a searchable fact picker with descriptions, value inputs that match the fact and everyday operator words, and I review it in both languages. | Browser |
+| 164 | As a tenant admin, I search and filter the rules list (gate / event / schedule, on / off), see where each rule applies, and undo a delete from the toast. | Browser |
+| 165 | As a tenant admin, I add form fields from a palette of field types with descriptions, reorder them by drag and drop, and get a camelCase key generated from the English label (locked once the form is published). | Browser; server camelCase check: Test (admin-agent "invalid operations", snake_case key) |
+| 166 | As a tenant admin, I write calculated fields with a helper that inserts fields, operators and functions, checks the formula is complete and shows a live result. | Browser; server formula grammar: existing low-code tests |
+| 167 | As a tenant admin, I open a Help drawer with a searchable glossary and follow a getting-started checklist on the Cycle Designer and the Process Studio (ticked from real data where available; hiding it is remembered in that browser). | Browser |
+
+## 25. AI admin builder (rc6) — docs/ADMIN-AI-BUILDER.md
+
+All tests below are in `services/api/test/admin-agent.test.ts` and run against the **test-only fake Orchestrate**; the agent
+has not yet been run against a live watsonx Orchestrate instance (`agents\import.ps1`, `npm run verify:ai`,
+`npm run evals -- agents`).
+
+| # | User story | Verified by |
+|---|---|---|
+| 168 | As a tenant admin, I describe a configuration change in Arabic or English in Admin → AI builder, or with **Describe a change** in the Cycle Designer and Process Studio headers, and get a proposal: one card per operation with a bilingual sentence written by TenderFlow from the validated values, a validation badge, reasons, warnings and the exact field-level changes. | Test ("valid plan"); Browser (fake Orchestrate); Live IBM pending |
+| 169 | As a tenant admin, I can only apply a proposal whose every operation passes the same validators as the screens; invalid operations (unknown fact, six approval levels, snake_case key, approver on an event, unknown template setting, empty actions) are shown with their reasons. | Test ("invalid operations") |
+| 170 | As a tenant admin, I refine a proposal with a follow-up ("make it 2 million instead"); the same proposal is revised on the same Orchestrate thread. | Test ("refinement") |
+| 171 | As a tenant admin, **Create drafts** creates drafts only (document types switched off) in one transaction, re-validated inside it; nothing published changes, a second apply is refused (409) and a later proposal goes into the open drafts. Publishing stays a separate human step under the entity's four-eyes setting. | Test ("apply creates DRAFTS only", "a later proposal goes into the open drafts") |
+| 172 | As the entity, the AI builder can never weaken a locked control: an operation such as `OPEN_BIDS` or an `integrity` template setting is refused with a bilingual explanation. | Test ("invalid operations") |
+| 173 | As a tenant admin, a request about users, roles, tenders, bids, notification texts or entity settings gets an explanation of where it is done and no operations. | Test ("out-of-scope request") |
+| 174 | As a tenant admin, when Orchestrate is not configured or the agent is not imported, the page says so (503) and no proposal is stored — nothing is generated by TenderFlow itself. | Test ("not configured", "agent not imported") |
+| 175 | As the entity, only tenant administrators chat, apply and discard; auditors read proposals; officers and directors are refused. | Test ("roles") |
+| 176 | As the entity, my proposals, Orchestrate threads and the configuration in the prompt are my own; another entity gets 404 and its prompt holds only its own data. | Test ("entity isolation") |
+| 177 | As an auditor, every proposal, apply and discard is in the audit chain, the drafts carry the proposal id, and the chain verifies. | Test ("audit") |
+| 178 | As a tenant admin working in the Orchestrate chat, the agent submits a structured proposal into TenderFlow through the tool pack (`submit_admin_proposal`); it is validated the same way and never applied until I review it in TenderFlow. | Test ("tool path"); live tool-pack connection pending |
+| 179 | As a tenant admin, if the agent answers with invalid JSON even after one repair turn, I get a clear error and nothing is stored. | Test ("not valid JSON after the repair turn") |
+
+## 26. Dedicated entity edition — one installation per government entity (rc6) — docs/DEPLOYMENT-MODEL.md
+
+Tests are in `services/api/test/dedicated-mode.test.ts` (a database holding all three demo entities started as a dedicated
+`kea` installation). The rest of the suite runs in shared mode.
+
+| # | User story | Verified by |
+|---|---|---|
+| 180 | As a government entity, my installation serves only my entity (`TENANCY_MODE=dedicated` by default, `ENTITY_ID`); in production it refuses to start without `ENTITY_ID` and `config:check` reports it. | Test ("config: …") |
+| 181 | As an operator, start-up refuses an `ENTITY_ID` that is not in a database holding other entities, starts an empty database and waits for `entity:create`, and outside production takes the entity from the database only when that is unambiguous. | Test ("startup: …") |
+| 182 | As a user of my entity, I sign in without choosing an entity, and the header shows my entity's name (EN/AR), logo text and colour (`GET /public/deployment`). | Test ("login", "GET /public/deployment"); Browser |
+| 183 | As the entity, any request for another entity id — sign-in, registration, public board, feeds, public vendor form, SSO start — gets the same 404 "Entity not found" whether that entity exists or not, and a token for another entity is refused and never issued. | Test ("login", "a session token of another entity", "public board") |
+| 184 | As a supplier, I register with this entity only and the page tells me that supplier accounts are per entity. | Test ("vendor registration"); Browser |
+| 185 | As a member of the public, I see "Public tenders of &lt;entity&gt;" with only this entity's open tenders, also in the RSS and JSON feeds. | Test ("public board, RSS and JSON feed"); Browser |
+| 186 | As an operator, creating any entity other than `ENTITY_ID` is refused (403 `ENTITY_CREATION_DISABLED`), while the installation's own entity can still be provisioned with `entity:create`. | Test ("creating another entity is disabled") |
+| 187 | As an operator, background jobs and tender closing touch only this entity. | Test ("background jobs and tender closing") |
+| 188 | As staff, a vendor or an auditor, no screen, dashboard, analytics view, audit list, evidence pack or Orchestrate prompt contains another entity's data. | Test ("every staff and vendor screen", "auditor evidence pack", "Orchestrate prompts") |
+| 189 | As KBM presales, I keep the three-entity demo with `TENANCY_MODE=shared`, or run a single-entity demo in dedicated mode that seeds only `DEMO_ENTITY` (kea, gcia or moi). | Test (configuration and start-up resolution); Browser |
+
 ## Not yet built (roadmap — needs MOI or third-party access, or after the IBM review)
 
 - KNET payments (needs MOI's merchant account and KNET's integration specification, BRD DEP-004)
@@ -290,3 +351,4 @@ FileNet storage itself (upload, download, Arabic text, 2 MB files, SHA-256 match
 - Multi-step upgrade approval (waits on MOI's DEP-003)
 - Custom roles defined by an entity
 - Low-code: a free-form BPMN designer (new stages between the fixed ones); per-request conditional routing; rules on bid-level facts after opening
+- AI admin builder: notification templates and user accounts/roles (not in the v1 operation catalogue)

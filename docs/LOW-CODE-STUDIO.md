@@ -19,9 +19,49 @@ Facts include budget, category, cycle template, envelopes, days until deadline, 
 count, recommended bid's score and rank, vendor status, categories and grade, request budget, department and source, document kind, size and type,
 the acting user's roles, and **every custom field**.
 
-**Describe it instead of building it.** Administrators can also ask the watsonx Orchestrate agent in **Admin → AI builder** for
-forms, rules and cycle templates in plain language (Arabic or English). It produces a proposal that the server validates with the same
-rules as this Studio and creates drafts only when the administrator applies it — see [ADMIN-AI-BUILDER.md](ADMIN-AI-BUILDER.md).
+## Guided experience (rc6)
+
+Since rc6 both configuration screens guide an administrator who is not a technical user. All of it is in Arabic and English
+(right-to-left included) and uses the existing APIs only; the server still validates everything on save, check and publish.
+
+**Cycle Designer** (`Admin → Cycle Designer`)
+
+| Aid | What it does |
+|---|---|
+| **New-template wizard** | Six short steps: 1 start from a starter template, a copy of one of the entity's templates, or blank · 2 envelopes and pass mark · 3 approvals (presets, due times in days + hours) · 4 stages as on/off cards · 5 eligibility and fees · 6 review with the plain-language summary, the stage strip and the server's validation. The result is a **draft**. |
+| **In plain words** | A live summary of the template as sentences ("Before publication the tender is approved by …. The person who drafted it can never approve it."). |
+| **Stage strip** | Click a stage to jump to the settings card that shapes it. |
+| **Inline validation** | The server's message is shown next to the card it concerns (friendly bilingual text plus the server's own words), with a "jump to" list; the sticky action bar counts the problems. |
+| **Unsaved-changes guard** | Warns before closing the tab, following an in-app link or switching template with unsaved edits. |
+| **Compare with live version** | A table of what the draft changes against the published version. |
+| **Approval chains** | Level cards that can be dragged into order (the ↑/↓ buttons still work), quick presets; labels in an optional disclosure. |
+
+**Process Studio** (`Admin → Process Studio`)
+
+| Aid | What it does |
+|---|---|
+| **Rule recipes** | "New rule" (and "Add rule here" on the process map) opens a gallery: extra approval above an amount · require a field when… · require a document before publication · minimum bidding days · remind before the deadline · notify a role when… · task that must be done before award · call an integration when… · blank rule. Recipes are built from the server catalogue; one that needs a published tender field or an integration the entity does not have is shown disabled with the reason. |
+| **Step-by-step rule editor** | 1 When → 2 If → 3 Then → 4 Name & review. The plain-language sentence is always visible, and the review shows the rule in both languages. Triggers are grouped as gate / event / schedule; the fact picker is searchable with descriptions; value inputs match the fact (choices, amount with currency, days, yes/no, roles); operators use everyday words. Obvious mistakes are flagged before saving. |
+| **Rules list** | Search; filter by gate / event / schedule and on / off; "where it applies" chips (kind, stage, object); delete with **Undo**. |
+| **Form builder** | Field-type palette with icons and descriptions; drag-and-drop ordering (↑/↓ kept); camelCase keys generated from the English label (locked once published); calculated-field helper that inserts fields, operators and functions, checks completeness and shows a live result; live preview side by side. |
+
+**On both pages:** a **Help** drawer with a searchable glossary, and a dismissible **Getting started** checklist (Cycle
+Designer: have a template → create one with the wizard → read the summary → publish a default; Process Studio: look at the
+process map → add form fields → add a rule from a recipe → try the simulator → publish). Steps are ticked from real data
+where available; hiding the checklist is remembered in that browser only.
+
+Limits: the unsaved-changes guard does not catch the browser **Back** button; the wizard's starter templates are client-side
+copies of the server's starter settings (kept in step by hand, still validated by the server).
+
+## Describe it instead of building it — AI builder (rc6)
+
+Administrators can also describe a change in plain language (Arabic or English) and let the watsonx Orchestrate agent
+`tenderflow_admin_builder` prepare it: in **Admin → AI builder**, or with the **Describe a change** button in the Cycle
+Designer and Process Studio headers. The agent proposes forms, form fields, rules, cycle templates and document types; the
+server validates every operation with the same validators as these screens and shows each one as a bilingual sentence with
+its exact changes. **Create drafts** creates drafts only — publishing (and four-eyes) stays as described below, and the
+locked controls cannot be touched. Notification templates, users and roles are not covered. Details:
+[ADMIN-AI-BUILDER.md](ADMIN-AI-BUILDER.md).
 
 ## What can never be changed (locked controls)
 

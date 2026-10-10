@@ -1,4 +1,4 @@
-# TenderFlow (KBM) — v1.0.0-rc5
+# TenderFlow (KBM) — v1.0.0-rc6
 
 TenderFlow is a generic, configurable public-tendering product for government entities and regulated enterprises.
 Each entity runs **its own tender cycle** from a versioned template (stages on/off, N-level approval chains, one or
@@ -23,6 +23,13 @@ approver ≠ creator, award approver ≠ recommender, append-only HMAC-chained a
   tender, request and vendor forms; visual rules that route approvals, stop steps until conditions are met, create tasks,
   notify and call other systems through signed webhooks; drafts, simulation, versioning and four-eyes publishing; packages
   to roll a process out to another entity. The integrity rules above can never be weakened by a rule.
+  Since rc6 both configuration screens guide non-technical administrators: a new-template wizard, the cycle "in plain
+  words", rule recipes, a step-by-step rule editor, drag-and-drop approval chains and form fields, a formula helper,
+  help and getting-started checklists ([guided experience](docs/LOW-CODE-STUDIO.md#guided-experience-rc6)).
+- **AI admin builder (rc6):** an administrator describes a change in Arabic or English (Admin → AI builder, or
+  *Describe a change* in the Cycle Designer and Process Studio) and the Orchestrate agent `tenderflow_admin_builder`
+  proposes it; TenderFlow validates every operation with the screens' own rules, shows it as a bilingual sentence with the
+  exact changes and creates **drafts only** — publishing stays a human step ([docs/ADMIN-AI-BUILDER.md](docs/ADMIN-AI-BUILDER.md)).
 - Both IBM services are optional at start-up: without them the product runs on a local file store and every AI feature says
   "not connected" — never fake output.
 
@@ -34,7 +41,7 @@ other entity id is answered with 404. `TENANCY_MODE=shared` (several entities in
 multi-entity demo and the tests. Details: [docs/DEPLOYMENT-MODEL.md](docs/DEPLOYMENT-MODEL.md).
 
 Docs: [Deployment model](docs/DEPLOYMENT-MODEL.md) · [BUILD-SPEC](docs/BUILD-SPEC.md) · [Installation & operations (Windows, OpenShift, PostgreSQL, backups, upgrades)](docs/INSTALLATION-AND-OPERATIONS.md) · [Implemented user stories](docs/USER-STORIES.md) ·
-[What is verified (rc5)](docs/release-notes-v1.0.0-rc5.md) · [Low-code Process Studio](docs/LOW-CODE-STUDIO.md) · [MOI reference configuration](docs/MOI-REFERENCE-CONFIGURATION.md) ·
+[What is verified (rc6)](docs/release-notes-v1.0.0-rc6.md) · [Low-code Process Studio](docs/LOW-CODE-STUDIO.md) · [AI admin builder](docs/ADMIN-AI-BUILDER.md) · [MOI reference configuration](docs/MOI-REFERENCE-CONFIGURATION.md) ·
 [Security](docs/SECURITY-FEATURES.md) · [Notifications & escalation](docs/NOTIFICATIONS-AND-ESCALATION.md) · [Analytics & evidence](docs/ANALYTICS-AND-EVIDENCE.md) · FileNet: [README](docs/filenet/README.md), [showcase](docs/filenet/SHOWCASE.md) ·
 AI agents: [agents/README.md](agents/README.md) · [Document intelligence](docs/DOCUMENT-INTELLIGENCE.md)
 
@@ -59,7 +66,7 @@ All use the password you set in `DEMO_PASSWORD`.
 
 | Stage | Who (demo user) | Where in the app |
 |---|---|---|
-| Configure the entity and its cycle templates | `admin` | Admin → Cycle Designer / Entity settings / Document types |
+| Configure the entity and its cycle templates | `admin` | Admin → Cycle Designer / Process Studio / AI builder / Entity settings / Document types |
 | Department request (scanned letter or Raslni ref.), approval chain, convert to tender | `officer`, `director` | Procurement → Requests |
 | Register company, upload documents; every upload classified and data extracted | vendor (`/register`), `officer` reviews | Vendor portal · Procurement → Document intelligence |
 | Approve vendor, set activity codes and grades | `officer` | Procurement → Vendors |
@@ -113,8 +120,10 @@ Data (database + files) lives in `.\data`. Delete that folder (or `npm run demo:
 
 1. `py -m pip install --upgrade ibm-watsonx-orchestrate` (Python 3.11+).
 2. In `.env`: `WXO_INSTANCE_URL` and `WXO_API_KEY` (Orchestrate → Settings → API details); optional `WXO_LLM`; `DOC_AI_AUTO=true` to classify uploads automatically.
-3. `powershell -ExecutionPolicy Bypass -File agents\import.ps1` — imports the nine collaborator agents, then the supervisor.
-4. `npm run verify:ai` — IAM token, all agents present, one live clarification, one supervisor turn, one document-intelligence run.
+3. `powershell -ExecutionPolicy Bypass -File agents\import.ps1` — imports eleven agents: the nine collaborators and the
+   admin builder, then the supervisor.
+4. `npm run verify:ai` — IAM token, all agents present, one live clarification, one supervisor turn, one document-intelligence
+   run and one admin-builder turn.
 5. `npm run evals` and `npm run evals -- agents` — Arabic + English eval sets; real pass rates written under `agents/evals/`.
 
 ## Security model (summary)
