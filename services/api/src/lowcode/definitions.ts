@@ -56,7 +56,8 @@ export async function ruleContext(q: Queryable, tenantId: string, formsOverride?
 }
 export const factsWith = (rc: RuleContext) => (scope: Scope | null) => factsFor(scope, customFactSources(rc.forms));
 
-function validateBody(kind: Kind, code: string, def: unknown, rc: RuleContext) {
+/** Validate a form / rule-set body against a rule context (forms + integrations). Throws a 400 ApiError with the reason. */
+export function validateBody(kind: Kind, code: string, def: unknown, rc: RuleContext) {
   if (kind === 'FORM') {
     if (!FORM_CODES.includes(code as FormCode)) throw badRequest(`Form code must be one of ${FORM_CODES.join(', ')}`);
     return validateFormDefinition(def, code as FormCode);
@@ -120,20 +121,40 @@ export async function createDraft(ctx: Ctx, actor: Actor, b: any) {
   }
   const rc = await ruleContext(ctx.db, actor.tenantId);
   const def = validateBody(kind, code, body ?? (kind === 'FORM' ? { sections: [], fields: [] } : { rules: [] }), rc);
-  return ctx.db.tx(async (q) => {
-    const open = await q.query('SELECT id FROM lowcode_definitions WHERE tenant_id=$1 AND kind=$2 AND code=$3 AND status=\'DRAFT\'', [actor.tenantId, kind, code]);
-    if (open.length) throw conflict('DRAFT_EXISTS', 'A draft of this definition is already open; edit or discard it first');
-    const v = await q.query<{ v: number | null }>('SELECT max(version) AS v FROM lowcode_definitions WHERE tenant_id=$1 AND kind=$2 AND code=$3', [actor.tenantId, kind, code]);
-    const version = (Number(v[0]?.v) || 0) + 1;
-    const defaults = kind === 'RULESET' ? ['Process rules', 'قواعد الإجراءات'] : [`${code[0]}${code.slice(1).toLowerCase()} form`, code === 'TENDER' ? 'نموذج المناقصة' : code === 'VENDOR' ? 'نموذج المورد' : 'نموذج الطلب'];
-    const rows = await q.query<DefinitionRow>(
-      `INSERT INTO lowcode_definitions (id, tenant_id, kind, code, version, status, name_en, name_ar, definition, created_by, updated_by, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,'DRAFT',$6,$7,$8::jsonb,$9,$9,$10,$10) RETURNING *`,
-      [uuid(), actor.tenantId, kind, code, version, nameEn ?? defaults[0], nameAr ?? defaults[1], JSON.stringify(def), actor.id, now()]);
-    await auditTx(ctx, q, { tenantId: actor.tenantId, actor, action: 'LOWCODE_DRAFT_CREATED', resourceType: 'LOWCODE_DEFINITION', resourceId: rows[0].id,
-      newState: 'DRAFT', details: { kind, code, version, fromId: b?.fromId ?? null } });
-    return publicDefinitionRow(rows[0]);
-  });
+  return ctx.db.tx(async (q) => publicDefinitionRow(await insertDraft(ctx, q, actor, { kind, code, definition: def, nameEn, nameAr, fromId: b?.fromId ?? null })));
+}
+
+/**
+ * Insert a new DRAFT version inside the caller's transaction. The definition must already be validated (validateBody).
+ * 409 DRAFT_EXISTS when a draft of this kind+code is open. Audited as LOWCODE_DRAFT_CREATED.
+ */
+export async function insertDraft(ctx: Ctx, q: Queryable, actor: Actor, d: { kind: Kind; code: string; definition: unknown; nameEn?: string; nameAr?: string; fromId?: string | null },
+  auditDetails: Record<string, unknown> = {}): Promise<DefinitionRow> {
+  const { kind, code } = d;
+  const open = await q.query('SELECT id FROM lowcode_definitions WHERE tenant_id=$1 AND kind=$2 AND code=$3 AND status=\'DRAFT\'', [actor.tenantId, kind, code]);
+  if (open.length) throw conflict('DRAFT_EXISTS', 'A draft of this definition is already open; edit or discard it first');
+  const v = await q.query<{ v: number | null }>('SELECT max(version) AS v FROM lowcode_definitions WHERE tenant_id=$1 AND kind=$2 AND code=$3', [actor.tenantId, kind, code]);
+  const version = (Number(v[0]?.v) || 0) + 1;
+  const defaults = kind === 'RULESET' ? ['Process rules', 'قواعد الإجراءات'] : [`${code[0]}${code.slice(1).toLowerCase()} form`, code === 'TENDER' ? 'نموذج المناقصة' : code === 'VENDOR' ? 'نموذج المورد' : 'نموذج الطلب'];
+  const rows = await q.query<DefinitionRow>(
+    `INSERT INTO lowcode_definitions (id, tenant_id, kind, code, version, status, name_en, name_ar, definition, created_by, updated_by, created_at, updated_at)
+     VALUES ($1,$2,$3,$4,$5,'DRAFT',$6,$7,$8::jsonb,$9,$9,$10,$10) RETURNING *`,
+    [uuid(), actor.tenantId, kind, code, version, d.nameEn ?? defaults[0], d.nameAr ?? defaults[1], JSON.stringify(d.definition), actor.id, now()]);
+  await auditTx(ctx, q, { tenantId: actor.tenantId, actor, action: 'LOWCODE_DRAFT_CREATED', resourceType: 'LOWCODE_DEFINITION', resourceId: rows[0].id,
+    newState: 'DRAFT', details: { kind, code, version, fromId: d.fromId ?? null, ...auditDetails } });
+  return rows[0];
+}
+
+/** Save a (validated) definition into an open DRAFT inside the caller's transaction. Audited as LOWCODE_DRAFT_UPDATED. */
+export async function saveDraft(ctx: Ctx, q: Queryable, actor: Actor, row: DefinitionRow, def: unknown, names: { nameEn?: string; nameAr?: string } = {},
+  auditDetails: Record<string, unknown> = {}): Promise<DefinitionRow> {
+  const rows = await q.query<DefinitionRow>(
+    `UPDATE lowcode_definitions SET definition=$1::jsonb, name_en=$2, name_ar=$3, updated_by=$4, updated_at=$5 WHERE id=$6 AND tenant_id=$7 AND status='DRAFT' RETURNING *`,
+    [JSON.stringify(def), names.nameEn ?? row.name_en, names.nameAr ?? row.name_ar, actor.id, now(), row.id, actor.tenantId]);
+  if (!rows[0]) throw conflict('INVALID_STATE', 'The draft was published or discarded meanwhile');
+  await auditTx(ctx, q, { tenantId: actor.tenantId, actor, action: 'LOWCODE_DRAFT_UPDATED', resourceType: 'LOWCODE_DEFINITION', resourceId: row.id,
+    details: { kind: row.kind, code: row.code, version: row.version, ...auditDetails } });
+  return rows[0];
 }
 
 export async function updateDraft(ctx: Ctx, actor: Actor, id: string, b: any) {
@@ -141,15 +162,8 @@ export async function updateDraft(ctx: Ctx, actor: Actor, id: string, b: any) {
   if (row.status !== 'DRAFT') throw conflict('INVALID_STATE', 'Only a DRAFT can be edited; create a new version instead');
   const rc = await ruleContext(ctx.db, actor.tenantId);
   const def = b?.definition !== undefined ? validateBody(row.kind, row.code, b.definition, rc) : row.definition;
-  return ctx.db.tx(async (q) => {
-    const rows = await q.query<DefinitionRow>(
-      `UPDATE lowcode_definitions SET definition=$1::jsonb, name_en=$2, name_ar=$3, updated_by=$4, updated_at=$5 WHERE id=$6 AND status='DRAFT' RETURNING *`,
-      [JSON.stringify(def), str(b?.nameEn, 'nameEn', { max: 200 }) ?? row.name_en, str(b?.nameAr, 'nameAr', { max: 200 }) ?? row.name_ar, actor.id, now(), id]);
-    if (!rows[0]) throw conflict('INVALID_STATE', 'The draft was published or discarded meanwhile');
-    await auditTx(ctx, q, { tenantId: actor.tenantId, actor, action: 'LOWCODE_DRAFT_UPDATED', resourceType: 'LOWCODE_DEFINITION', resourceId: id,
-      details: { kind: row.kind, code: row.code, version: row.version } });
-    return publicDefinitionRow(rows[0]);
-  });
+  return ctx.db.tx(async (q) => publicDefinitionRow(await saveDraft(ctx, q, actor, row, def,
+    { nameEn: str(b?.nameEn, 'nameEn', { max: 200 }), nameAr: str(b?.nameAr, 'nameAr', { max: 200 }) })));
 }
 
 export async function discardDraft(ctx: Ctx, actor: Actor, id: string) {

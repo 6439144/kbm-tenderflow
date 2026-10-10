@@ -77,7 +77,7 @@ export async function installDefaultDocumentTypes(q: Queryable, tenantId: string
 }
 
 /** Tenants created before migration 003 get the defaults on first use. */
-async function ensureCatalogue(ctx: Ctx, tenantId: string): Promise<void> {
+export async function ensureCatalogue(ctx: Ctx, tenantId: string): Promise<void> {
   const any = await ctx.db.query('SELECT 1 FROM document_types WHERE tenant_id=$1 LIMIT 1', [tenantId]);
   if (any.length) return;
   await ctx.db.tx(async (q) => {
@@ -114,7 +114,7 @@ export const publicType = (r: DocumentTypeRow) => camel<any>({
   fields: (r.fields ?? []).map((f) => ({ key: f.key, labelEn: f.labelEn, labelAr: f.labelAr, type: f.type, required: !!f.required })),
 });
 
-function parseFields(raw: unknown): DocTypeField[] {
+export function parseFields(raw: unknown): DocTypeField[] {
   if (!Array.isArray(raw)) throw badRequest('fields must be an array');
   if (raw.length > 30) throw badRequest('at most 30 fields per document type');
   const seen = new Set<string>();
@@ -133,7 +133,7 @@ function parseFields(raw: unknown): DocTypeField[] {
   });
 }
 
-function parseContexts(raw: unknown): string[] {
+export function parseContexts(raw: unknown): string[] {
   if (!Array.isArray(raw) || !raw.length) throw badRequest('contexts must be a non-empty array');
   const bad = raw.filter((c) => !(DOC_CONTEXTS as readonly string[]).includes(c));
   if (bad.length) throw badRequest(`unknown context(s): ${bad.join(', ')}; allowed: ${DOC_CONTEXTS.join(', ')}`);
@@ -151,17 +151,21 @@ export async function createDocumentType(ctx: Ctx, actor: Actor, b: any) {
   const contexts = parseContexts(b?.contexts);
   const fields = parseFields(b?.fields ?? []);
   const nameEn = reqStr(b?.nameEn, 'nameEn', 200); const nameAr = reqStr(b?.nameAr, 'nameAr', 200);
-  return ctx.db.tx(async (q) => {
-    const dup = await q.query('SELECT 1 FROM document_types WHERE tenant_id=$1 AND code=$2', [actor.tenantId, code]);
-    if (dup.length) throw conflict('DOCUMENT_TYPE_EXISTS', `Document type ${code} already exists`);
-    const rows = await q.query<DocumentTypeRow>(
-      `INSERT INTO document_types (id, tenant_id, code, contexts, name_en, name_ar, fields, active, created_at, updated_at)
-       VALUES ($1,$2,$3,$4::text[],$5,$6,$7::jsonb,$8,$9,$9) RETURNING *`,
-      [uuid(), actor.tenantId, code, contexts, nameEn, nameAr, JSON.stringify(fields), b?.active !== false, now()]);
-    await auditTx(ctx, q, { tenantId: actor.tenantId, actor, action: 'DOCUMENT_TYPE_CREATED', resourceType: 'DOCUMENT_TYPE', resourceId: rows[0].id,
-      details: { code, contexts, fields: fields.map((f) => f.key) } });
-    return publicType(rows[0]);
-  });
+  return ctx.db.tx(async (q) => publicType(await insertDocumentType(ctx, q, actor, { code, contexts, fields, nameEn, nameAr, active: b?.active !== false })));
+}
+
+/** Insert a document type inside the caller's transaction (inputs already parsed). 409 if the code exists. Audited. */
+export async function insertDocumentType(ctx: Ctx, q: Queryable, actor: Actor,
+  d: { code: string; contexts: string[]; fields: DocTypeField[]; nameEn: string; nameAr: string; active: boolean }, auditDetails: Record<string, unknown> = {}): Promise<DocumentTypeRow> {
+  const dup = await q.query('SELECT 1 FROM document_types WHERE tenant_id=$1 AND code=$2', [actor.tenantId, d.code]);
+  if (dup.length) throw conflict('DOCUMENT_TYPE_EXISTS', `Document type ${d.code} already exists`);
+  const rows = await q.query<DocumentTypeRow>(
+    `INSERT INTO document_types (id, tenant_id, code, contexts, name_en, name_ar, fields, active, created_at, updated_at)
+     VALUES ($1,$2,$3,$4::text[],$5,$6,$7::jsonb,$8,$9,$9) RETURNING *`,
+    [uuid(), actor.tenantId, d.code, d.contexts, d.nameEn, d.nameAr, JSON.stringify(d.fields), d.active, now()]);
+  await auditTx(ctx, q, { tenantId: actor.tenantId, actor, action: 'DOCUMENT_TYPE_CREATED', resourceType: 'DOCUMENT_TYPE', resourceId: rows[0].id,
+    details: { code: d.code, contexts: d.contexts, fields: d.fields.map((f) => f.key), ...(d.active ? {} : { active: false }), ...auditDetails } });
+  return rows[0];
 }
 
 export async function patchDocumentType(ctx: Ctx, actor: Actor, id: string, b: any) {
