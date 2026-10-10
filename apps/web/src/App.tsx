@@ -16,7 +16,7 @@ import TenderDetailPage from './pages/procurement/TenderDetail';
 import { AdminUsers, AdminAudit, AdminSystem } from './pages/admin/Admin';
 import { CycleDesignerPage, EntitySettingsPage, RequestDetailPage, RequestsPage } from './features/cycle';
 import { DemoOverlay } from './features/demo';
-import { FileNetHealthPage } from './features/filenet';
+import { FileNetHealthPage, FileNetSearchPage } from './features/filenet';
 import { AssistantDock } from './features/assistant';
 import { DocumentQueuePage, DocumentTypesPage } from './features/docintel';
 import { AdminOverviewPage, AnalyticsPage, EvidencePackPage, PublicBoardPage } from './features/insight';
@@ -43,6 +43,7 @@ const PROCUREMENT_NAV: NavItem[] = [
   { to: '/procurement/tenders/new', label: 'nav.newTender', roles: ['PROCUREMENT_OFFICER'] },
   { to: '/procurement/vendors', label: 'nav.vendors', roles: ['PROCUREMENT_OFFICER', 'DIRECTOR'] },
   { to: '/procurement/documents', label: 'nav.documentIntelligence' },
+  { to: '/procurement/filenet-search', label: 'filenet.nav.search' },
   { to: '/procurement/analytics', label: 'insight.nav.analytics', roles: ['DIRECTOR', 'UNDERSECRETARY'] },
   { to: '/procurement/grading', label: 'moi.nav.grading', roles: ['GRADING_AUTHORITY'] },
   { to: '/procurement/security', label: 'security.nav.mfa' },
@@ -60,6 +61,7 @@ const ADMIN_NAV: NavItem[] = [
   { to: '/admin/documents', label: 'nav.documentIntelligence' },
   { to: '/admin/audit', label: 'nav.audit' },
   { to: '/admin/filenet', label: 'nav.filenet' },
+  { to: '/admin/filenet-search', label: 'filenet.nav.search' },
   { to: '/admin/system', label: 'nav.system' },
   { to: '/admin/overview', label: 'insight.nav.overview' },
   { to: '/admin/analytics', label: 'insight.nav.analytics' },
@@ -134,6 +136,7 @@ export default function App() {
               <Route path="tenders/:id" element={<TenderDetailPage />} />
               <Route path="tenders/:id/edit" element={<TenderForm />} />
               <Route path="documents" element={<DocumentQueuePage />} />
+              <Route path="filenet-search" element={<FileNetSearchPage />} />
               {/* insight routes */}
               <Route path="analytics" element={<AnalyticsPage />} />
               {/* security routes */}
@@ -151,6 +154,7 @@ export default function App() {
               <Route path="document-types" element={<DocumentTypesPage />} />
               <Route path="documents" element={<DocumentQueuePage />} />
               <Route path="filenet" element={<FileNetHealthPage />} />
+              <Route path="filenet-search" element={<FileNetSearchPage />} />
               <Route path="system" element={<AdminSystem />} />
               {/* insight routes */}
               <Route path="overview" element={<AdminOverviewPage />} />

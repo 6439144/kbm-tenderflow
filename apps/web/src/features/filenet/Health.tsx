@@ -1,8 +1,8 @@
 // FileNet workstream: /admin/filenet — repository status, folder tree, operations, counts, latest verify report, "Why FileNet".
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useI18n } from '../../i18n';
 import { AsyncView, Badge, Button, Card, EmptyState, Table, useAsync } from '../../components/ui';
-import { docTypeLabel, filenetApi, type FileNetHealth, type FolderNode } from './api';
+import { docTypeLabel, filenetApi, type FileNetHealth, type FileNetModel, type FolderNode, type NavigatorProbe } from './api';
 import { RepoIcon } from './Evidence';
 
 type Tone = 'success' | 'danger' | 'warn' | 'info' | 'neutral';
@@ -41,6 +41,8 @@ export function FileNetHealthPage() {
       <AsyncView state={state} isEmpty={() => false}>
         {(h) => <HealthBody h={h} />}
       </AsyncView>
+      <NavigatorCard />
+      <ModelCard />
       <WhyFileNet />
     </div>
   );
@@ -110,10 +112,26 @@ function HealthBody({ h }: { h: FileNetHealth }) {
         />
         <StatusTile
           label={t('filenet.health.tile.navigator')}
-          tone={c.navigator.configured ? 'success' : 'neutral'}
-          value={t(c.navigator.configured ? 'filenet.health.configured' : 'filenet.health.notConfigured')}
-          detail={c.navigator.configured ? <span dir="ltr">{`${c.navigator.host} · desktop ${c.navigator.desktop}`}</span> : undefined}
+          tone={c.navigator.mode && c.navigator.mode !== 'off' ? 'success' : 'neutral'}
+          value={t(c.navigator.mode === 'derived' ? 'filenet.nav.mode.derived' : c.navigator.configured ? 'filenet.health.configured' : 'filenet.health.notConfigured')}
+          detail={c.navigator.host ? <span dir="ltr">{`${c.navigator.host} · desktop ${c.navigator.desktop}`}</span> : undefined}
         />
+        {fn && (
+          <StatusTile
+            label={t('filenet.health.tile.classModel')}
+            tone={c.classModel === 'subclasses' ? 'success' : 'info'}
+            value={t(c.classModel === 'subclasses' ? 'filenet.model.mode.subclasses' : 'filenet.model.mode.single')}
+            detail={<span dir="ltr">FILENET_CLASS_MODEL = {c.classModel ?? 'single'}</span>}
+          />
+        )}
+        {fn && (
+          <StatusTile
+            label={t('filenet.health.tile.security')}
+            tone={c.aclMode === 'groups' ? 'success' : 'info'}
+            value={t(c.aclMode === 'groups' ? 'filenet.acl.mode.groups' : 'filenet.acl.mode.off')}
+            detail={<span dir="ltr">FILENET_ACL_MODE = {c.aclMode ?? 'off'}</span>}
+          />
+        )}
       </div>
 
       <div className="grid-2">
@@ -255,6 +273,9 @@ function HealthBody({ h }: { h: FileNetHealth }) {
                 {h.verifyReport.file}
               </code>
               <span className="muted small">{fmtDate(h.verifyReport.finishedAt ?? h.verifyReport.startedAt)}</span>
+              {h.verifyReport.summary && (
+                <span className="small">{t('filenet.verify.summary', { pass: h.verifyReport.summary.PASS, fail: h.verifyReport.summary.FAIL, skip: h.verifyReport.summary.SKIP })}</span>
+              )}
             </div>
             {h.verifyReport.steps && h.verifyReport.steps.length > 0 && (
               <Table head={[t('filenet.health.step'), t('common.title'), t('filenet.health.result'), t('filenet.health.latency')]}>
@@ -266,7 +287,11 @@ function HealthBody({ h }: { h: FileNetHealth }) {
                       {s.error && <div className="fn-op-error">{s.error}</div>}
                     </td>
                     <td>
-                      <Badge tone={s.ok ? 'success' : 'danger'} label={t(s.ok ? 'filenet.health.ok' : 'filenet.health.failed')} />
+                      <Badge
+                        tone={(s.status ?? (s.ok ? 'PASS' : 'FAIL')) === 'PASS' ? 'success' : (s.status ?? '') === 'SKIP' ? 'neutral' : 'danger'}
+                        label={te('filenet.verify.status.', s.status ?? (s.ok ? 'PASS' : 'FAIL'))}
+                      />
+                      {s.reason && <div className="muted small">{s.reason}</div>}
                     </td>
                     <td className="fn-num" dir="ltr">
                       {s.ms ?? '—'} {s.ms != null ? 'ms' : ''}
@@ -336,6 +361,145 @@ function WhyFileNet() {
           </div>
         ))}
       </div>
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------- Navigator probe
+
+function NavigatorCard() {
+  const { t, fmtDate } = useI18n();
+  const [refresh, setRefresh] = useState(0);
+  const state = useAsync(() => filenetApi.navigator(refresh > 0), [refresh]);
+  return (
+    <Card
+      title={t('filenet.nav.title')}
+      actions={
+        <Button variant="ghost" onClick={() => setRefresh((x) => x + 1)} busy={state.loading && !!state.data}>
+          {t('filenet.nav.probe')}
+        </Button>
+      }
+    >
+      <AsyncView state={state} isEmpty={() => false}>
+        {(n: NavigatorProbe) =>
+          !n.applicable ? (
+            <p className="muted">{t('filenet.nav.notApplicable')}</p>
+          ) : !n.navigator ? (
+            <p className="muted">{t('filenet.nav.off')}</p>
+          ) : (
+            <div className="stack-sm">
+              <div className="row wrap">
+                <Badge tone={n.navigator.reachable ? 'success' : 'danger'} label={t(n.navigator.reachable ? 'filenet.nav.reachable' : 'filenet.nav.unreachable')} />
+                <Badge tone="neutral" label={t(n.mode === 'derived' ? 'filenet.nav.mode.derived' : 'filenet.nav.mode.configured')} />
+                <span className="muted small">{fmtDate(n.navigator.checkedAt)}</span>
+              </div>
+              <p className="small">
+                <code dir="ltr">{n.navigator.url}</code> <span className="muted" dir="ltr">· desktop {n.navigator.desktop} · {n.navigator.repositoryId}</span>
+              </p>
+              {!n.navigator.reachable && <div className="alert alert-warn" role="note"><span>{t('filenet.nav.fixHint')}</span></div>}
+              <Table head={[t('filenet.nav.candidate'), t('filenet.health.result'), t('filenet.health.latency')]}>
+                {n.navigator.tried.map((x) => (
+                  <tr key={x.url}>
+                    <td dir="ltr" className="small">{x.url}</td>
+                    <td dir="ltr" className="small">{x.status ?? x.error ?? '—'}</td>
+                    <td className="fn-num" dir="ltr">{x.ms} ms</td>
+                  </tr>
+                ))}
+              </Table>
+              {n.acce && (
+                <p className="small">
+                  ACCE: <a href={n.acce.url} target="_blank" rel="noopener noreferrer" dir="ltr">{n.acce.url}</a>
+                </p>
+              )}
+              <p className="muted small">{t('filenet.nav.note')}</p>
+            </div>
+          )
+        }
+      </AsyncView>
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------- class model + security
+
+function ModelCard() {
+  const { t, te } = useI18n();
+  const [refresh, setRefresh] = useState(0);
+  const state = useAsync(() => filenetApi.model(refresh > 0), [refresh]);
+  return (
+    <Card
+      title={t('filenet.model.title')}
+      actions={
+        <Button variant="ghost" onClick={() => setRefresh((x) => x + 1)} busy={state.loading && !!state.data}>
+          {t('common.refresh')}
+        </Button>
+      }
+    >
+      <AsyncView state={state} isEmpty={() => false}>
+        {(m: FileNetModel) => (
+          <div className="stack-sm">
+            {m.applicable ? (
+              <div className="row wrap">
+                <Badge tone={m.mode === 'subclasses' ? 'success' : 'info'} label={t(m.mode === 'subclasses' ? 'filenet.model.mode.subclasses' : 'filenet.model.mode.single')} />
+                {m.status && <Badge tone={m.status.ready ? 'success' : 'warn'} label={t(m.status.ready ? 'filenet.model.ready' : 'filenet.model.notReady')} />}
+                <span className="muted small" dir="ltr">fallback: {m.fallbackClass}</span>
+              </div>
+            ) : (
+              <p className="muted">{t('filenet.model.notApplicable')}</p>
+            )}
+            {m.error && <div className="alert alert-danger" role="alert"><span dir="ltr">{m.error}</span></div>}
+            <p className="muted small">{t('filenet.model.intro')}</p>
+            <Table head={[t('filenet.model.class'), t('filenet.model.holds'), t('filenet.model.inRepository'), t('filenet.model.properties')]}>
+              {m.spec.classes.map((c) => {
+                const st = m.status?.classes.find((x) => x.name === c.name);
+                return (
+                  <tr key={c.name}>
+                    <td dir="ltr">
+                      <code>{c.name}</code>
+                      <div className="muted small">⟵ {c.parent}</div>
+                    </td>
+                    <td className="small">{c.ownerTypes.length ? c.ownerTypes.map((o) => docTypeLabel(te, o)).join(' · ') : t('filenet.model.base')}</td>
+                    <td>
+                      {!st ? (
+                        <span className="muted">—</span>
+                      ) : (
+                        <Badge
+                          tone={st.exists === true && st.missing.length === 0 ? 'success' : st.exists === false ? 'danger' : 'warn'}
+                          label={st.exists === false ? t('filenet.health.missing') : st.exists === null ? t('filenet.health.unknown') : st.missing.length ? t('filenet.model.missingProps', { n: st.missing.length }) : t('filenet.health.exists')}
+                        />
+                      )}
+                      {st?.missing && st.missing.length > 0 && st.exists !== false && <div className="small fn-op-error" dir="ltr">{st.missing.join(', ')}</div>}
+                      {st?.error && <div className="muted small" dir="ltr">{st.error}</div>}
+                    </td>
+                    <td className="small" dir="ltr">
+                      {c.properties.map((p) => `${p.name} (${p.dataType}${p.maxLength ? ` ${p.maxLength}` : ''})`).join(', ') || '—'}
+                    </td>
+                  </tr>
+                );
+              })}
+            </Table>
+            <h3 className="fn-h3">{t('filenet.acl.title')}</h3>
+            <p className="small">
+              <Badge tone={m.acl?.mode === 'groups' ? 'success' : 'info'} label={t(m.acl?.mode === 'groups' ? 'filenet.acl.mode.groups' : 'filenet.acl.mode.off')} />{' '}
+              <span className="muted">{t('filenet.acl.intro')}</span>
+            </p>
+            <Table head={[t('filenet.acl.level'), t('filenet.acl.groups')]}>
+              {m.spec.levels.map((l) => (
+                <tr key={l.level}>
+                  <td>
+                    {te('filenet.level.', l.level)}
+                    <div className="muted small">{te('filenet.level.hint.', l.level)}</div>
+                  </td>
+                  <td className="small" dir="ltr">
+                    {[`${m.acl?.serviceGrantee ?? 'service user'} — FULL_CONTROL ${m.spec.accessMasks.FULL_CONTROL}`,
+                      ...l.groups.map((g) => `${m.acl?.groups?.[g] ?? `FILENET_GROUP_${g} (not set)`} — VIEW_CONTENT ${m.spec.accessMasks.VIEW_CONTENT}`)].join(' · ')}
+                  </td>
+                </tr>
+              ))}
+            </Table>
+          </div>
+        )}
+      </AsyncView>
     </Card>
   );
 }

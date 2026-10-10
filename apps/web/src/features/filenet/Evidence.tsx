@@ -2,8 +2,8 @@
 import { useState, type ReactNode } from 'react';
 import type { DocumentMeta } from '../../api';
 import { useI18n } from '../../i18n';
-import { AsyncView, Badge, Button, fmtBytes, Modal, Table, useAsync } from '../../components/ui';
-import { docTypeLabel, filenetApi, isRepoError, type DocumentEvidenceData, type RepositoryDescription } from './api';
+import { AsyncView, Badge, Button, fmtBytes, Modal, Table, useAsync, useToast } from '../../components/ui';
+import { docTypeLabel, filenetApi, isRepoError, type DocumentAccess, type DocumentEvidenceData, type RepositoryDescription } from './api';
 
 /** Version and record badges shown next to a document title. */
 export function DocumentBadges({ doc }: { doc: DocumentMeta }) {
@@ -59,11 +59,7 @@ function EvidenceModal({ docId, onClose }: { docId: string; onClose: () => void 
       }
       footer={
         <>
-          {state.data?.navigatorUrl && (
-            <a className="btn btn-primary" href={state.data.navigatorUrl} target="_blank" rel="noopener noreferrer">
-              {t('filenet.evidence.openNavigator')}
-            </a>
-          )}
+          {state.data && <FileNetLinks e={state.data} />}
           <Button variant="secondary" onClick={onClose}>
             {t('common.close')}
           </Button>
@@ -89,6 +85,100 @@ function Row({ label, children, ltr }: { label: ReactNode; children: ReactNode; 
 }
 
 const versionLabel = (major?: number | null, minor?: number | null) => (typeof major === 'number' ? `${major}.${minor ?? 0}` : null);
+
+/**
+ * Buttons that open this exact document version in FileNet: IBM Content Navigator (bookmark), ACCE, and "Copy object ID".
+ * Each use is audited (FILENET_LINK_OPENED). Links always open in a new tab without an opener.
+ */
+export function FileNetLinks({ e }: { e: DocumentEvidenceData }) {
+  const { t } = useI18n();
+  const toast = useToast();
+  const links = e.links;
+  if (e.storeType !== 'filenet' || !links) return null;
+  const copy = async () => {
+    if (!links.objectId) return;
+    try {
+      await navigator.clipboard.writeText(links.objectId);
+      toast(t('filenet.links.copied', { id: links.objectId }), 'success');
+    } catch {
+      toast(t('filenet.links.copyFailed', { id: links.objectId }), 'info');
+    }
+    void filenetApi.opened(e.documentId, 'copy');
+  };
+  return (
+    <>
+      {links.navigator && (
+        <a
+          className={`btn ${links.navigator.reachable ? 'btn-primary' : 'btn-secondary'}`}
+          href={links.navigator.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={() => void filenetApi.opened(e.documentId, 'navigator')}
+          title={links.navigator.reachable ? undefined : t('filenet.links.unreachableShort')}
+        >
+          {!links.navigator.reachable && <span aria-hidden="true">⚠ </span>}
+          {t('filenet.evidence.openNavigator')}
+        </a>
+      )}
+      {links.acce && (
+        <a className="btn btn-ghost" href={links.acce.url} target="_blank" rel="noopener noreferrer" onClick={() => void filenetApi.opened(e.documentId, 'acce')}>
+          {t('filenet.links.openAcce')}
+        </a>
+      )}
+      {links.objectId && (
+        <Button variant="ghost" onClick={() => void copy()}>
+          {t('filenet.links.copyId')}
+        </Button>
+      )}
+    </>
+  );
+}
+
+const LEVEL_TONE: Record<string, string> = { PUBLIC: 'info', INTERNAL: 'neutral', SEALED: 'warn', COMMITTEE: 'primary', AUDIT: 'neutral' };
+const STATUS_TONE: Record<string, string> = { APPLIED: 'success', INHERITED: 'success', PENDING: 'info', FAILED: 'danger', UNVERIFIED: 'warn', NOT_ENFORCED: 'neutral', UNKNOWN: 'neutral' };
+
+function AccessSection({ a }: { a: DocumentAccess }) {
+  const { t, te, fmtDate } = useI18n();
+  return (
+    <section>
+      <h3 className="fn-h3">{t('filenet.access.title')}</h3>
+      <div className="row wrap">
+        <Badge tone={LEVEL_TONE[a.level] ?? 'neutral'} label={te('filenet.level.', a.level)} />
+        <Badge tone={STATUS_TONE[a.status] ?? 'neutral'} label={te('filenet.access.status.', a.status)} />
+        {a.at && <span className="muted small">{fmtDate(a.at)}</span>}
+      </div>
+      <p className="muted small">{te('filenet.level.hint.', a.level)}</p>
+      {a.mode === 'off' || a.status === 'NOT_ENFORCED' ? (
+        <p className="muted small">{t('filenet.access.notEnforced')}</p>
+      ) : (
+        <>
+          {a.grantees && a.grantees.length > 0 && (
+            <Table head={[t('filenet.access.grantee'), t('filenet.access.rights')]}>
+              {a.grantees.map((g) => (
+                <tr key={g.name}>
+                  <td dir="ltr">{g.name}</td>
+                  <td>
+                    {te('filenet.access.right.', g.access)} <span className="muted small" dir="ltr">({g.access === 'FULL_CONTROL' ? 998903 : 131201})</span>
+                  </td>
+                </tr>
+              ))}
+            </Table>
+          )}
+          {a.error && (
+            <div className="alert alert-warn small" role="note">
+              <div>
+                {t('filenet.access.errorNote', { n: a.attempts ?? 0 })}
+                <div className="alert-msg" dir="ltr">
+                  {a.error}
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
 
 function EvidenceBody({ e }: { e: DocumentEvidenceData }) {
   const { t, te, fmtDate } = useI18n();
@@ -189,10 +279,32 @@ function EvidenceBody({ e }: { e: DocumentEvidenceData }) {
         {e.encrypted && (
           <Row label={t('filenet.evidence.encrypted')}>{t(filenet ? 'filenet.evidence.encryptedNote' : 'filenet.evidence.encryptedNoteDev')}</Row>
         )}
-        <Row label={t('filenet.evidence.storeRef')} ltr>
-          <code className="fn-ref">{e.storeRef}</code>
-        </Row>
+        {e.storeRef && (
+          <Row label={t('filenet.evidence.storeRef')} ltr>
+            <code className="fn-ref">{e.storeRef}</code>
+          </Row>
+        )}
+        {filenet && e.classModel?.fallback && (
+          <Row label={t('filenet.evidence.classFallback')}>
+            <span className="small" dir="ltr">
+              {e.classModel.requested} → {e.classModel.used}: {e.classModel.fallback}
+            </span>
+          </Row>
+        )}
+        {filenet && e.aiClassification && (
+          <Row label={t('filenet.evidence.aiClassification')}>
+            <Badge tone={e.aiClassification.status === 'WRITTEN' ? 'success' : e.aiClassification.status === 'FAILED' ? 'danger' : 'neutral'} label={te('filenet.ai.status.', e.aiClassification.status)} />{' '}
+            <span dir="ltr">
+              {e.aiClassification.docType}
+              {e.aiClassification.confidence != null && ` · ${Math.round(e.aiClassification.confidence * 100)}%`}
+            </span>
+            <div className="muted small">{t('filenet.evidence.aiConfidenceNote')}</div>
+          </Row>
+        )}
       </dl>
+
+      {filenet && e.links && <LinksSection e={e} />}
+      {e.access && <AccessSection a={e.access} />}
 
       {repoErr && (
         <div className="alert alert-danger" role="alert">
@@ -273,8 +385,42 @@ function EvidenceBody({ e }: { e: DocumentEvidenceData }) {
         </section>
       )}
 
-      {filenet && !e.navigatorUrl && <p className="muted small">{t('filenet.evidence.navigatorNotConfigured')}</p>}
     </div>
+  );
+}
+
+/** Where the document opens in FileNet; warns when Navigator did not answer (the link may not open). */
+function LinksSection({ e }: { e: DocumentEvidenceData }) {
+  const { t, fmtDate } = useI18n();
+  const l = e.links!;
+  const staffView = !!(l.navigator || l.acce || e.objectStore);
+  return (
+    <section>
+      <h3 className="fn-h3">{t('filenet.links.title')}</h3>
+      {l.navigator && !l.navigator.reachable && (
+        <div className="alert alert-warn" role="alert">
+          <span>{t('filenet.links.unreachable', { date: fmtDate(l.navigator.checkedAt) })}</span>
+        </div>
+      )}
+      {l.navigator?.reachable && <p className="muted small">{t(l.navigator.source === 'derived' ? 'filenet.links.derived' : 'filenet.links.configured')}</p>}
+      {staffView && !l.navigator && <p className="muted small">{t('filenet.links.navigatorOff')}</p>}
+      {!staffView && <p className="muted small">{t('filenet.links.vendorNote')}</p>}
+      <dl className="kv fn-kv small">
+        <Row label={t('filenet.evidence.objectId')} ltr>
+          <code>{l.objectId ?? '—'}</code>
+        </Row>
+        {l.versionSeriesId && (
+          <Row label={t('filenet.evidence.versionSeries')} ltr>
+            <code>{l.versionSeriesId}</code>
+          </Row>
+        )}
+        {l.path && (
+          <Row label={t('filenet.evidence.folderPath')} ltr>
+            {l.path}
+          </Row>
+        )}
+      </dl>
+    </section>
   );
 }
 

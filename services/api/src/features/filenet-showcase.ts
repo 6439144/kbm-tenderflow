@@ -231,7 +231,11 @@ function latestVerifyReport() {
     delete cfg.FILENET_SERVICE_PASSWORD;
     return {
       file, startedAt: r.startedAt ?? null, finishedAt: r.finishedAt ?? null, ok: r.ok === true, config: cfg,
-      steps: (Array.isArray(r.steps) ? r.steps : []).map((s: any) => ({ step: s.step, name: s.name, ok: !!s.ok, ms: s.ms ?? null, error: s.error ? String(s.error).slice(0, 500) : undefined })),
+      steps: (Array.isArray(r.steps) ? r.steps : []).map((s: any) => ({
+        step: s.step, name: s.name, ok: !!s.ok, status: ['PASS', 'FAIL', 'SKIP'].includes(s.status) ? s.status : (s.ok ? 'PASS' : 'FAIL'), ms: s.ms ?? null,
+        error: s.error ? String(s.error).slice(0, 500) : undefined, reason: s.reason ? String(s.reason).slice(0, 300) : undefined,
+      })),
+      summary: r.summary && typeof r.summary === 'object' ? { PASS: Number(r.summary.PASS) || 0, FAIL: Number(r.summary.FAIL) || 0, SKIP: Number(r.summary.SKIP) || 0 } : null,
       documents: Array.isArray(r.documents) ? r.documents.map((d: any) => ({ label: d.label, id: d.id, className: d.className, version: d.version, byteSize: d.byteSize, sha256: d.sha256 })) : [],
     };
   } catch (e) {

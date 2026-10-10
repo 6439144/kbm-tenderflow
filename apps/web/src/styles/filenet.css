@@ -1,0 +1,23 @@
+/* FileNet workstream: search page, link routing. RTL-safe (logical properties only). */
+.fn-search-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 0.75rem 1rem;
+  align-items: end;
+}
+.fn-search-form input,
+.fn-search-form select {
+  inline-size: 100%;
+}
+.fn-search-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-block-end: 0.25rem;
+}
+.fn-cesql code {
+  overflow-wrap: anywhere;
+  unicode-bidi: plaintext;
+}
+.fn-search .fn-ref-cell code {
+  overflow-wrap: anywhere;
+}
