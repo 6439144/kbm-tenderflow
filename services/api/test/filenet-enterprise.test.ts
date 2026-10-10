@@ -588,6 +588,19 @@ describe('API with FileNet (class model, ACLs, search, evidence, opening)', () =
     assert.equal(await writeAiClassification(run.handle.ctx, { id: 'SYSTEM', roles: ['SYSTEM'] }, { ...(await docOf(up.body.id)), store_type: 'filesystem' }, 'X', [], []), null);
   });
 
+  test('auditor evidence pack: stored as TF_EvidencePack (AUDIT level); its evidence opens in FileNet for auditors only', async () => {
+    const g = await api(run, 'POST', '/api/v1/audit/evidence-pack', { token: tok.auditor, json: { tenderId } });
+    assert.equal(g.status, 201, g.text);
+    const o = await fakeObj(g.body.documentId);
+    assert.equal(o.cls, 'TF_EvidencePack');
+    assert.equal(o.props.TF_Confidentiality, 'AUDIT');
+    assert.deepEqual(o.acl!.map((a) => a.granteeName), ['svc_tf', 'TF Auditors']);
+    const e = await api(run, 'GET', `/api/v1/documents/${g.body.documentId}/evidence`, { token: tok.auditor });
+    assert.equal(e.status, 200, e.text);
+    assert.ok(e.body.links.navigator.url.includes(encodeURIComponent(`TF_EvidencePack,${OS_GUID},`)));
+    assert.equal((await api(run, 'GET', `/api/v1/documents/${g.body.documentId}/evidence`, { token: tok.officer })).status, 404);
+  });
+
   test('audit chain stays valid', async () => {
     const r = await api(run, 'GET', '/api/v1/audit/verify', { token: tok.auditor });
     assert.equal(r.status, 200);
@@ -621,3 +634,12 @@ function crReply(prompt: string): string {
     fields: [field('crNumber', /^CR No:\s*(.+)$/), field('expiryDate', /^Expiry date:\s*(.+)$/)].filter(Boolean),
   });
 }
+
+test('Windows: scripts/windows/filenet-check.cmd runs the build-free verify with CRLF line endings', () => {
+  const root = path.resolve(import.meta.dirname, '../../..');
+  const raw = fs.readFileSync(path.join(root, 'scripts/windows/filenet-check.cmd'), 'utf8');
+  assert.ok(raw.split('\n').slice(0, -1).every((l) => l.endsWith('\r')), 'every line ends with CRLF');
+  assert.match(raw, /node --import tsx services\\api\\src\\tools\\verify-filenet\.ts/);
+  assert.ok(fs.existsSync(path.join(root, 'services/api/src/tools/verify-filenet.ts')));
+  assert.match(fs.readFileSync(path.join(root, '.gitattributes'), 'utf8'), /^\*\.cmd text eol=crlf$/m);
+});

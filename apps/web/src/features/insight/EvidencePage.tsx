@@ -6,6 +6,7 @@ import { api } from '../../api';
 import { useI18n } from '../../i18n';
 import { AsyncView, Badge, Button, Card, ErrorBox, Field, Hash, Table, fmtBytes, useAsync, useToast, errText } from '../../components/ui';
 import { insight, type EvidencePack } from './api';
+import { DocumentEvidence } from '../filenet';
 import '../../styles/insight.css';
 
 const kuwaitToday = () => new Date(Date.now() + 3 * 3600_000).toISOString().slice(0, 10);
@@ -136,7 +137,11 @@ export function EvidencePackPage() {
                   <td>{p.storeType === 'filenet' ? 'IBM FileNet' : t('insight.admin.localStore')}</td>
                   <td><Hash value={p.sha256} /></td>
                   <td>{fmtBytes(p.byteSize)}</td>
-                  <td><Button variant="secondary" onClick={() => download(p)}>{t('common.download')}</Button></td>
+                  <td>
+                    <Button variant="secondary" onClick={() => download(p)}>{t('common.download')}</Button>
+                    {/* filenet: the stored pack opens in IBM Content Navigator / ACCE from its evidence panel */}
+                    {p.storeType === 'filenet' && <DocumentEvidence doc={{ id: p.documentId, title: p.title, storeType: p.storeType }} />}
+                  </td>
                 </tr>
               ))}
             </Table>
