@@ -23,6 +23,7 @@ import { AdminOverviewPage, AnalyticsPage, EvidencePackPage, PublicBoardPage } f
 import { DeliveryLogPage, JobsPage, NotificationTemplatesPage } from './features/notify';
 import { AdminAccountsPage, AdminIdentityPage, MyMfaPage } from './features/security';
 import { MyTasksPage, StudioPage } from './features/lowcode';
+import { AdminBuilderPage } from './features/adminagent';
 import { EntityPoliciesPage, GradingQueuePage, GradingVendorPage, ReceiptPage, UpgradeRequestPage, VendorLifecycleAdminPage, VendorSubscriptionPage } from './features/moi';
 
 const LANG_KEY = 'tf.lang';
@@ -59,6 +60,7 @@ const ADMIN_NAV: NavItem[] = [
   { to: '/admin', label: 'nav.users', end: true, roles: ['TENANT_ADMIN'] },
   { to: '/admin/cycle', label: 'nav.cycleDesigner', roles: ['TENANT_ADMIN'] },
   { to: '/admin/studio', label: 'nav.studio' },
+  { to: '/admin/builder', label: 'aa.nav' },
   { to: '/admin/entity', label: 'nav.entity', roles: ['TENANT_ADMIN'] },
   { to: '/admin/document-types', label: 'nav.documentTypes', roles: ['TENANT_ADMIN'] },
   { to: '/admin/documents', label: 'nav.documentIntelligence' },
@@ -157,6 +159,8 @@ export default function App() {
               <Route path="cycle" element={<CycleDesignerPage />} />
               {/* low-code routes */}
               <Route path="studio" element={<StudioPage />} />
+              {/* AI admin builder */}
+              <Route path="builder" element={<AdminBuilderPage />} />
               <Route path="entity" element={<EntitySettingsPage />} />
               <Route path="document-types" element={<DocumentTypesPage />} />
               <Route path="documents" element={<DocumentQueuePage />} />

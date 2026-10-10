@@ -2,6 +2,7 @@
 // Everything here is computed from the validated configuration — never from the agent's own wording — so what the
 // administrator reads is exactly what TenderFlow will save.
 import type { Bilingual } from '../../ai/index.js';
+import { canonicalJson } from '../../util.js';
 import { describe, type Condition } from '../../lowcode/conditions.js';
 import { triggerDef, type FactDef } from '../../lowcode/catalog.js';
 import type { Action, Rule } from '../../lowcode/rules.js';
@@ -140,6 +141,7 @@ export function flatDiff(before: unknown, after: unknown, prefix = ''): { path: 
     const keys = [...new Set([...Object.keys(before), ...Object.keys(after)])];
     return keys.flatMap((k) => flatDiff(before[k], after[k], prefix ? `${prefix}.${k}` : k));
   }
-  if (JSON.stringify(before ?? null) === JSON.stringify(after ?? null)) return [];
+  // Key order is not meaningful (jsonb reorders keys): compare canonically.
+  if (canonicalJson(before ?? null) === canonicalJson(after ?? null)) return [];
   return [{ path: prefix || '(value)', before: before ?? null, after: after ?? null }];
 }

@@ -215,7 +215,7 @@ export function evaluatePlan(state: EntityState, operations: AdminOperation[]): 
       w.def = def; w.touched = true;
       r.summary = { en: `Add the section “${sec.titleEn}” (${sec.key}) to the ${FORM_LABELS[code].en}.`, ar: `إضافة القسم «${sec.titleAr}» (${sec.key}) إلى ${FORM_LABELS[code].ar}.` };
       r.target = formTarget(code);
-      r.diff = [{ path: `sections.${sec.key}`, before: null, after: sec }];
+      r.diff = flatDiff({}, sec);
     },
 
     ADD_FORM_FIELD(o, r) {
@@ -229,7 +229,7 @@ export function evaluatePlan(state: EntityState, operations: AdminOperation[]): 
       const sec = f.section ? def.sections.find((s) => s.key === f.section) : null;
       r.summary = fieldSentence(f, code, sec ? { en: sec.titleEn, ar: sec.titleAr } : null, 'add');
       r.target = formTarget(code);
-      r.diff = [{ path: `fields.${f.key}`, before: null, after: f }];
+      r.diff = flatDiff({}, f);
     },
 
     UPDATE_FORM_FIELD(o, r) {
@@ -242,7 +242,7 @@ export function evaluatePlan(state: EntityState, operations: AdminOperation[]): 
       const fields = w.def.fields.map((f, j) => (j === i ? { ...f, ...o.changes } : f));
       const def = validateFormDefinition({ ...w.def, fields }, code);
       const f = def.fields[i];
-      const diff = flatDiff(before, f).map((d) => ({ ...d, path: `fields.${f.key}.${d.path}` }));
+      const diff = flatDiff(before, f);
       if (!diff.length) throw err('This operation changes nothing in the field.', 'هذه العملية لا تغير شيئاً في الحقل.');
       w.def = def; w.touched = true;
       const sec = f.section ? def.sections.find((s) => s.key === f.section) : null;
@@ -262,7 +262,7 @@ export function evaluatePlan(state: EntityState, operations: AdminOperation[]): 
       r.summary = { en: `Add the document type “${nameEn}” (${code}) for ${contexts.join(', ')} with ${fields.length} field(s). It is created switched off; an administrator switches it on in Document types.`,
         ar: `إضافة نوع المستند «${nameAr}» (${code}) لـ ${contexts.join('، ')} مع ${fields.length} حقل. يُنشأ غير مفعل، ويفعّله المسؤول من صفحة أنواع المستندات.` };
       r.target = { type: 'DOCUMENT_TYPE', code, action: 'CREATE_INACTIVE', draftVersion: null, label: { en: nameEn, ar: nameAr } };
-      r.diff = [{ path: `documentTypes.${code}`, before: null, after: { code, nameEn, nameAr, contexts, fields, active: false } }];
+      r.diff = flatDiff({}, { code, nameEn, nameAr, contexts, fields, active: false });
     },
 
     ADD_RULE(o, r) {
@@ -276,7 +276,7 @@ export function evaluatePlan(state: EntityState, operations: AdminOperation[]): 
       const rule = validateRuleset({ rules: [raw] }, rc(), factsOf() as (s: Scope) => any).rules[0];
       set.rules = [...set.rules, rule];
       describeRule(r, rule, 'add');
-      r.diff = [{ path: `rules.${rule.id}`, before: null, after: rule }];
+      r.diff = flatDiff({}, rule);
     },
 
     UPDATE_RULE(o, r) {
@@ -286,7 +286,7 @@ export function evaluatePlan(state: EntityState, operations: AdminOperation[]): 
       if (i < 0) throw err(`There is no rule "${o.ruleId}".`, `لا توجد قاعدة بالمعرف "${o.ruleId}".`);
       const before = set.rules[i];
       const rule = validateRuleset({ rules: [{ ...before, ...o.changes, id: before.id }] }, rc(), factsOf() as (s: Scope) => any).rules[0];
-      const diff = flatDiff(before, rule).map((d) => ({ ...d, path: `rules.${rule.id}.${d.path}` }));
+      const diff = flatDiff(before, rule);
       if (!diff.length) throw err('This operation changes nothing in the rule.', 'هذه العملية لا تغير شيئاً في القاعدة.');
       set.rules = set.rules.map((x, j) => (j === i ? rule : x));
       describeRule(r, rule, 'update');
@@ -305,7 +305,7 @@ export function evaluatePlan(state: EntityState, operations: AdminOperation[]): 
         ? { en: `Switch on the rule “${rule.nameEn}” (${rule.id}).`, ar: `تفعيل القاعدة «${rule.nameAr}» (${rule.id}).` }
         : { en: `Switch off the rule “${rule.nameEn}” (${rule.id}); it stays in the rule set and can be switched on again.`, ar: `إيقاف القاعدة «${rule.nameAr}» (${rule.id})؛ تبقى ضمن القواعد ويمكن تفعيلها مجدداً.` };
       r.target = rulesetTarget();
-      r.diff = [{ path: `rules.${rule.id}.enabled`, before: before.enabled, after: o.enabled }];
+      r.diff = [{ path: 'enabled', before: before.enabled, after: o.enabled }];
     },
   };
 
