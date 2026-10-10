@@ -56,8 +56,8 @@ export const OPS: Record<FactType, string[]> = {
   date: ['before', 'after', 'withinDays', 'isEmpty', 'isNotEmpty'],
 };
 export const OP_LABELS: Record<string, { en: string; ar: string }> = {
-  eq: { en: 'is', ar: 'يساوي' }, ne: { en: 'is not', ar: 'لا يساوي' }, gt: { en: '>', ar: '>' }, gte: { en: '≥', ar: '≥' },
-  lt: { en: '<', ar: '<' }, lte: { en: '≤', ar: '≤' }, between: { en: 'is between', ar: 'بين' }, in: { en: 'is one of', ar: 'أحد' },
+  eq: { en: 'is', ar: 'يساوي' }, ne: { en: 'is not', ar: 'لا يساوي' }, gt: { en: '>', ar: 'أكبر من' }, gte: { en: '≥', ar: 'أكبر من أو يساوي' },
+  lt: { en: '<', ar: 'أقل من' }, lte: { en: '≤', ar: 'أقل من أو يساوي' }, between: { en: 'is between', ar: 'بين' }, in: { en: 'is one of', ar: 'أحد' },
   notIn: { en: 'is none of', ar: 'ليس أياً من' }, contains: { en: 'contains', ar: 'يحتوي' }, startsWith: { en: 'starts with', ar: 'يبدأ بـ' },
   isEmpty: { en: 'is empty', ar: 'فارغ' }, isNotEmpty: { en: 'is filled in', ar: 'مُعبأ' }, isTrue: { en: 'is yes', ar: 'نعم' },
   isFalse: { en: 'is no', ar: 'لا' }, includes: { en: 'includes', ar: 'يتضمن' }, excludes: { en: 'does not include', ar: 'لا يتضمن' },

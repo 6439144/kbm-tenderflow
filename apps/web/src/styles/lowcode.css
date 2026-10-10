@@ -1,0 +1,105 @@
+/* LOW-CODE Process Studio styles. Logical properties only, so Arabic (RTL) and English (LTR) both work. */
+
+.lc-tabs { display: flex; flex-wrap: wrap; gap: 0.25rem; border-block-end: 1px solid var(--line); }
+.lc-tab {
+  background: none; border: 0; border-block-end: 3px solid transparent; margin-block-end: -1px;
+  padding: 0.5rem 0.9rem; color: var(--ink-2); font: inherit; cursor: pointer;
+}
+.lc-tab:hover { color: var(--ink); }
+.lc-tab.is-active { color: var(--primary); border-block-end-color: var(--primary); font-weight: 600; }
+.lc-tab:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+.lc-locked { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.35rem; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.lc-locked li { background: var(--line-2); border-radius: var(--radius-sm); padding: 0.45rem 0.65rem; font-size: 0.9rem; }
+
+/* version bar */
+.lc-verbar { display: grid; gap: 0.5rem; padding: 0.75rem; background: var(--line-2); border-radius: var(--radius-sm); margin-block-end: 0.75rem; }
+.lc-verbar > .row:first-child { justify-content: space-between; }
+.lc-verbar > .row { gap: 0.5rem; }
+.lc-history summary { cursor: pointer; color: var(--ink-2); }
+.lc-hist-list { padding-inline-start: 1.2rem; display: grid; gap: 0.4rem; }
+.lc-hist-list code { margin-inline-end: 0.3rem; }
+.lc-add { color: var(--success); }
+.lc-del { color: var(--danger); }
+
+/* kinds */
+.lc-chip { display: inline-block; border-radius: 999px; padding: 0.1rem 0.6rem; font-size: 0.8rem; border: 1px solid var(--line); background: var(--surface); }
+.lc-gate { border-color: #e7b7b2; background: var(--danger-bg); }
+.lc-event { border-color: #b6d0ee; background: var(--info-bg); }
+.lc-schedule { border-color: #ead1a4; background: var(--warn-bg); }
+.lc-chip.is-off, .lc-rule.is-off { opacity: 0.55; }
+.lc-legend { margin-block: 0.5rem 0.75rem; gap: 0.4rem; }
+
+/* process map */
+.lc-flow { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.75rem; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); counter-reset: stage; }
+.lc-stage {
+  position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 0.7rem;
+  display: grid; gap: 0.4rem; align-content: start; counter-increment: stage; box-shadow: var(--shadow);
+}
+.lc-stage::before { content: counter(stage); position: absolute; inset-block-start: -0.55rem; inset-inline-start: 0.6rem; background: var(--primary); color: var(--primary-ink);
+  border-radius: 999px; font-size: 0.72rem; min-inline-size: 1.3rem; text-align: center; padding: 0 0.3rem; }
+.lc-stage.is-locked { border-color: var(--primary-line); background: var(--primary-soft); }
+.lc-stage.is-off { opacity: 0.6; }
+.lc-stage-head { display: flex; justify-content: space-between; gap: 0.5rem; align-items: center; }
+.lc-lock-note { color: var(--primary); }
+.lc-rule-chips { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.35rem; }
+.lc-rule-chips .lc-chip { border-radius: var(--radius-sm); display: block; padding: 0.35rem 0.5rem; }
+.lc-acts { list-style: none; margin: 0.15rem 0 0; padding: 0; }
+
+/* rules */
+.lc-rules { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; }
+.lc-rule { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 0.6rem 0.75rem; background: var(--surface); }
+.lc-rule.is-hit { border-color: var(--success); background: var(--success-bg); }
+.lc-rule.is-miss { opacity: 0.75; }
+.lc-sentence { margin: 0.35rem 0 0; line-height: 1.6; }
+.lc-kw { font-weight: 700; color: var(--primary); text-transform: uppercase; font-size: 0.78rem; letter-spacing: 0.04em; margin-inline-end: 0.15rem; }
+.lc-step { border-inline-start: 3px solid var(--primary-line); padding-inline-start: 0.75rem; display: grid; gap: 0.5rem; }
+.lc-step h3 { margin: 0; }
+.lc-group { border: 1px dashed var(--line); border-radius: var(--radius-sm); padding: 0.5rem; display: grid; gap: 0.4rem; }
+.lc-group.depth-1 { background: var(--line-2); }
+.lc-conds { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.35rem; }
+.lc-leaf { display: grid; grid-template-columns: minmax(10rem, 2fr) minmax(7rem, 1fr) minmax(8rem, 1.5fr) auto; gap: 0.4rem; align-items: center; }
+.lc-leaf > * { min-inline-size: 0; }
+.lc-row4 { display: grid; grid-template-columns: minmax(7rem, 10rem) 1fr 1fr auto; gap: 0.4rem; align-items: center; }
+@media (max-width: 700px) { .lc-leaf, .lc-row4 { grid-template-columns: 1fr; } }
+.lc-action { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 0.5rem 0.65rem; display: grid; gap: 0.4rem; background: var(--surface); }
+.lc-preview-sentence { background: var(--primary-soft); border-radius: var(--radius-sm); padding: 0.6rem 0.75rem; }
+
+/* forms */
+.lc-builder { display: grid; gap: 1rem; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); align-items: start; }
+@media (max-width: 1000px) { .lc-builder { grid-template-columns: 1fr; } }
+.lc-preview { position: sticky; inset-block-start: 4.5rem; max-block-size: calc(100vh - 6rem); overflow: auto; border: 1px solid var(--line); border-radius: var(--radius); padding: 0.75rem; background: var(--bg); }
+.lc-sections, .lc-fields { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.35rem; }
+.lc-key { max-inline-size: 11rem; font-family: var(--mono); }
+.lc-field-row { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 0.4rem 0.55rem; background: var(--surface); display: grid; gap: 0.4rem; grid-template-columns: 1fr auto; align-items: center; }
+.lc-field-row.is-selected { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary-line); }
+.lc-field-pick { background: none; border: 0; text-align: start; font: inherit; cursor: pointer; color: inherit; padding: 0.1rem; }
+.lc-field-editor { grid-column: 1 / -1; border: 0; padding: 0.5rem 0 0; margin: 0; border-block-start: 1px solid var(--line-2); display: grid; gap: 0.5rem; }
+.lc-visible { align-items: center; }
+.lc-form { display: grid; gap: 0.75rem; }
+.lc-fieldset { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 0.6rem 0.75rem; margin: 0; }
+.lc-fieldset legend { font-weight: 600; padding-inline: 0.3rem; }
+.lc-grid { display: grid; gap: 0.25rem 0.9rem; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.lc-span2 { grid-column: 1 / -1; }
+.lc-computed { display: block; padding: 0.45rem 0.6rem; background: var(--line-2); border-radius: var(--radius-sm); font-variant-numeric: tabular-nums; }
+.lc-sub { margin: 0.35rem 0 0; font-size: 0.95rem; color: var(--ink-2); }
+.mono { font-family: var(--mono); }
+
+/* simulator */
+.lc-facts { display: grid; gap: 0.25rem 0.9rem; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); margin-block: 0.5rem; }
+.lc-chain { display: flex; flex-wrap: wrap; gap: 0.4rem; list-style: none; padding: 0; margin: 0; counter-reset: lvl; }
+.lc-chain li { counter-increment: lvl; border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 0.35rem 0.6rem; background: var(--surface); }
+.lc-chain li::before { content: counter(lvl) '. '; color: var(--muted); }
+.lc-chain li.is-added { border-color: var(--info); background: var(--info-bg); }
+.lc-secret { background: var(--ink); color: #fff; padding: 0.6rem; border-radius: var(--radius-sm); overflow-wrap: anywhere; white-space: pre-wrap; user-select: all; }
+
+/* tender process panel and tasks */
+.lc-gatebox { border-inline-start: 4px solid var(--line); padding: 0.35rem 0.7rem; border-radius: var(--radius-sm); background: var(--line-2); }
+.lc-gatebox.is-ok { border-inline-start-color: var(--success); }
+.lc-gatebox.is-blocked { border-inline-start-color: var(--danger); }
+.lc-gatebox ul { margin: 0.25rem 0 0; padding-inline-start: 1rem; }
+.lc-tasks { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.4rem; }
+.lc-task { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 0.5rem 0.65rem; background: var(--surface); }
+.lc-task.is-overdue { border-color: var(--danger); }
+.lc-task.is-closed { opacity: 0.7; }
+.alert-list { margin: 0.3rem 0 0; padding-inline-start: 1.1rem; }

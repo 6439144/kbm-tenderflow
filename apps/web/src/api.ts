@@ -274,6 +274,8 @@ export interface TenderInput {
   submissionDeadline: string;
   criteria: Criterion[];
   requiredDocuments: RequiredDocument[];
+  /** Low-code: values of the entity's custom tender fields (validated by the server). */
+  customFields?: Record<string, unknown>;
 }
 
 export interface BidReceipt {
@@ -351,6 +353,8 @@ export interface VendorRegistration {
   categories: string[];
   username: string;
   password: string;
+  /** Low-code: public fields of the entity's vendor form. */
+  customFields?: Record<string, unknown>;
 }
 
 // ---------------------------------------------------------------- session
@@ -412,10 +416,13 @@ export function clearSession(): void {
 export class ApiError extends Error {
   status: number;
   code: string;
-  constructor(status: number, code: string, message: string) {
+  /** Extra fields of the error body (e.g. the bilingual reasons of PROCESS_RULE_BLOCKED). */
+  details?: Record<string, unknown>;
+  constructor(status: number, code: string, message: string, details?: Record<string, unknown>) {
     super(message);
     this.status = status;
     this.code = code;
+    this.details = details;
   }
 }
 
@@ -454,6 +461,7 @@ function authHeaders(): Record<string, string> {
 async function toApiError(res: Response): Promise<ApiError> {
   let code = `HTTP_${res.status}`;
   let message = res.statusText || 'Request failed';
+  let details: Record<string, unknown> | undefined;
   try {
     const text = await res.text();
     if (text) {
@@ -461,6 +469,7 @@ async function toApiError(res: Response): Promise<ApiError> {
         const body = JSON.parse(text) as { code?: string; message?: string; error?: string };
         code = body.code ?? code;
         message = body.message ?? body.error ?? message;
+        details = camelize<Record<string, unknown>>(body);
       } catch {
         message = text.slice(0, 300);
       }
@@ -468,7 +477,7 @@ async function toApiError(res: Response): Promise<ApiError> {
   } catch {
     /* ignore */
   }
-  return new ApiError(res.status, code, message);
+  return new ApiError(res.status, code, message, details);
 }
 
 async function send(path: string, init: RequestInit = {}): Promise<Response> {
@@ -512,7 +521,8 @@ const put = <T>(path: string, body: unknown) =>
   json<T>(path, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 
 /** Low-level typed HTTP helpers for feature clients (api-*.ts). Same auth, errors and camelCase handling. */
-export const http = { get, post, patch, put, postForm };
+const del = <T>(path: string) => json<T>(path, { method: 'DELETE' });
+export const http = { get, post, patch, put, postForm, del };
 
 function qs(params: Record<string, string | number | undefined | null>): string {
   const u = new URLSearchParams();

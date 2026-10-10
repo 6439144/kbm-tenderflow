@@ -34,7 +34,7 @@ export interface FormField {
 export interface FormSection { key: string; titleEn: string; titleAr: string }
 export interface FormDefinition { sections: FormSection[]; fields: FormField[] }
 
-const KEY_RE = /^[a-z][A-Za-z0-9_]{0,39}$/;
+const KEY_RE = /^[a-z][A-Za-z0-9]{0,39}$/; // camelCase only (the web client camel-cases snake_case keys)
 const RESERVED = new Set(['budget', 'id', 'status', 'tenant', 'min', 'max', 'round', 'abs']);
 const MAX_FIELDS = 60;
 
@@ -49,7 +49,7 @@ export function validateFormDefinition(raw: any, code: FormCode): FormDefinition
   const sectionsIn = Array.isArray(raw.sections) ? raw.sections : [];
   if (sectionsIn.length > 10) throw badRequest('A form may have at most 10 sections');
   const sections: FormSection[] = sectionsIn.map((s: any, i: number) => {
-    if (typeof s?.key !== 'string' || !KEY_RE.test(s.key)) throw badRequest(`sections[${i}].key must start with a lower-case letter (letters, digits, _)`);
+    if (typeof s?.key !== 'string' || !KEY_RE.test(s.key)) throw badRequest(`sections[${i}].key must be camelCase: a lower-case letter, then letters or digits`);
     return { key: s.key, titleEn: str(s.titleEn, `sections[${i}].titleEn`, { required: true, max: 120 })!, titleAr: str(s.titleAr, `sections[${i}].titleAr`, { required: true, max: 120 })! };
   });
   if (new Set(sections.map((s) => s.key)).size !== sections.length) throw badRequest('Section keys must be unique');
@@ -58,7 +58,7 @@ export function validateFormDefinition(raw: any, code: FormCode): FormDefinition
   if (fieldsIn.length > MAX_FIELDS) throw badRequest(`A form may have at most ${MAX_FIELDS} fields`);
   const fields: FormField[] = fieldsIn.map((f: any, i: number) => {
     const p = `fields[${i}]`;
-    if (typeof f?.key !== 'string' || !KEY_RE.test(f.key)) throw badRequest(`${p}.key must start with a lower-case letter and use letters, digits or _ (max 40)`);
+    if (typeof f?.key !== 'string' || !KEY_RE.test(f.key)) throw badRequest(`${p}.key must be camelCase: a lower-case letter, then letters or digits (max 40)`);
     if (RESERVED.has(f.key)) throw badRequest(`${p}.key '${f.key}' is reserved`);
     if (!FIELD_TYPES.includes(f.type)) throw badRequest(`${p}.type must be one of ${FIELD_TYPES.join(', ')}`);
     const out: FormField = {

@@ -1,6 +1,7 @@
 import { VendorCyclePanel, vendorBidBlock } from '../../features/cycle';
 import { bidsInScope, OutOfScopeNote, VendorTenderNotes } from '../../features/moi';
 import { useState, type FormEvent } from 'react';
+import { TenderProcessPanel } from '../../features/lowcode';
 import { Link, useParams } from 'react-router-dom';
 import { api, type Bid, type BidReceipt } from '../../api';
 import { useI18n } from '../../i18n';
@@ -127,6 +128,7 @@ export default function VendorTender() {
                   </Card>
                   <VendorCyclePanel td={td} onChange={tender.reload} />
                   <VendorTenderNotes td={td} />
+                  <TenderProcessPanel tenderId={td.id} staff={false} />
                   <Card title={t('vendor.packDocs')}>
                     <DocList docs={packDocs} empty={t('vendor.noPackDocs')} />
                   </Card>

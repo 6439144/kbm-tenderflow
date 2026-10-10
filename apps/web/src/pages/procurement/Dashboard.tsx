@@ -2,6 +2,7 @@ import { useI18n } from '../../i18n';
 import { ApprovalsWaitingCard, DefaultCycleCard } from '../../features/cycle';
 import { StaffRoleDashboard } from '../../features/insight';
 import { OverdueApprovalsCard } from '../../features/notify';
+import { MyTasksWidget } from '../../features/lowcode';
 
 /**
  * Staff home (/procurement), MOI BRD FR-031: the cycle cards, then one dashboard section per role the user holds
@@ -19,6 +20,7 @@ export default function Dashboard() {
         <OverdueApprovalsCard />
         <DefaultCycleCard />
       </div>
+      <MyTasksWidget />
       <StaffRoleDashboard />
     </div>
   );

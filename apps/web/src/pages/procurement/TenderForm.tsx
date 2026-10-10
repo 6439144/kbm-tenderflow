@@ -5,6 +5,9 @@ import type { CycleConfig } from '../../api-platform';
 import { useI18n } from '../../i18n';
 import { Button, Card, ErrorBox, Field, Spinner, useToast } from '../../components/ui';
 import { TenderCycleFields, type TenderCycleValue } from '../../features/cycle';
+import { CustomFieldsForm, lowcode } from '../../features/lowcode';
+import { defaults as cfDefaults } from '../../features/lowcode/engine';
+import type { FormDefinition } from '../../features/lowcode/api';
 
 function toLocalInput(iso: string | undefined): string {
   if (!iso) return '';
@@ -90,6 +93,16 @@ export default function TenderForm() {
   const [pinned, setPinned] = useState<Pick<TenderDetail, 'template' | 'cycle' | 'stages'> | null>(null);
   const [tplCfg, setTplCfg] = useState<CycleConfig | null>(null);
   const [critTouched, setCritTouched] = useState(false);
+  // Low-code: the entity's custom tender fields (live form for a new tender, the pinned version when editing).
+  const [cf, setCf] = useState<{ def: FormDefinition; values: Record<string, unknown> } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    const load = id
+      ? lowcode.tenderProcess(id).then((p) => (p.form ? { def: p.form.definition, values: { ...(p.raw ?? {}) } } : null))
+      : lowcode.form('TENDER').then((r) => (r.form ? { def: r.form.definition, values: cfDefaults(r.form.definition.fields) } : null));
+    load.then((x) => { if (alive) setCf(x); }).catch(() => undefined);
+    return () => { alive = false; };
+  }, [id]);
 
   useEffect(() => {
     if (!id) return;
@@ -158,6 +171,7 @@ export default function TenderForm() {
       requiredDocuments: f.requiredDocuments
         .filter((d) => d.nameEn.trim() || d.nameAr.trim())
         .map((d, i) => ({ ...d, key: d.key || slug(d.nameEn, i, 'd') })),
+      ...(cf ? { customFields: Object.fromEntries(Object.entries(cf.values).filter(([k, v]) => cf.def.fields.some((x) => x.key === k && x.type !== 'computed') && v !== undefined)) } : {}),
     };
     const full = id
       ? { ...body, eligibility: cyc.eligibility }
@@ -306,6 +320,13 @@ export default function TenderForm() {
           {t('form.weightTotal', { total: Number.isNaN(total) ? 0 : total })} {!weightsOk && `— ${t('form.weightMustBe100')}`}
         </p>
       </Card>
+
+      {cf && cf.def.fields.length > 0 && (
+        <Card title={t('lc.proc.editFields')}>
+          <CustomFieldsForm definition={cf.def} values={cf.values} onChange={(v) => setCf({ ...cf, values: v })}
+            budget={f.estimatedBudget === '' ? null : Number(f.estimatedBudget)} showAudience />
+        </Card>
+      )}
 
       <Card
         title={t('form.requiredDocs')}

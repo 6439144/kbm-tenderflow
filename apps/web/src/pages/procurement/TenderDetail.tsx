@@ -2,6 +2,7 @@ import { ChainView, TenderCyclePanel, waitingStep, type CycleBid, type Step } fr
 import { RejectTenderButton } from '../../features/notify';
 import { auditLabel } from '../../locales/audit';
 import { TenderAiExtras } from '../../features/assistant';
+import { TenderProcessPanel } from '../../features/lowcode'; // low-code: custom fields, gate readiness, tasks
 import { ViewDocButton } from '../../features/security'; // HARDEN: protected pdf.js viewer for opened bid files
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
@@ -360,6 +361,7 @@ function Detail({
           </Card>
 
           <TenderCyclePanel td={td} onChange={refresh} />
+          <TenderProcessPanel tenderId={td.id} staff reloadKey={`${td.status}|${td.updatedAt}`} />
           <TenderAiExtras td={td} onChange={refresh} />
 
           <Card id="sec-docs" title={t('td.documents')}>

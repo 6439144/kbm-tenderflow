@@ -34,15 +34,24 @@ export async function catalog(ctx: Ctx, actor: Actor) {
   };
 }
 
+const ROLE_NAMES: Record<string, [string, string]> = {
+  PROCUREMENT_OFFICER: ['Procurement officer', 'موظف المشتريات'], DIRECTOR: ['Director', 'المدير'], UNDERSECRETARY: ['Undersecretary', 'الوكيل'],
+  COMMITTEE_CHAIR: ['Committee chair', 'رئيس اللجنة'], EVALUATOR: ['Evaluator', 'المقيّم'], TENANT_ADMIN: ['Entity administrator', 'مسؤول الجهة'],
+  AUDITOR: ['Auditor', 'المدقق'], GRADING_AUTHORITY: ['Grading authority', 'جهة التصنيف'],
+};
+const GATE_NAMES: Record<string, [string, string]> = { TENDER_PUBLISH: ['publication', 'النشر'], AWARD_RECOMMEND: ['the award recommendation', 'التوصية بالترسية'] };
+
 function actionSummary(a: Action, lang: 'en' | 'ar'): string {
   const ar = lang === 'ar';
+  const roleName = (r?: string) => (r ? (ROLE_NAMES[r]?.[ar ? 1 : 0] ?? r) : '');
+  const gateName = (g?: string | null) => (g ? (GATE_NAMES[g]?.[ar ? 1 : 0] ?? g) : '');
   switch (a.type) {
-    case 'ADD_APPROVER': return ar ? `إضافة مستوى اعتماد: ${a.labelAr} (${a.role})` : `Add approval level: ${a.labelEn} (${a.role})`;
+    case 'ADD_APPROVER': return ar ? `إضافة مستوى اعتماد: ${a.labelAr || roleName(a.role)}` : `Add approval level: ${a.labelEn || roleName(a.role)}`;
     case 'BLOCK': return ar ? `إيقاف: ${a.messageAr}` : `Stop: ${a.messageEn}`;
     case 'REQUIRE_FIELDS': return ar ? `اشتراط الحقول: ${a.fields.join('، ')}` : `Require fields: ${a.fields.join(', ')}`;
     case 'REQUIRE_DOCUMENTS': return ar ? `اشتراط ${a.minCount} مستند${a.titleContains ? ` بعنوان «${a.titleContains}»` : ''}` : `Require ${a.minCount} pack document(s)${a.titleContains ? ` titled “${a.titleContains}”` : ''}`;
-    case 'NOTIFY': return ar ? `إشعار ${a.to === 'ROLE' ? a.role : a.to === 'CREATOR' ? 'المنشئ' : 'المورد'}: ${a.titleAr}` : `Notify ${a.to === 'ROLE' ? a.role : a.to === 'CREATOR' ? 'the creator' : 'the vendor'}: ${a.titleEn}`;
-    case 'CREATE_TASK': return ar ? `مهمة لـ ${a.role}: ${a.titleAr}${a.blocksGate ? ` (تمنع ${a.blocksGate})` : ''}` : `Task for ${a.role}: ${a.titleEn}${a.blocksGate ? ` (blocks ${a.blocksGate})` : ''}`;
+    case 'NOTIFY': return ar ? `إشعار ${a.to === 'ROLE' ? roleName(a.role) : a.to === 'CREATOR' ? 'المنشئ' : 'المورد'}: ${a.titleAr}` : `Notify ${a.to === 'ROLE' ? roleName(a.role) : a.to === 'CREATOR' ? 'the creator' : 'the vendor'}: ${a.titleEn}`;
+    case 'CREATE_TASK': return ar ? `مهمة لـ ${roleName(a.role)}: ${a.titleAr}${a.blocksGate ? ` (يجب إنجازها قبل ${gateName(a.blocksGate)})` : ''}` : `Task for ${roleName(a.role)}: ${a.titleEn}${a.blocksGate ? ` (must be done before ${gateName(a.blocksGate)})` : ''}`;
     case 'WEBHOOK': return ar ? `استدعاء التكامل ${a.endpoint}` : `Call integration ${a.endpoint}`;
     case 'SET_FIELD': return ar ? `تعيين ${a.field} = ${JSON.stringify(a.value)}` : `Set ${a.field} = ${JSON.stringify(a.value)}`;
   }

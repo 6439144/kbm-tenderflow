@@ -169,7 +169,7 @@ export function EmptyState({ message, children }: { message: ReactNode; children
 }
 
 export function ErrorBox({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
-  const { t, te } = useI18n();
+  const { t, te, pick, lang } = useI18n();
   if (isAiNotConfigured(error)) return <AiNotConfiguredBanner />;
   if (isAgentNotImported(error)) return <AgentNotImportedBanner agent={agentNameOf(error)} />;
   if (isEmptyAiReply(error)) {
@@ -185,13 +185,22 @@ export function ErrorBox({ error, onRetry }: { error: unknown; onRetry?: () => v
   }
   const code = error instanceof ApiError ? error.code : 'CLIENT_ERROR';
   const raw = error instanceof Error ? error.message : String(error);
-  const message = te('security.err.', code) !== code ? te('security.err.', code) : raw; // SEC: bilingual security refusals
+  const message = te('security.err.', code) !== code ? te('security.err.', code) // SEC: bilingual security refusals
+    : te('lowcode.err.', code) !== code ? te('lowcode.err.', code) : raw; // low-code: bilingual process-rule refusals
+  const d = error instanceof ApiError && code === 'PROCESS_RULE_BLOCKED' ? (error.details as any) : null;
+  const reasons: string[] = d ? [
+    ...((d.blocks ?? []) as any[]).map((b) => pick(b.messageEn, b.messageAr)),
+    ...(d.missingFields?.length ? [t('lc.proc.missingFields', { list: (d.missingFields as any[]).map((f) => pick(f.labelEn, f.labelAr)).join(lang === 'ar' ? '، ' : ', ') })] : []),
+    ...((d.missingDocuments ?? []) as any[]).map((x) => t('lc.proc.missingDocs', { rule: pick(x.ruleNameEn, x.ruleNameAr), n: x.minCount, title: x.titleContains ? ` «${x.titleContains}»` : '', found: x.found })),
+    ...(d.openTasks?.length ? [t('lc.proc.openTasks', { list: (d.openTasks as any[]).map((x) => pick(x.titleEn, x.titleAr)).join('; ') })] : []),
+  ] : [];
   const forbidden = error instanceof ApiError && error.status === 403 && message === raw;
   return (
     <div className="alert alert-danger" role="alert">
       <div>
         <strong>{forbidden ? t('common.notPermitted') : t('common.error')}</strong>
         <div className="alert-msg">{message}</div>
+        {reasons.length > 0 && <ul className="alert-list">{reasons.map((r, i) => <li key={i}>{r}</li>)}</ul>}
         <div className="muted small">
           {t('common.errorCode')}: <code>{code}</code>
         </div>

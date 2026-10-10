@@ -7,6 +7,7 @@ import { useSession } from '../../session';
 import { DocList } from '../../components/shared';
 import { VerifiedDocuments } from '../../features/docintel';
 import { AsyncView, Badge, Button, Card, Modal, ReasonDialog, Table, useAsync, useToast } from '../../components/ui';
+import { VendorCustomFields } from '../../features/lowcode';
 
 const FILTERS = ['PENDING_REVIEW', 'APPROVED', 'REJECTED', ''];
 
@@ -108,6 +109,7 @@ export default function VendorsQueue() {
                     </>
                   )}
                 </dl>
+                <VendorCustomFields vendorId={v.id} custom={(v as any).custom} canEdit={hasRole('PROCUREMENT_OFFICER', 'TENANT_ADMIN', 'GRADING_AUTHORITY')} onSaved={detail.reload} />
                 <h3>{t('vendor.documents')}</h3>
                 <DocList docs={v.documents ?? []} empty={t('vendor.noDocs')} />
                 <VerifiedDocuments vendorId={v.id} />

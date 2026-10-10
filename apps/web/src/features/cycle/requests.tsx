@@ -11,6 +11,8 @@ import { AsyncView, Badge, Button, Card, ErrorBox, Field, FileInput, ReasonDialo
 import { RequestAiExtras } from '../assistant';
 import { DocInsightInline, LetterPrefill } from '../docintel';
 import { ApprovalSlaBadge } from '../notify';
+import { CustomFieldsForm, CustomValuesView, lowcode } from '../lowcode';
+import { defaults as cfDefaults } from '../lowcode/engine';
 import { ChainView, REQUEST_TONE, StageStrip, TemplateBadge, waitingStep, type Step } from './common';
 
 export function RequestsPage() {
@@ -91,6 +93,10 @@ function RegisterForm({ onCancel }: { onCancel: () => void }) {
   const [suggested, setSuggested] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<unknown>(null);
+  const cform = useAsync(() => lowcode.form('REQUEST').catch(() => ({ form: null })), []);
+  const [custom, setCustom] = useState<Record<string, unknown> | null>(null);
+  const cdef = cform.data?.form?.definition ?? null;
+  const cvals = custom ?? (cdef ? cfDefaults(cdef.fields) : {});
   const sourceOk = source === 'LETTER' ? Boolean(letter) : Boolean(reference.trim());
   const ok = sourceOk && department.trim() && subject.trim();
 
@@ -111,6 +117,7 @@ function RegisterForm({ onCancel }: { onCancel: () => void }) {
     f.append('description', description.trim());
     if (budget.trim()) f.append('estimatedBudget', budget.trim());
     if (suggested) f.append('suggestedTemplate', suggested);
+    if (cdef) f.append('customFields', JSON.stringify(Object.fromEntries(Object.entries(cvals).filter(([k]) => cdef.fields.some((x) => x.key === k && x.type !== 'computed')))));
     try {
       const r = await platform.createRequest(f);
       toast(t('cycle.r.registered', { n: r.requestNumber }));
@@ -168,6 +175,7 @@ function RegisterForm({ onCancel }: { onCancel: () => void }) {
           </Field>
         </div>
         <Field label={t('cycle.r.description')}>{(id) => <textarea id={id} rows={4} value={description} onChange={(e) => setDescription(e.target.value)} />}</Field>
+        {cdef && cdef.fields.length > 0 && <CustomFieldsForm definition={cdef} values={cvals} onChange={setCustom} budget={budget.trim() ? Number(budget) : null} />}
         <div className="row-end">
           <Button variant="ghost" onClick={onCancel}>
             {t('common.cancel')}
@@ -232,6 +240,11 @@ function RequestDetail({ r, reload }: { r: ProcurementRequest & { createdBy?: st
         </div>
       )}
 
+      {(r as any).custom?.values?.length > 0 && (
+        <Card title={t('lc.proc.values')}>
+          <CustomValuesView values={(r as any).custom.values} sections={(r as any).custom.form?.definition?.sections} />
+        </Card>
+      )}
       <Card title={t('cycle.r.approvalChain')} actions={waiting && inApproval ? <span className="muted small">{t('cycle.levelOf', { n: waiting.level, total: chain.length })}<ApprovalSlaBadge subjectId={r.id} gate="REQUEST" version={`${r.status}:${waiting.level}`} /></span> : undefined}>
         <ChainView steps={chain} />
         {canDecide && (

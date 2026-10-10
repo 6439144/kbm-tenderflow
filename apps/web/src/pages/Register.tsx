@@ -5,6 +5,9 @@ import { useI18n } from '../i18n';
 import { applyTheme } from '../session';
 import { Header } from '../components/Layout';
 import { Badge, Button, ErrorBox, Field, Spinner, useAsync } from '../components/ui';
+import { CustomFieldsForm, lowcode } from '../features/lowcode';
+import { defaults as cfDefaults } from '../features/lowcode/engine';
+import type { FormDefinition } from '../features/lowcode/api';
 
 export default function Register() {
   const { t, te, pick } = useI18n();
@@ -21,6 +24,14 @@ export default function Register() {
     if (!tenantId && tenants.data?.length) setTenantId(tenants.data[0].id);
   }, [tenants.data, tenantId]);
   const tenant = tenants.data?.find((x) => x.id === tenantId);
+  // Low-code: the public fields of the entity's vendor registration form.
+  const [cf, setCf] = useState<{ def: FormDefinition; values: Record<string, unknown> } | null>(null);
+  useEffect(() => {
+    if (!tenantId) return;
+    let alive = true;
+    lowcode.publicVendorForm(tenantId).then((r) => { if (alive) setCf(r.form ? { def: r.form.definition, values: cfDefaults(r.form.definition.fields) } : null); }).catch(() => { if (alive) setCf(null); });
+    return () => { alive = false; };
+  }, [tenantId]);
   useEffect(() => applyTheme(tenant?.primaryColor), [tenant?.primaryColor]);
 
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF((x) => ({ ...x, [k]: e.target.value }));
@@ -33,7 +44,8 @@ export default function Register() {
     setBusy(true);
     setErr(null);
     try {
-      const v = await api.registerVendor({ tenantId, ...f, categories: cats });
+      const customFields = cf ? Object.fromEntries(Object.entries(cf.values).filter(([k]) => cf.def.fields.some((x) => x.key === k && x.type !== 'computed'))) : undefined;
+      const v = await api.registerVendor({ tenantId, ...f, categories: cats, ...(customFields ? { customFields } : {}) });
       setDone(v);
     } catch (e2) {
       setErr(e2);
@@ -118,6 +130,7 @@ export default function Register() {
                   </div>
                   {touched && cats.length === 0 && <div className="field-error">{t('reg.categoriesHint')}</div>}
                 </fieldset>
+                {cf && cf.def.fields.length > 0 && <CustomFieldsForm definition={cf.def} values={cf.values} onChange={(v) => setCf({ ...cf, values: v })} />}
                 <fieldset>
                   <legend>{t('reg.account')}</legend>
                   <div className="grid-2">

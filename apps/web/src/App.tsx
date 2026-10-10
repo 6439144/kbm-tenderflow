@@ -22,6 +22,7 @@ import { DocumentQueuePage, DocumentTypesPage } from './features/docintel';
 import { AdminOverviewPage, AnalyticsPage, EvidencePackPage, PublicBoardPage } from './features/insight';
 import { DeliveryLogPage, JobsPage, NotificationTemplatesPage } from './features/notify';
 import { AdminAccountsPage, AdminIdentityPage, MyMfaPage } from './features/security';
+import { MyTasksPage, StudioPage } from './features/lowcode';
 import { EntityPoliciesPage, GradingQueuePage, GradingVendorPage, ReceiptPage, UpgradeRequestPage, VendorLifecycleAdminPage, VendorSubscriptionPage } from './features/moi';
 
 const LANG_KEY = 'tf.lang';
@@ -38,6 +39,7 @@ function initialLang(): Lang {
 
 const PROCUREMENT_NAV: NavItem[] = [
   { to: '/procurement', label: 'nav.dashboard', end: true },
+  { to: '/procurement/tasks', label: 'nav.tasks' },
   { to: '/procurement/requests', label: 'nav.requests' },
   { to: '/procurement/tenders', label: 'nav.tenders' },
   { to: '/procurement/tenders/new', label: 'nav.newTender', roles: ['PROCUREMENT_OFFICER'] },
@@ -56,6 +58,7 @@ const VENDOR_NAV: NavItem[] = [
 const ADMIN_NAV: NavItem[] = [
   { to: '/admin', label: 'nav.users', end: true, roles: ['TENANT_ADMIN'] },
   { to: '/admin/cycle', label: 'nav.cycleDesigner', roles: ['TENANT_ADMIN'] },
+  { to: '/admin/studio', label: 'nav.studio' },
   { to: '/admin/entity', label: 'nav.entity', roles: ['TENANT_ADMIN'] },
   { to: '/admin/document-types', label: 'nav.documentTypes', roles: ['TENANT_ADMIN'] },
   { to: '/admin/documents', label: 'nav.documentIntelligence' },
@@ -135,6 +138,8 @@ export default function App() {
               <Route path="tenders/new" element={<TenderForm />} />
               <Route path="tenders/:id" element={<TenderDetailPage />} />
               <Route path="tenders/:id/edit" element={<TenderForm />} />
+              {/* low-code routes */}
+              <Route path="tasks" element={<MyTasksPage />} />
               <Route path="documents" element={<DocumentQueuePage />} />
               <Route path="filenet-search" element={<FileNetSearchPage />} />
               {/* insight routes */}
@@ -150,6 +155,8 @@ export default function App() {
               <Route index element={<AdminUsers />} />
               <Route path="audit" element={<AdminAudit />} />
               <Route path="cycle" element={<CycleDesignerPage />} />
+              {/* low-code routes */}
+              <Route path="studio" element={<StudioPage />} />
               <Route path="entity" element={<EntitySettingsPage />} />
               <Route path="document-types" element={<DocumentTypesPage />} />
               <Route path="documents" element={<DocumentQueuePage />} />
