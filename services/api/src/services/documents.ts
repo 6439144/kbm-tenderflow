@@ -91,6 +91,9 @@ export async function putDocument(ctx: Ctx, d: StoreDocInput): Promise<PreparedD
       properties: {
         TF_TenantId: d.tenantId, TF_TenderId: d.tenderId ?? '', TF_VendorId: d.vendorId ?? '',
         TF_DocType: d.ownerType, TF_Sha256: sha,
+        // FileNet class model (content/filenet-model.ts); stores without it ignore these.
+        TF_OwnerType: d.ownerType, TF_TenderNumber: d.tenderNumber ?? '', TF_UploadedBy: d.uploadedBy ?? '',
+        TF_VersionNo: String((d.supersedes?.version_no ?? 0) + 1), TF_BidId: d.bidId ?? '',
       },
       supersedesRef: d.supersedes?.store_ref,
     });

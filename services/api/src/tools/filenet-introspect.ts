@@ -45,10 +45,13 @@ const TYPES = [
   'SubContentTransferInput', 'PropertyIdentifierAndScalarValue', 'FolderPropertiesInput', 'ObjectReferenceInput',
   'SubCheckinActionInput', 'ContentElementType',
   'Document', 'ContentElement', 'ContentTransfer', 'ContentTransferType', 'Folder', 'ObjectStore', 'ClassDescription',
+  // FileNet workstream (class model, security, search) — the ASSUMED shapes in content/filenet-model.ts
+  'PropertyDescription', 'PermissionListInput', 'PermissionInput', 'SubAccessPermissionInput', 'AccessPermissionInput',
+  'Permission', 'AccessPermission', 'PermissionType', 'AccessType', 'DocumentSet',
 ];
 const ROOT_FIELDS: { root: 'Query' | 'Mutation'; names: string[] }[] = [
-  { root: 'Query', names: ['objectStore', 'folder', 'document', 'classDescription', '_apiInfo'] },
-  { root: 'Mutation', names: ['createDocument', 'createFolder', 'fileDocument'] },
+  { root: 'Query', names: ['objectStore', 'folder', 'document', 'documents', 'classDescription', '_apiInfo'] },
+  { root: 'Mutation', names: ['createDocument', 'createFolder', 'fileDocument', 'updateDocument'] },
 ];
 
 const TYPE_REF = 'kind name ofType { kind name ofType { kind name ofType { kind name ofType { kind name } } } }';

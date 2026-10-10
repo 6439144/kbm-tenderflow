@@ -3,6 +3,8 @@ import type express from 'express';
 import type { Ctx } from '../ctx.js';
 import { registerDemoRoutes } from './demo.js';
 import { registerFileNetShowcaseRoutes } from './filenet-showcase.js';
+import { registerFileNetAccess } from './filenet-access.js';
+import { registerFileNetSearchRoutes } from './filenet-search.js';
 import { registerAssistantRoutes } from './assistant.js';
 import { registerDocumentIntelligenceRoutes } from './document-intelligence.js';
 import { registerInsightRoutes, registerPublicBoardRoutes } from './insight.js';
@@ -13,6 +15,8 @@ import { registerMoiRoutes } from './moi.js';
 export function registerFeatureRoutes(r: express.Router, ctx: Ctx) {
   registerDemoRoutes(r, ctx);
   registerFileNetShowcaseRoutes(r, ctx);
+  registerFileNetAccess(r, ctx);
+  registerFileNetSearchRoutes(r, ctx);
   registerAssistantRoutes(r, ctx);
   registerDocumentIntelligenceRoutes(r, ctx);
   registerMoiRoutes(r, ctx);

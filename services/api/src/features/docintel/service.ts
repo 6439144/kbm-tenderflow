@@ -21,6 +21,7 @@ import { notify, notifyRole } from '../../services/notifications.js';
 import { setClassification } from '../../services/eligibility.js';
 import { catalogueFor, contextOf, typeByCode, CLASSIFIABLE_OWNER_TYPES } from '../../services/doc-catalogue.js';
 import { computeFlags, expectedTypeOf, EXPIRY_KEYS, type EffectiveField, type Flag } from './flags.js';
+import { writeAiClassification } from '../filenet-showcase.js';
 
 export type InsightStatus = 'PENDING_REVIEW' | 'ACCEPTED' | 'CORRECTED' | 'REJECTED' | 'NOT_EXTRACTABLE' | 'FAILED';
 export type Trigger = 'MANUAL' | 'UPLOAD' | 'OPENING' | 'FINANCIAL_OPENING';
@@ -182,10 +183,14 @@ export async function classifyDocumentRow(ctx: Ctx, actor: Actor, d: DocumentRow
   const out = run.response as { docType: string; language: string; fields: ExtractedField[]; summaryEn: string; summaryAr: string; citations: unknown[] };
   const draft = { status: 'PENDING_REVIEW', doc_type: out.docType, fields: out.fields, corrected_doc_type: null, corrected_fields: null } as unknown as InsightRow;
   const flags = await flagsFor(ctx, d, draft, info);
-  return insertInsight(ctx, actor, d, {
+  const created = await insertInsight(ctx, actor, d, {
     status: 'PENDING_REVIEW', trigger, ai_run_id: run.id, doc_type: out.docType, language: out.language, fields: out.fields,
     summary_en: out.summaryEn, summary_ar: out.summaryAr, citations: out.citations, flags,
   }, 'DOCUMENT_INSIGHT_CREATED');
+  // FileNet: TF_AiClassification / TF_AiConfidence on the object when its class has them (best effort, never throws).
+  await writeAiClassification(ctx, actor, d, out.docType, (catalogue.find((c) => c.code === out.docType)?.fields ?? []).filter((f) => f.required).map((f) => f.key),
+    (out.fields ?? []).filter((f) => f.citation?.quote).map((f) => f.key));
+  return created;
 }
 
 export async function classifyManually(ctx: Ctx, actor: Actor, documentId: string) {

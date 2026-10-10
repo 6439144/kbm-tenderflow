@@ -5,6 +5,7 @@
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import { AddressInfo } from 'node:net';
+import { TF_BASE_PROPERTIES, TF_SUBCLASSES, TF_SUBCLASS_PROPERTIES } from '../../src/content/filenet-model.js';
 
 export const USER = 'svc_tf';
 export const PASSWORD = 's3cr3t-P@ss';
@@ -15,6 +16,8 @@ export interface FakeDoc {
   id: string; name: string; folder: string; cls: string; mime: string; bytes: Buffer; props: Record<string, unknown>; retrievalName: string;
   versionSeriesId: string; major: number; minor: number; isCurrent: boolean; isReserved: boolean; reservation: boolean;
   dateCreated: string; retention: string | null;
+  /** Permission list (documentProperties.permissions.replace), null = class default security. */
+  acl?: { granteeName: string; accessMask: number }[] | null;
 }
 export interface Logged { kind: 'graphql' | 'download'; op: string; variables?: any; query?: string; multipart?: { partOrder: string[]; fileField?: string; fileName?: string; fileType?: string }; path: string; cookie: string; xsrfHeader: string }
 
@@ -32,6 +35,20 @@ export class FakeFileNet {
   failCreateDocument: string | null = null;
   /** When set, the next checkinDocument returns this GraphQL error. */
   failCheckin: string | null = null;
+  /** Class hierarchy (child → parent) and own property templates, for classDescription.propertyDescriptions. */
+  classParents = new Map<string, string>();
+  classProps = new Map<string, string[]>();
+  /** When true, createDocument / updateDocument refuse properties the class does not define (like the Content Engine). */
+  strictProperties = false;
+  /** When true, classDescription refuses the propertyDescriptions selection (schema without it). */
+  noPropertyDescriptions = false;
+  /** When set, createDocument / updateDocument with a permission list fail with this message. */
+  failPermissions: string | null = null;
+  /** When set, only these grantee names exist in the directory. */
+  knownGrantees: Set<string> | null = null;
+  /** Status answered for Navigator / ACCE probes, by path (e.g. '/navigator/'); unknown paths answer 404. */
+  probeStatus = new Map<string, number>();
+  probes: { method: string; path: string; authorization: boolean; cookie: boolean }[] = [];
   omitDownloadUrl = false;
   downloadUrlWithoutContext = false;
   folderCreateDelayMs = 0;
@@ -47,6 +64,8 @@ export class FakeFileNet {
   async stop() { await new Promise<void>((r) => this.server.close(() => r())); }
   reset() {
     this.folders = new Set(['/']); this.docs.clear(); this.log = []; this.classes = new Set(['Document']); this.recordProperties = false; this.aiProperties = false;
+    this.classParents = new Map(); this.classProps = new Map(); this.strictProperties = false; this.noPropertyDescriptions = false;
+    this.failPermissions = null; this.knownGrantees = null; this.probeStatus = new Map(); this.probes = [];
     this.failCreateDocument = null; this.failCheckin = null; this.omitDownloadUrl = false; this.downloadUrlWithoutContext = false; this.folderCreateDelayMs = 0; this.http500Once = false;
   }
   graphqlOps(op?: string) { return this.log.filter((l) => l.kind === 'graphql' && (!op || l.op === op)); }
@@ -67,8 +86,46 @@ export class FakeFileNet {
   private parseProps(q: string): Record<string, unknown> {
     const props: Record<string, unknown> = {};
     const block = /properties: \[([^\]]*)\]/.exec(q)?.[1];
-    if (block) for (const m of block.matchAll(/\{(\w+): ("(?:[^"\\]|\\.)*"|true|false)\}/g)) props[m[1]] = JSON.parse(m[2]);
+    if (block) for (const m of block.matchAll(/\{(\w+): ("(?:[^"\\]|\\.)*"|true|false|-?\d+(?:\.\d+)?)\}/g)) props[m[1]] = JSON.parse(m[2]);
     return props;
+  }
+  /** TF_Document-style test model: base class with properties, subclasses inheriting them (+ own). */
+  defineClass(name: string, parent: string, ownProps: string[] = []) {
+    this.classes.add(name); this.classParents.set(name, parent); this.classProps.set(name, ownProps);
+  }
+  /** Properties of a class: system + own + inherited. */
+  propertiesOf(cls: string): string[] {
+    const out = ['DocumentTitle', 'Id', 'Creator', 'DateCreated', 'IsCurrentVersion'];
+    for (let c: string | undefined = cls, i = 0; c && i < 10; c = this.classParents.get(c), i++) out.push(...(this.classProps.get(c) ?? []));
+    return [...new Set(out)];
+  }
+  isA(cls: string, ancestor: string): boolean {
+    for (let c: string | undefined = cls, i = 0; c && i < 10; c = this.classParents.get(c), i++) if (c === ancestor) return true;
+    return ancestor === 'Document';
+  }
+  /** Permission list from documentProperties.permissions.replace (null when absent). */
+  private parsePerms(q: string): { granteeName: string; accessMask: number }[] | null {
+    const block = /permissions: \{ replace: \[(.*?)\] \}/s.exec(q)?.[1];
+    if (block === undefined) return null;
+    const out: { granteeName: string; accessMask: number }[] = [];
+    for (const m of block.matchAll(/\{ type: ACCESS_PERMISSION, subAccessPermission: \{ accessType: ALLOW, inheritableDepth: 0, accessMask: (\d+), granteeName: ("(?:[^"\\]|\\.)*") \} \}/g)) {
+      out.push({ accessMask: Number(m[1]), granteeName: JSON.parse(m[2]) });
+    }
+    return out;
+  }
+  /** Error text for a write the Content Engine would refuse (unknown property / grantee), or null. */
+  private refuseWrite(cls: string, props: Record<string, unknown>, perms: { granteeName: string }[] | null): string | null {
+    if (this.strictProperties) {
+      const known = this.propertiesOf(cls);
+      const bad = Object.keys(props).find((k) => !known.includes(k));
+      if (bad) return `FNRCE0051E: E_OBJECT_NOT_FOUND: property ${bad} not found in class ${cls}`;
+    }
+    if (perms) {
+      if (this.failPermissions) return this.failPermissions;
+      const bad = this.knownGrantees ? perms.find((p) => !this.knownGrantees!.has(p.granteeName)) : undefined;
+      if (bad) return `FNRCE0201E: E_BAD_SECURITY_PRINCIPAL: grantee ${bad.granteeName} not found in the directory`;
+    }
+    return null;
   }
   private contentPart(q: string, v: any, multipart: Logged['multipart'], file: File | null): string | null {
     if (!multipart || !file) return 'request without multipart content';
@@ -88,6 +145,15 @@ export class FakeFileNet {
     const cookie = String(req.headers.cookie ?? '');
     const xsrfHeader = String(req.headers['ecm-cs-xsrf-token'] ?? '');
 
+    const probePath = new URL(req.url ?? '/', 'http://x').pathname;
+    if (/^\/(?:navigator|icn\/navigator|acce)(?:\/|$)/.test(probePath)) {
+      this.probes.push({ method: String(req.method), path: probePath, authorization: !!req.headers.authorization, cookie: !!req.headers.cookie });
+      const st = this.probeStatus.get(probePath) ?? 404;
+      res.statusCode = st;
+      if (st >= 300 && st < 400) res.setHeader('Location', '/navigator/login');
+      res.end(req.method === 'HEAD' ? undefined : `probe ${st}`);
+      return;
+    }
     const expected = 'Basic ' + Buffer.from(`${USER}:${PASSWORD}`).toString('base64');
     if (req.headers.authorization !== expected) { res.statusCode = 401; res.setHeader('WWW-Authenticate', 'Basic realm="fn"'); res.end('Unauthorized'); return; }
     const cookieXsrf = /(?:^|;\s*)ECM-CS-XSRF-Token=([^;]+)/.exec(cookie)?.[1];
@@ -163,6 +229,9 @@ export class FakeFileNet {
       if (this.failCreateDocument) { const m = this.failCreateDocument; this.failCreateDocument = null; return this.json(res, 200, { data: { createDocument: null }, errors: [{ message: m, path: ['createDocument'] }] }); }
       if (!this.classes.has(v.cls)) return this.json(res, 200, { data: { createDocument: null }, errors: [{ message: `FNRCE0051E: E_OBJECT_NOT_FOUND: class ${v.cls} not found` }] });
       if (!this.folders.has(v.folder)) return this.json(res, 200, { data: { createDocument: null }, errors: [{ message: `FNRCE0051E: folder ${v.folder} not found` }] });
+      const newPerms = this.parsePerms(q);
+      const refused = this.refuseWrite(v.cls, this.parseProps(q), newPerms);
+      if (refused) return this.json(res, 200, { data: { createDocument: null }, errors: [{ message: refused, path: ['createDocument'] }] });
       for (const d of this.docs.values()) if (d.folder === v.folder && d.name === v.name && d.isCurrent) {
         return this.json(res, 200, { data: { createDocument: null }, errors: [{ message: 'FNRCE0022E: E_NOT_UNIQUE: A uniqueness requirement has been violated. ContainmentName' }] });
       }
@@ -170,6 +239,7 @@ export class FakeFileNet {
       const d: FakeDoc = {
         id, name: v.name, folder: v.folder, cls: v.cls, mime: v.mime, bytes: Buffer.from(await file!.arrayBuffer()), props: this.parseProps(q), retrievalName: v.name,
         versionSeriesId: this.newId('VS'), major: 1, minor: 0, isCurrent: true, isReserved: false, reservation: false, dateCreated: new Date().toISOString(), retention: null,
+        acl: newPerms,
       };
       this.docs.set(id, d);
       return this.json(res, 200, { data: { createDocument: this.created(d) } });
@@ -218,17 +288,42 @@ export class FakeFileNet {
         return this.json(res, 200, { data: { updateDocument: { id: d.id, cmRetentionDate: d.retention } } });
       }
       const props = this.parseProps(q);
-      if ('TF_RecordDeclared' in props && !(this.recordProperties && d.cls === 'TF_Document')) {
+      const perms = this.parsePerms(q);
+      const refused = this.refuseWrite(d.cls, props, perms);
+      if (refused) return this.json(res, 200, { data: { updateDocument: null }, errors: [{ message: refused, path: ['updateDocument'] }] });
+      if (perms) { d.acl = perms; if (!Object.keys(props).length) return this.json(res, 200, { data: { updateDocument: { id: d.id } } }); }
+      if ('TF_RecordDeclared' in props && !(this.recordProperties && this.isA(d.cls, 'TF_Document') && d.cls !== 'Document')) {
         return this.json(res, 200, { data: { updateDocument: null }, errors: [{ message: `FNRCE0051E: E_OBJECT_NOT_FOUND: property TF_RecordDeclared not found in class ${d.cls}` }] });
       }
       // Document-intelligence properties (ACCE runbook §1c): only on TF_Document once the templates exist.
       const ai = Object.keys(props).filter((k) => ['TF_ExpiryDate', 'TF_AIReviewed'].includes(k));
-      if (ai.length && !(this.aiProperties && d.cls === 'TF_Document')) {
+      if (ai.length && !(this.aiProperties && this.isA(d.cls, 'TF_Document') && d.cls !== 'Document')) {
         return this.json(res, 200, { data: { updateDocument: null }, errors: [{ message: `FNRCE0051E: E_OBJECT_NOT_FOUND: property ${ai[0]} not found in class ${d.cls}` }] });
       }
       Object.assign(d.props, props);
       const back = /properties\(includes: \[([^\]]*)\]\)/.exec(q)?.[1]?.match(/"(\w+)"/g)?.map((x) => x.slice(1, -1)) ?? ['TF_RecordDeclared', 'TF_RecordDeclaredAt'];
       return this.json(res, 200, { data: { updateDocument: { id: d.id, properties: back.map((p) => ({ id: p, value: d.props[p] ?? null })) } } });
+    }
+    if (q.includes('documents(repositoryIdentifier: $os, from: $from, where: $where, pageSize: $n)')) {
+      const conds = String(v.where).split(' AND ');
+      const ok = (d: FakeDoc) => conds.every((c) => {
+        let m = /^(\w+) = '([^']*)'$/.exec(c);
+        if (m) return String(m[1] === 'DocumentTitle' ? d.name : d.props[m[1]] ?? '') === m[2];
+        m = /^(\w+) = (TRUE|FALSE)$/.exec(c);
+        if (m) return m[1] === 'IsCurrentVersion' ? d.isCurrent === (m[2] === 'TRUE') : d.props[m[1]] === (m[2] === 'TRUE');
+        m = /^DocumentTitle LIKE '%([^']*)%'$/.exec(c);
+        if (m) return d.name.toLowerCase().includes(m[1].toLowerCase());
+        throw new Error(`fake CE SQL: unsupported condition ${c}`);
+      });
+      let hits: FakeDoc[];
+      try { hits = [...this.docs.values()].filter((d) => !d.reservation && this.isA(d.cls, v.from) && ok(d)); }
+      catch (e: any) { return this.json(res, 200, { data: { documents: null }, errors: [{ message: `FNRCE0002E: E_BAD_SQL: ${e.message}` }] }); }
+      const page = hits.slice(0, v.n);
+      return this.json(res, 200, { data: { documents: {
+        documents: page.map((d) => ({ id: d.id, name: d.name, className: d.cls, majorVersionNumber: d.major, minorVersionNumber: d.minor, dateCreated: d.dateCreated,
+          properties: (v.props as string[]).map((p) => ({ id: p, value: p === 'DocumentTitle' ? d.name : d.props[p] ?? null })) })),
+        pageInfo: { token: hits.length > page.length ? 'more' : null },
+      } } });
     }
     if (q.includes('document(repositoryIdentifier: $os, identifier: $id)')) {
       const d = this.docs.get(v.id);
@@ -246,6 +341,7 @@ export class FakeFileNet {
         ...(q.includes('cmRetentionDate') ? { cmRetentionDate: d.retention } : {}),
         versionSeries: { id: d.versionSeriesId },
         foldersFiledIn: { folders: [{ pathName: d.folder }] }, contentElements: [el], properties: props,
+        ...(q.includes('permissions {') ? { permissions: (d.acl ?? [{ granteeName: '#AUTHENTICATED-USERS', accessMask: 131201 }]).map((p) => ({ ...p, accessType: 'ALLOW', permissionSource: d.acl ? 'SOURCE_DIRECT' : 'SOURCE_DEFAULT' })) } : {}),
         versions: { documents: versions },
       } } });
     }
@@ -263,8 +359,20 @@ export class FakeFileNet {
     if (q.includes('_apiInfo(')) return this.json(res, 200, { data: { _apiInfo: { productVersion: '5.6.0', implementationVersion: 'fake', buildNumber: '1', buildDate: 'today' } } });
     if (q.includes('classDescription(')) {
       if (!this.classes.has(v.cls)) return this.json(res, 200, { data: { classDescription: null }, errors: [{ message: `FNRCE0051E: E_OBJECT_NOT_FOUND: class ${v.cls}` }] });
+      if (q.includes('propertyDescriptions')) {
+        if (this.noPropertyDescriptions) return this.json(res, 400, { errors: [{ message: "Validation error of type FieldUndefined: Field 'propertyDescriptions' in type 'ClassDescription' is undefined" }] });
+        return this.json(res, 200, { data: { classDescription: { symbolicName: v.cls, propertyDescriptions: this.propertiesOf(v.cls).map((p) => ({ symbolicName: p })) } } });
+      }
       return this.json(res, 200, { data: { classDescription: { symbolicName: v.cls, displayName: v.cls } } });
     }
     return this.json(res, 200, { errors: [{ message: `fake server: unhandled operation ${op}` }] });
   }
+}
+
+/** Creates the TenderFlow class model of docs/filenet/ACCE-RUNBOOK.md §6 in the fake (base class + five subclasses). */
+export function defineTfModel(fake: FakeFileNet, opts: { withOptional?: boolean } = {}) {
+  const base = TF_BASE_PROPERTIES.map((p) => p.name);
+  const optional = opts.withOptional === false ? [] : ['TF_RecordDeclared', 'TF_RecordDeclaredAt', 'TF_ExpiryDate', 'TF_AIReviewed'];
+  fake.defineClass('TF_Document', 'Document', [...base, ...optional]);
+  for (const c of TF_SUBCLASSES) fake.defineClass(c, 'TF_Document', (TF_SUBCLASS_PROPERTIES[c] ?? []).map((p) => p.name));
 }

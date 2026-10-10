@@ -58,7 +58,7 @@ export function withTelemetry(inner: ContentStore, telemetry = new ContentTeleme
     telemetry: (limit?: number) => telemetry.recent(limit),
     unwrap: () => inner,
   };
-  if (inner.describe) wrapped.describe = (ref) => timed('describe', ref, null, () => inner.describe!(ref));
+  if (inner.describe) wrapped.describe = (ref, opts) => timed('describe', ref, null, () => inner.describe!(ref, opts));
   if (inner.declareRecord) {
     wrapped.declareRecord = (ref, info) => timed('declareRecord', ref, null, () => inner.declareRecord!(ref, info), undefined,
       (r) => (r.ok ? { ok: true } : { ok: false, error: r.detail.slice(0, 500) }));

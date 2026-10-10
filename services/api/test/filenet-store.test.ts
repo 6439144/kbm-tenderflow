@@ -11,7 +11,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { FileNetStore, FileNetError, FileNetConfigError, sanitizeDocumentName } from '../src/content/filenet-store.js';
 
-import { FakeFileNet, USER, PASSWORD } from './fakes/fake-filenet.js';
+import { FakeFileNet, USER, PASSWORD, defineTfModel } from './fakes/fake-filenet.js';
 
 const fake = new FakeFileNet();
 const env = (extra: Record<string, string> = {}): NodeJS.ProcessEnv => ({
@@ -252,11 +252,12 @@ describe('CLI tools against the fake server', () => {
   });
 
   test('verify-filenet passes end-to-end and writes a report without the password', async () => {
+    fake.probeStatus.set('/navigator/', 302); // Navigator answers on the GraphQL origin (derived link)
     const r = await runTool('verify-filenet', baseEnv());
     assert.equal(r.code, 0, r.stdout + r.stderr);
-    assert.match(r.stdout, /✓ 1 ping object store/);
-    assert.match(r.stdout, /✓ 4 download text and compare SHA-256/);
-    assert.match(r.stdout, /✓ 5 download 2 MB binary/);
+    assert.match(r.stdout, /✓ PASS 1 ping object store/);
+    assert.match(r.stdout, /✓ PASS 4 download text and compare SHA-256/);
+    assert.match(r.stdout, /✓ PASS 5 download 2 MB binary/);
     assert.match(r.stdout, /Navigator path: OS1 > TenderFlow > _verify > verify-text-/);
     assert.doesNotMatch(r.stdout + r.stderr, new RegExp(PASSWORD.replace(/[$@]/g, '\\$&')));
     const files = readdirSync(dir).filter((f) => f.startsWith('filenet-verify-'));
@@ -268,47 +269,95 @@ describe('CLI tools against the fake server', () => {
     assert.equal(report.documents.length, 2);
     assert.ok(fake.folders.has('/TenderFlow/_verify'));
     // Step 8: versioning proof (runs even with FILENET_VERSIONING=false so the flag can be enabled afterwards).
-    assert.match(r.stdout, /✓ 8 versioning: create v1 — \{DOC-\d+.*\(version 1\.0\)/);
-    assert.match(r.stdout, /✓ 8 versioning: check in v2 as the next major version \(checkout \+ checkin\) — \{RES-\d+.*\(version 2\.0\)/);
-    assert.match(r.stdout, /✓ 8 versioning: read v1 and v2 back and compare SHA-256/);
-    assert.match(r.stdout, /✓ 8 versioning: describe both versions \(same version series, v2 current\) — series \{VS-\d+.*: 1\.0 → 2\.0/);
-    assert.match(r.stdout, /- 9 records declaration check skipped \(FILENET_RECORDS_MODE=none\)/);
+    assert.match(r.stdout, /✓ PASS 8 versioning: create v1 — \{DOC-\d+.*\(version 1\.0\)/);
+    assert.match(r.stdout, /✓ PASS 8 versioning: check in v2 as the next major version \(checkout \+ checkin\) — \{RES-\d+.*\(version 2\.0\)/);
+    assert.match(r.stdout, /✓ PASS 8 versioning: read v1 and v2 back and compare SHA-256/);
+    assert.match(r.stdout, /✓ PASS 8 versioning: describe both versions \(same version series, v2 current\) — series \{VS-\d+.*: 1\.0 → 2\.0/);
+    assert.match(r.stdout, /- SKIP 9 records declaration — FILENET_RECORDS_MODE=none/);
     assert.equal(report.versioning.v1Version, '1.0');
     assert.equal(report.versioning.v2Version, '2.0');
-    assert.equal(report.versioning.navigatorUrl, null, 'no Navigator URL unless FILENET_NAVIGATOR_URL is set');
+    const origin = new URL(fake.url).origin;
+    assert.equal(report.versioning.navigatorUrl.startsWith(`${origin}/navigator/bookmark.jsp?`), true, 'Navigator derived from the GraphQL origin');
+    assert.match(r.stdout, /✓ PASS 13 IBM Content Navigator reachable \(derived\) — .*\/navigator answered HTTP 302/);
+    assert.ok(fake.probes.every((p) => !p.authorization && !p.cookie), 'the probe never sends credentials');
+    for (const n of [10, 11, 12, 14]) assert.match(r.stdout, new RegExp(`- SKIP ${n} `));
+    assert.deepEqual(report.summary, { PASS: report.steps.filter((x: any) => x.status === 'PASS').length, FAIL: 0, SKIP: 7 });
+    assert.ok(report.steps.every((x: any) => ['PASS', 'SKIP'].includes(x.status)));
   });
 
   test('verify-filenet proves records declaration (property mode) and prints a Navigator link when configured', async () => {
     fake.classes.add('TF_Document');
     fake.recordProperties = true;
+    fake.probeStatus.set('/icn/navigator/', 401);
+    const origin = new URL(fake.url).origin;
     const r = await runTool('verify-filenet', { ...baseEnv(), FILENET_DOC_CLASS: 'TF_Document', FILENET_SET_CUSTOM_PROPERTIES: 'true', FILENET_RECORDS_MODE: 'property',
-      FILENET_NAVIGATOR_URL: 'http://icn.example:9080/navigator' });
+      FILENET_NAVIGATOR_URL: `${origin}/icn/navigator` });
     assert.equal(r.code, 0, r.stdout + r.stderr);
-    assert.match(r.stdout, /✓ 9 records declaration \(FILENET_RECORDS_MODE=property\) — marked TF_RecordDeclared=true/);
-    assert.match(r.stdout, /Navigator link \(format ASSUMED — open it to confirm\): http:\/\/icn\.example:9080\/navigator\/bookmark\.jsp\?desktop=ICN&repositoryId=OS1&repositoryType=p8&docid=TF_Document%2C%7B0E3A1C2B/);
+    assert.match(r.stdout, /✓ PASS 9 records declaration \(FILENET_RECORDS_MODE=property\) — marked TF_RecordDeclared=true/);
+    assert.match(r.stdout, /✓ PASS 12 CE SQL search \(TF_Document\) finds the verify text document — 1 hit\(s\) for WHERE TF_TenantId = '_verify' AND IsCurrentVersion = TRUE AND DocumentTitle LIKE '%verify-text-/);
+    assert.ok(r.stdout.includes(`Navigator link (format ASSUMED — open it to confirm): ${origin}/icn/navigator/bookmark.jsp?desktop=ICN&repositoryId=OS1&repositoryType=p8&docid=TF_Document%2C%7B0E3A1C2B`), r.stdout);
   });
 
-  test('verify-filenet stops at step 8 with the server error when check-in is refused', async () => {
+  test('verify-filenet: an unreachable Navigator is a FAIL with the candidates tried; FILENET_NAVIGATOR_URL=off is a SKIP', async () => {
+    const bad = await runTool('verify-filenet', baseEnv());
+    assert.equal(bad.code, 1, bad.stdout);
+    assert.match(bad.stdout, /✗ FAIL 13 IBM Content Navigator reachable \(derived\)/);
+    assert.match(bad.stdout, /\/navigator → 404; .*\/icn\/navigator → 404/);
+    assert.match(bad.stdout, /1 step\(s\) FAILED/);
+    const off = await runTool('verify-filenet', { ...baseEnv(), FILENET_NAVIGATOR_URL: 'off' });
+    assert.equal(off.code, 0, off.stdout);
+    assert.match(off.stdout, /- SKIP 13 IBM Content Navigator reachable — FILENET_NAVIGATOR_URL=off/);
+  });
+
+  test('verify-filenet with the class model, ACLs and AI properties: steps 10–14 PASS', async () => {
+    defineTfModel(fake);
+    fake.strictProperties = true;
+    fake.probeStatus.set('/navigator/', 200);
+    const r = await runTool('verify-filenet', { ...baseEnv(), FILENET_CLASS_MODEL: 'subclasses', FILENET_ACL_MODE: 'groups',
+      FILENET_GROUP_COMMITTEE: 'TF Committee', FILENET_GROUP_AUDIT: 'TF Auditors' });
+    assert.equal(r.code, 0, r.stdout + r.stderr);
+    assert.match(r.stdout, /✓ PASS 10 class model: classes and properties exist — 6 classes ready/);
+    assert.match(r.stdout, /✓ PASS 10 class model: a tender document is stored as TF_TenderDocument with its properties/);
+    assert.match(r.stdout, /✓ PASS 11 ACL: sealed envelope created with the SEALED permission list \(read back\) — svc_tf/);
+    assert.match(r.stdout, /✓ PASS 11 ACL: opened envelope changed to COMMITTEE \(read back\) — COMMITTEE: svc_tf 998903, TF Committee 131201, TF Auditors 131201/);
+    assert.match(r.stdout, /✓ PASS 12 CE SQL search \(TF_Document\) finds the verify text document/);
+    assert.match(r.stdout, /✓ PASS 14 AI properties TF_AiClassification \/ TF_AiConfidence written — wrote TF_AiClassification, TF_AiConfidence/);
+  });
+
+  test('verify-filenet: a missing subclass is a FAIL at step 10, the rest of the run continues', async () => {
+    defineTfModel(fake);
+    fake.classes.delete('TF_EvidencePack');
+    fake.probeStatus.set('/navigator/', 200);
+    const r = await runTool('verify-filenet', { ...baseEnv(), FILENET_CLASS_MODEL: 'subclasses' });
+    assert.equal(r.code, 1);
+    assert.match(r.stdout, /✗ FAIL 10 class model: classes and properties exist/);
+    assert.match(r.stdout, /TF_EvidencePack: class missing/);
+    assert.match(r.stdout, /✓ PASS 10 class model: a tender document is stored as TF_TenderDocument/);
+    assert.match(r.stdout, /✓ PASS 13 IBM Content Navigator reachable/);
+  });
+
+  test('verify-filenet reports step 8 FAIL with the server error when check-in is refused (exit 1)', async () => {
     fake.failCheckin = 'FNRCE0066E: E_ACCESS_DENIED: checkin not permitted';
     const r = await runTool('verify-filenet', baseEnv());
     assert.equal(r.code, 1);
-    assert.match(r.stdout, /✗ 8 versioning: check in v2/);
+    assert.match(r.stdout, /✗ FAIL 8 versioning: check in v2/);
     assert.match(r.stdout, /E_ACCESS_DENIED: checkin not permitted/);
     assert.match(r.stdout, /reservation cancelled/);
   });
 
   test('verify-filenet with TF_Document + custom properties checks class and properties', async () => {
     fake.classes.add('TF_Document');
+    fake.probeStatus.set('/navigator/', 302);
     const r = await runTool('verify-filenet', { ...baseEnv(), FILENET_DOC_CLASS: 'TF_Document', FILENET_SET_CUSTOM_PROPERTIES: 'true' });
     assert.equal(r.code, 0, r.stdout + r.stderr);
-    assert.match(r.stdout, /✓ 6 document class TF_Document exists/);
-    assert.match(r.stdout, /✓ 6 custom TF_\* properties stored — all 5 match/);
+    assert.match(r.stdout, /✓ PASS 6 document class TF_Document exists/);
+    assert.match(r.stdout, /✓ PASS 6 custom TF_\* properties stored — all 5 match/);
   });
 
   test('verify-filenet exits 1 on first failure with the full GraphQL error', async () => {
     const r = await runTool('verify-filenet', { ...baseEnv(), FILENET_DOC_CLASS: 'TF_Document' });
     assert.equal(r.code, 1);
-    assert.match(r.stdout, /✗ 3 upload UTF-8 Arabic \+ English text/);
+    assert.match(r.stdout, /✗ FAIL 3 upload UTF-8 Arabic \+ English text/);
     assert.match(r.stdout, /FNRCE0051E: E_OBJECT_NOT_FOUND: class TF_Document not found/);
     const report = JSON.parse(readFileSync(join(dir, readdirSync(dir)[0]), 'utf8'));
     assert.equal(report.ok, false);

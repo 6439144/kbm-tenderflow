@@ -1,21 +1,24 @@
-// FileNet showcase: per-document repository evidence (object, class, version chain, record status, Navigator link)
-// and the FileNet health page (connection, class, folder tree, counts, operation telemetry, latest verify report).
-// Owned by the FileNet workstream. Read-only: nothing here writes to the database or the repository.
+// FileNet showcase: per-document repository evidence (object, class, version chain, record status, security, links that
+// open the real document in IBM Content Navigator / ACCE) and the FileNet health page (connection, class model, Navigator
+// probe, folder tree, counts, operation telemetry, latest verify report). Owned by the FileNet workstream.
+// Writes only audit events (FILENET_LINK_OPENED) and, after a classification, the AI properties on the FileNet object.
 import fs from 'node:fs';
 import path from 'node:path';
 import type express from 'express';
 import type { Ctx } from '../ctx.js';
-import { hasRole, isStaff } from '../ctx.js';
+import { auditTx, hasRole, isStaff, isVendor } from '../ctx.js';
 import type { Actor } from '../auth/tokens.js';
 import { REPO_ROOT } from '../config.js';
 import { h, actor, requireRoles } from '../routes.js';
-import { ApiError, forbidden, isUuid, notFound } from '../util.js';
+import { ApiError, badRequest, forbidden, isUuid, notFound, now } from '../util.js';
 import { loadReadableDocument, type DocumentRow } from '../services/documents.js';
 import { financialSealed, loadBid } from '../services/bids.js';
 import type { TenderRow } from '../services/tenders.js';
 import type { ContentStore, FolderNode, RepositoryDescription, TelemetryEntry } from '../content/types.js';
 import { FileNetStore } from '../content/filenet-store.js';
-import { navigatorConfig, navigatorUrl } from '../content/navigator.js';
+import { bookmarkUrl } from '../content/navigator.js';
+import { TF_BASE_PROPERTIES, TF_SUBCLASS_PROPERTIES, TF_CLASSES, LEVEL_GROUPS, CONFIDENTIALITY_LEVELS, ACCESS_MASK, ownerTypesOf, type ModelValue } from '../content/filenet-model.js';
+import { describeAccess, fileNetStoreOf } from './filenet-access.js';
 
 /** Same roles as services/bids.ts BID_READERS (who may read opened bids). */
 const BID_READERS = ['COMMITTEE_CHAIR', 'EVALUATOR', 'DIRECTOR', 'UNDERSECRETARY'];
@@ -23,7 +26,10 @@ const MAX_CHAIN = 50;
 
 export function registerFileNetShowcaseRoutes(r: express.Router, ctx: Ctx): void {
   r.get('/documents/:id/evidence', h((req) => documentEvidence(ctx, actor(req), req.params.id)));
+  r.post('/documents/:id/filenet-opened', h((req) => fileNetLinkOpened(ctx, actor(req), req.params.id, req.body)));
   r.get('/filenet/health', requireRoles('TENANT_ADMIN', 'AUDITOR'), h((req) => fileNetHealth(ctx, actor(req))));
+  r.get('/filenet/model', requireRoles('TENANT_ADMIN', 'AUDITOR'), h((req) => fileNetModel(ctx, req.query.refresh === 'true')));
+  r.get('/filenet/navigator', requireRoles('TENANT_ADMIN', 'AUDITOR'), h((req) => fileNetNavigator(ctx, req.query.refresh === 'true')));
 }
 
 const innerStore = (s: ContentStore): ContentStore => (s.unwrap ? s.unwrap() : s);
@@ -33,10 +39,12 @@ const innerStore = (s: ContentStore): ContentStore => (s.unwrap ? s.unwrap() : s
  * GET /documents/:id for non-bid documents; GET /bids/:id/documents/:docId for BID_* (owner vendor, or
  * chair/evaluators/director/undersecretary after opening, financial envelope only once opened).
  */
-async function loadForEvidence(ctx: Ctx, a: Actor, id: string): Promise<DocumentRow> {
+export async function loadForEvidence(ctx: Ctx, a: Actor, id: string): Promise<DocumentRow> {
   if (!isUuid(id)) throw notFound('Document');
   const row = (await ctx.db.query<DocumentRow>('SELECT * FROM documents WHERE id=$1 AND tenant_id=$2', [id, a.tenantId]))[0];
   if (!row) throw notFound('Document');
+  // Auditor evidence packs: same roles as their download route (GET /audit/evidence-packs/:id/download).
+  if (row.owner_type === 'EVIDENCE_PACK') { if (!hasRole(a, 'AUDITOR', 'TENANT_ADMIN')) throw notFound('Document'); return row; }
   if (!row.owner_type.startsWith('BID_')) return loadReadableDocument(ctx, a, id);
   if (!row.bid_id) throw notFound('Document');
   const bid = await loadBid(ctx, a.tenantId, row.bid_id);
@@ -83,12 +91,59 @@ async function versionChain(ctx: Ctx, d: DocumentRow) {
   }));
 }
 
+export interface EvidenceLinks {
+  navigator?: { url: string; reachable: boolean; source: 'configured' | 'derived'; checkedAt: string };
+  acce?: { url: string };
+  objectId: string | null;
+  versionSeriesId: string | null;
+  path: string | null;
+}
+
+/**
+ * Links that open this exact document version in FileNet. Navigator: a bookmark on the configured or derived Navigator
+ * (probed; an unreachable Navigator is still linked but flagged). ACCE: the administration console. Vendors get the
+ * object id only — never a link that exposes the object store or that needs a FileNet login they do not have.
+ */
+export async function evidenceLinks(ctx: Ctx, a: Actor, d: DocumentRow, desc: RepositoryDescription | null): Promise<EvidenceLinks> {
+  const meta = (d.store_meta ?? {}) as Record<string, any>;
+  const isFileNet = d.store_type === 'filenet';
+  const ref = /^filenet:([^:]+):(.+)$/.exec(d.store_ref);
+  const links: EvidenceLinks = {
+    objectId: isFileNet ? (desc?.id ?? meta.objectId ?? ref?.[2] ?? null) : null,
+    versionSeriesId: isFileNet ? (desc?.versionSeriesId ?? meta.versionSeriesId ?? null) : null,
+    path: meta.folderPath ?? desc?.folders?.[0] ?? null,
+  };
+  const fn = fileNetStoreOf(ctx);
+  if (!isFileNet || !fn || isVendor(a) || !isStaff(a)) return links;
+  if (fn.config.acceUrl) links.acce = { url: fn.config.acceUrl };
+  let nav = null;
+  try { nav = await fn.resolveNavigator(); } catch { nav = null; }
+  if (!nav || !nav.repositoryId || !links.objectId) return links;
+  const className = desc?.className ?? meta.className ?? null;
+  let osId = desc?.objectStoreId ?? null;
+  if (!osId) { try { osId = await fn.objectStoreId(); } catch { osId = null; } }
+  if (!className || !osId) return links;
+  links.navigator = {
+    url: bookmarkUrl(nav.url, nav.desktop, nav.repositoryId, { className, objectStoreId: osId, id: links.objectId, versionSeriesId: links.versionSeriesId }),
+    reachable: nav.reachable, source: nav.source, checkedAt: nav.checkedAt,
+  };
+  return links;
+}
+
+/** Vendors: no repository internals (object store name / GUID, service account, property bag). */
+function redactForVendor(r: RepositoryDescription | { error: string } | null): RepositoryDescription | { error: string } | null {
+  if (!r) return r;
+  if ('error' in r) return { error: 'The repository could not describe this document right now.' };
+  const { objectStore: _os, objectStoreId: _osId, creator: _c, properties: _p, ...rest } = r;
+  return rest;
+}
+
 export async function documentEvidence(ctx: Ctx, a: Actor, id: string) {
   const d = await loadForEvidence(ctx, a, id);
   const meta = (d.store_meta ?? {}) as Record<string, any>;
   let repository: RepositoryDescription | { error: string } | null = null;
   if (ctx.store.describe) {
-    try { repository = await ctx.store.describe(d.store_ref); } catch (e) { repository = { error: String((e as Error)?.message ?? e).slice(0, 1000) }; }
+    try { repository = await ctx.store.describe(d.store_ref, { className: meta.className ?? null }); } catch (e) { repository = { error: String((e as Error)?.message ?? e).slice(0, 1000) }; }
   } else {
     repository = { error: `content store '${ctx.store.type}' cannot describe stored objects` };
   }
@@ -96,6 +151,8 @@ export async function documentEvidence(ctx: Ctx, a: Actor, id: string) {
   const isFileNet = d.store_type === 'filenet';
   const ref = /^filenet:([^:]+):(.+)$/.exec(d.store_ref);
   const versions = await versionChain(ctx, d);
+  const links = await evidenceLinks(ctx, a, d, desc);
+  const vendor = isVendor(a) || !isStaff(a);
   return {
     documentId: d.id,
     title: d.title,
@@ -104,10 +161,11 @@ export async function documentEvidence(ctx: Ctx, a: Actor, id: string) {
     byteSize: d.byte_size,
     createdAt: d.created_at,
     storeType: d.store_type,
-    storeRef: d.store_ref,
-    objectStore: isFileNet ? (meta.objectStore ?? desc?.objectStore ?? ref?.[1] ?? null) : null,
+    storeRef: vendor && isFileNet ? null : d.store_ref,
+    objectStore: isFileNet && !vendor ? (meta.objectStore ?? desc?.objectStore ?? ref?.[1] ?? null) : null,
     objectId: isFileNet ? (meta.objectId ?? desc?.id ?? ref?.[2] ?? null) : null,
     className: isFileNet ? (desc?.className ?? meta.className ?? null) : null,
+    classModel: isFileNet && !vendor ? (meta.classModel ?? null) : null,
     folderPath: meta.folderPath ?? desc?.folders?.[0] ?? null,
     versionNo: d.version_no ?? 1,
     supersedesId: d.supersedes_id ?? null,
@@ -120,9 +178,27 @@ export async function documentEvidence(ctx: Ctx, a: Actor, id: string) {
     encrypted: d.encrypted,
     encryptionNote: d.encrypted ? 'ciphertext in FileNet; key held by TenderFlow' : null,
     sha256: d.sha256_plain,
-    repository,
-    navigatorUrl: isFileNet && desc ? navigatorUrl(navigatorConfig(), desc) : null,
+    repository: vendor ? redactForVendor(repository) : repository,
+    access: await describeAccess(ctx, a, d),
+    aiClassification: !vendor ? (meta.aiClassification ?? null) : null,
+    links,
+    /** rc3 field: the Navigator link (same as links.navigator.url). */
+    navigatorUrl: links.navigator?.url ?? null,
   };
+}
+
+/** POST /documents/:id/filenet-opened — who opened which object in FileNet (Navigator, ACCE or a copied object id). */
+export async function fileNetLinkOpened(ctx: Ctx, a: Actor, id: string, body: any) {
+  const target = String(body?.target ?? 'navigator');
+  if (!['navigator', 'acce', 'copy'].includes(target)) throw badRequest('target must be navigator, acce or copy');
+  const d = await loadForEvidence(ctx, a, id);
+  if (d.store_type !== 'filenet') throw new ApiError(409, 'NOT_IN_FILENET', 'This document is not stored in IBM FileNet');
+  const meta = (d.store_meta ?? {}) as Record<string, any>;
+  const objectId = meta.objectId ?? /^filenet:[^:]+:(.+)$/.exec(d.store_ref)?.[1] ?? null;
+  const at = now();
+  await ctx.db.tx((q) => auditTx(ctx, q, { tenantId: a.tenantId, actor: a, action: 'FILENET_LINK_OPENED', resourceType: 'DOCUMENT', resourceId: d.id,
+    details: { objectId, target, className: meta.className ?? null, ownerType: d.owner_type, versionNo: d.version_no ?? 1 } }));
+  return { recorded: true, documentId: d.id, objectId, target, at };
 }
 
 // ---------------------------------------------------------------- health
@@ -166,7 +242,7 @@ function latestVerifyReport() {
 export async function fileNetHealth(ctx: Ctx, a: Actor) {
   const store = innerStore(ctx.store);
   const fn = store instanceof FileNetStore ? store : null;
-  const nav = navigatorConfig();
+  const nav = fn?.config.navigator ?? null;
   const config = fn
     ? {
         type: 'filenet' as const,
@@ -179,7 +255,12 @@ export async function fileNetHealth(ctx: Ctx, a: Actor) {
         versioning: fn.config.versioning,
         recordsMode: fn.config.recordsMode,
         retentionDays: fn.config.retentionDays,
-        navigator: nav ? { configured: true, host: new URL(nav.baseUrl).host, desktop: nav.desktop, repositoryId: nav.repositoryId } : { configured: false },
+        classModel: fn.config.classModel,
+        aclMode: fn.config.acl.mode,
+        navigator: nav
+          ? { configured: nav.mode === 'configured', mode: nav.mode, host: new URL(nav.candidates[0]).host, candidates: nav.candidates, desktop: nav.desktop, repositoryId: nav.repositoryId }
+          : { configured: false, mode: 'off' },
+        acceUrl: fn.config.acceUrl,
       }
     : { type: store.type, navigator: { configured: false } };
 
@@ -222,4 +303,69 @@ export async function fileNetHealth(ctx: Ctx, a: Actor) {
     operations: await tenantTelemetry(ctx, t, 50),
     verifyReport: latestVerifyReport(),
   };
+}
+
+// ---------------------------------------------------------------- class model, Navigator probe
+
+/** GET /filenet/model — the TF_* class model, what exists in the object store, the ACL configuration. */
+export async function fileNetModel(ctx: Ctx, refresh = false) {
+  const fn = fileNetStoreOf(ctx);
+  const spec = {
+    classes: TF_CLASSES.map((c) => ({ name: c, parent: c === 'TF_Document' ? 'Document' : 'TF_Document', ownerTypes: c === 'TF_Document' ? [] : ownerTypesOf(c),
+      properties: c === 'TF_Document' ? TF_BASE_PROPERTIES : (TF_SUBCLASS_PROPERTIES[c] ?? []) })),
+    levels: CONFIDENTIALITY_LEVELS.map((l) => ({ level: l, groups: LEVEL_GROUPS[l] })),
+    accessMasks: ACCESS_MASK,
+  };
+  if (!fn) return { storeType: ctx.store.type, applicable: false, spec };
+  let status = null; let error: string | null = null;
+  try { status = await fn.modelStatus({ force: refresh }); } catch (e) { error = String((e as Error)?.message ?? e).slice(0, 800); }
+  return {
+    storeType: 'filenet', applicable: true, mode: fn.config.classModel, fallbackClass: fn.config.docClass, status, error, spec,
+    acl: { mode: fn.config.acl.mode, serviceGrantee: fn.config.acl.serviceGrantee, groups: fn.config.acl.groups },
+  };
+}
+
+/** GET /filenet/navigator — the Navigator probe (configured / derived / off) and the ACCE link. */
+export async function fileNetNavigator(ctx: Ctx, refresh = false) {
+  const fn = fileNetStoreOf(ctx);
+  if (!fn) return { storeType: ctx.store.type, applicable: false, navigator: null, acce: null };
+  const s = fn.config.navigator;
+  const navigator = s ? await fn.resolveNavigator({ force: refresh }) : null;
+  return { storeType: 'filenet', applicable: true, mode: s?.mode ?? 'off', candidates: s?.candidates ?? [], navigator, acce: fn.config.acceUrl ? { url: fn.config.acceUrl } : null };
+}
+
+// ---------------------------------------------------------------- AI classification → FileNet properties
+
+/**
+ * After document intelligence classified a document (before any person reviewed it), writes TF_AiClassification and
+ * TF_AiConfidence on the FileNet object when its class has them. TF_AiConfidence is measured by TenderFlow (share of the
+ * suggested type's required fields that came back with a verified citation); the agent returns no probability.
+ * Best effort: never throws; the outcome is kept in store_meta.aiClassification and audited when written or refused.
+ */
+export async function writeAiClassification(ctx: Ctx, actor: { id: string; roles: string[] }, d: DocumentRow, docType: string, requiredKeys: string[], verifiedKeys: string[]) {
+  const fn = fileNetStoreOf(ctx);
+  if (!fn || d.store_type !== 'filenet' || !docType) return null;
+  const meta = (d.store_meta ?? {}) as Record<string, any>;
+  const confidence = requiredKeys.length ? Math.round((requiredKeys.filter((k) => verifiedKeys.includes(k)).length / requiredKeys.length) * 100) / 100 : null;
+  const props: Record<string, ModelValue> = { TF_AiClassification: docType.slice(0, 64), ...(confidence !== null ? { TF_AiConfidence: confidence } : {}) };
+  let outcome: Record<string, unknown>;
+  try {
+    const r = await fn.setModelProperties(d.store_ref, meta.className ?? null, props);
+    outcome = r.ok ? { status: 'WRITTEN', properties: r.written, detail: r.detail } : { status: 'SKIPPED', detail: r.detail };
+  } catch (e) {
+    outcome = { status: 'FAILED', detail: String((e as Error)?.message ?? e).slice(0, 800) };
+  }
+  outcome = { ...outcome, docType, confidence, at: now().toISOString() };
+  try {
+    await ctx.db.tx(async (q) => {
+      await q.query(`UPDATE documents SET store_meta = store_meta || jsonb_build_object('aiClassification', $1::jsonb) WHERE id=$2 AND tenant_id=$3`, [JSON.stringify(outcome), d.id, d.tenant_id]);
+      if (outcome.status !== 'SKIPPED') {
+        await auditTx(ctx, q, { tenantId: d.tenant_id, actor, action: outcome.status === 'WRITTEN' ? 'FILENET_AI_PROPERTIES_WRITTEN' : 'FILENET_AI_PROPERTIES_FAILED',
+          resourceType: 'DOCUMENT', resourceId: d.id, details: { objectId: meta.objectId ?? null, properties: Object.keys(props), docType, confidence, detail: String(outcome.detail).slice(0, 500) } });
+      }
+    });
+  } catch (e) {
+    console.error('[filenet] recording the AI classification properties failed:', (e as Error)?.message ?? e);
+  }
+  return outcome;
 }

@@ -11,6 +11,12 @@
 // Writes are confined to FILENET_ROOT_FOLDER (default /TenderFlow) in the shared object store.
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { ContentStore, ContentStoreUnavailableError, FolderNode, RepositoryDescription, StoredObject } from './types.js';
+import {
+  ACCESS_MASK, aclEntriesFor, aclMatches, CONFIDENTIALITY_LEVELS, confidentialityFor, expectedProperties, GRANTEE_RE, modelPropertyValues,
+  ownerTypesOf, PERMISSIONS_SELECTION, permissionsLiteral, planClass, subclassFor, TF_BASE_CLASS, TF_CLASSES,
+  type AclConfig, type AclEntry, type ClassStatus, type Confidentiality, type ModelStatus, type ModelValue, type TfClassName,
+} from './filenet-model.js';
+import { acceUrl, navigatorSettings, probeNavigator, type NavigatorSettings, type ResolvedNavigator } from './navigator.js';
 
 /** Protocol details. Items marked ASSUMED are not stated by the published schema/docs. */
 export const FILENET_PROTOCOL = {
@@ -73,6 +79,14 @@ export interface FileNetConfig {
   retentionDays: number | null;
   /** FILENET_AI_PROPERTIES: write TF_DocType / TF_ExpiryDate / TF_AIReviewed when a document insight is accepted. */
   aiProperties: boolean;
+  /** FILENET_CLASS_MODEL: single = every document in FILENET_DOC_CLASS (rc3); subclasses = TF_* subclass per owner type. */
+  classModel: 'single' | 'subclasses';
+  /** FILENET_ACL_MODE + FILENET_GROUP_<LEVEL>: permission list written at create / changed at opening. */
+  acl: AclConfig;
+  /** Navigator candidates (configured or derived from the GraphQL origin); null when FILENET_NAVIGATOR_URL=off. */
+  navigator: NavigatorSettings | null;
+  /** ACCE base URL; null when FILENET_ACCE_URL=off. */
+  acceUrl: string | null;
 }
 
 export interface FileNetDocumentInfo {
@@ -141,7 +155,35 @@ export function loadFileNetConfig(env: NodeJS.ProcessEnv = process.env): FileNet
     recordsMode,
     retentionDays,
     aiProperties: parseBool(env, 'FILENET_AI_PROPERTIES'),
+    classModel: parseEnum(env, 'FILENET_CLASS_MODEL', ['single', 'subclasses'] as const, 'single'),
+    acl: loadAclConfig(env),
+    navigator: navigatorSettings(env, graphqlUrl),
+    acceUrl: acceUrl(env, graphqlUrl),
   };
+}
+
+function parseEnum<T extends string>(env: NodeJS.ProcessEnv, name: string, values: readonly T[], dflt: T): T {
+  const raw = (env[name] ?? '').trim().toLowerCase();
+  if (!raw) return dflt;
+  if (!(values as readonly string[]).includes(raw)) throw new FileNetConfigError(`${name} must be one of ${values.join(', ')} (got "${env[name]}")`);
+  return raw as T;
+}
+
+/** FILENET_ACL_MODE=off|groups, FILENET_GROUP_<LEVEL> group names, FILENET_ACL_SERVICE_GRANTEE (default: the service user). */
+function loadAclConfig(env: NodeJS.ProcessEnv): AclConfig {
+  const mode = parseEnum(env, 'FILENET_ACL_MODE', ['off', 'groups'] as const, 'off');
+  const groups = {} as Record<Confidentiality, string | null>;
+  for (const level of CONFIDENTIALITY_LEVELS) {
+    const v = env[`FILENET_GROUP_${level}`]?.trim() || null;
+    if (v && !GRANTEE_RE.test(v)) throw new FileNetConfigError(`FILENET_GROUP_${level} is not a valid grantee name (letters, digits, space and . _ @ = , ( ) # - only)`);
+    groups[level] = v;
+  }
+  const serviceGrantee = env.FILENET_ACL_SERVICE_GRANTEE?.trim() || String(env.FILENET_SERVICE_USER ?? '').trim();
+  if (mode === 'groups') {
+    if (!GRANTEE_RE.test(serviceGrantee)) throw new FileNetConfigError('FILENET_ACL_MODE=groups: FILENET_ACL_SERVICE_GRANTEE (or FILENET_SERVICE_USER) is not a valid grantee name');
+    if (!Object.values(groups).some(Boolean)) throw new FileNetConfigError('FILENET_ACL_MODE=groups needs at least one FILENET_GROUP_<PUBLIC|INTERNAL|SEALED|COMMITTEE|AUDIT> group name');
+  }
+  return { mode, serviceGrantee, groups };
 }
 
 function parseBool(env: NodeJS.ProcessEnv, name: string): boolean {
@@ -307,36 +349,137 @@ export class FileNetStore implements ContentStore {
     if (!Buffer.isBuffer(input.bytes)) throw new FileNetError('FileNet put: bytes must be a Buffer');
     const folder = this.resolveFolder(input.folderPath);
     const sha256 = createHash('sha256').update(input.bytes).digest('hex');
-    const props = this.config.setCustomProperties ? this.buildCustomProperties(input.tenantId, input.properties ?? {}, sha256) : null;
+    const legacyProps = this.config.setCustomProperties ? this.buildCustomProperties(input.tenantId, input.properties ?? {}, sha256) : null;
     const name = sanitizeDocumentName(input.fileName);
+    const p = input.properties ?? {};
+    const ownerType = p.TF_OwnerType || p.TF_DocType || p.docType || null;
 
     // Versioning: the new content becomes the next MAJOR version of the superseded document. No fallback:
     // when versioning is enabled and the check-in fails, the upload fails with the server's error text.
     if (input.supersedesRef && this.config.versioning) {
       const prev = this.parseStoreRef(input.supersedesRef);
-      const v = await this.checkInNewVersion(prev.id, name, input, props);
+      // The version series keeps its class: model properties are written only when that class has them.
+      const checkinProps = this.config.classModel === 'subclasses' ? await this.checkinModelProps(prev.id, input.tenantId, p, sha256, legacyProps) : legacyProps;
+      const v = await this.checkInNewVersion(prev.id, name, input, checkinProps);
+      const acl = this.config.acl.mode === 'groups' ? { mode: 'groups', level: confidentialityFor(ownerType), status: 'INHERITED', detail: 'a checked-in version keeps the security of its version series', at: new Date().toISOString() } : undefined;
       return {
         storeRef: `filenet:${this.config.objectStore}:${v.id}`, storeType: 'filenet', byteSize: input.bytes.length,
         // A checked-in version stays filed where its version series is filed (not in input.folderPath), so the
         // folder is not recorded here; the evidence view reads the real folders from the repository (describe()).
-        meta: this.metaOf(v, null, v.name ?? name, { repositoryVersioning: true, supersedesObjectId: prev.id }),
+        meta: this.metaOf(v, null, v.name ?? name, { repositoryVersioning: true, supersedesObjectId: prev.id, propertiesWritten: Object.keys(checkinProps ?? {}), ...(acl ? { acl } : {}) }),
       };
     }
 
     await this.ensureFolder(folder);
-    let created: CreatedDocument;
+    const plan = await this.uploadPlan(input.tenantId, ownerType, p, sha256, legacyProps);
+    const { created, attempt, errors } = await this.createWithFallbacks(folder, name, input, plan);
+    const extra: Record<string, unknown> = { repositoryVersioning: false, propertiesWritten: Object.keys(attempt.props ?? {}) };
+    if (this.config.classModel === 'subclasses' || errors.length) {
+      extra.classModel = {
+        mode: this.config.classModel, requested: plan.requestedClass, used: created.className ?? attempt.className,
+        ...(plan.fallback ? { fallback: plan.fallback } : {}), ...(errors.length ? { refused: errors.map((e) => e.slice(0, 500)) } : {}),
+      };
+    }
+    if (plan.acl) extra.acl = await this.aclOutcome(created.id, plan.acl.level, plan.acl.entries, attempt.perms ? null : (errors[errors.length - 1] ?? 'permissions not written'));
+    return {
+      storeRef: `filenet:${this.config.objectStore}:${created.id}`, storeType: 'filenet', byteSize: input.bytes.length,
+      meta: this.metaOf(created, folder, created.name ?? name, extra),
+    };
+  }
+
+  /** Class, properties and permissions for a new document (see content/filenet-model.ts). */
+  private async uploadPlan(tenantId: string, ownerType: string | null, p: Record<string, string>, sha256: string, legacyProps: Record<string, string> | null): Promise<UploadPlan> {
+    const acl = this.config.acl.mode === 'groups'
+      ? { level: confidentialityFor(ownerType), entries: aclEntriesFor(this.config.acl, confidentialityFor(ownerType)) }
+      : null;
+    const fallbackAttempt = { className: this.config.docClass, props: legacyProps };
+    if (this.config.classModel !== 'subclasses') {
+      return { requestedClass: this.config.docClass, primary: fallbackAttempt, fallbackAttempt, model: false, acl };
+    }
+    const status = await this.modelStatus();
+    const planned = planClass(status, ownerType);
+    const requestedClass = subclassFor(ownerType);
+    if (!planned.model) return { requestedClass, primary: fallbackAttempt, fallbackAttempt, model: false, fallback: planned.fallback, acl };
+    let values: Record<string, ModelValue>;
+    try { values = modelPropertyValues(planned.className as TfClassName, tenantId, p, sha256); } catch (e: any) {
+      throw new FileNetError(`FileNet put: ${e?.message ?? e}`);
+    }
+    const props = planned.writable === 'all' || planned.writable === null
+      ? values
+      : Object.fromEntries(Object.entries(values).filter(([k]) => (planned.writable as Set<string>).has(k)));
+    return { requestedClass, primary: { className: planned.className, props }, fallbackAttempt, model: true, fallback: planned.fallback, acl };
+  }
+
+  /**
+   * Creates the document; never breaks an upload because of the class model or the permission list: a refused
+   * permission list is retried without it (recorded, re-applied by the filenet-access-retry job), a refused class or
+   * property falls back to FILENET_DOC_CLASS with the rc3 properties. Transport errors are thrown unchanged.
+   */
+  private async createWithFallbacks(folder: string, name: string, input: { fileName: string; mimeType: string; bytes: Buffer }, plan: UploadPlan): Promise<{ created: CreatedDocument; attempt: CreateAttempt; errors: string[] }> {
+    const perms = plan.acl?.entries ?? null;
+    const first: CreateAttempt = { ...plan.primary, perms };
+    const errors: string[] = [];
     try {
-      created = await this.createDocument(folder, name, input, props);
+      return { created: await this.createOnce(folder, name, input, first), attempt: first, errors };
+    } catch (e: any) {
+      if (!(e instanceof FileNetError) || !e.graphqlErrors) throw e;
+      errors.push(e.message);
+      const permsLikely = !!perms && /permission|grantee|security|access|acl|\bsid\b|principal/i.test(e.message);
+      if (plan.model && !permsLikely) this.modelCache = null; // re-check the classes on the next upload
+      const next: CreateAttempt[] = permsLikely
+        ? [{ ...plan.primary, perms: null }, ...(plan.model ? [{ ...plan.fallbackAttempt, perms: null }] : [])]
+        : [...(plan.model ? [{ ...plan.fallbackAttempt, perms }] : []), ...(perms ? [{ ...(plan.model ? plan.fallbackAttempt : plan.primary), perms: null }] : [])];
+      for (const a of next) {
+        try {
+          return { created: await this.createOnce(folder, name, input, a), attempt: a, errors };
+        } catch (e2: any) {
+          if (!(e2 instanceof FileNetError) || !e2.graphqlErrors) throw e2;
+          errors.push(e2.message);
+        }
+      }
+      throw new FileNetError(`FileNet createDocument failed (${errors.length} attempt${errors.length > 1 ? 's' : ''}): ${errors.join(' || ')}`, e.graphqlErrors, e.httpStatus);
+    }
+  }
+
+  /** One createDocument; a containment-name clash is retried once under a unique name. */
+  private async createOnce(folder: string, name: string, input: { fileName: string; mimeType: string; bytes: Buffer }, a: CreateAttempt): Promise<CreatedDocument> {
+    try {
+      return await this.createDocument(folder, name, input, a.props, a.className, a.perms);
     } catch (e: any) {
       // Same containment name already filed in this folder: store under a unique name (the document is real;
       // TenderFlow references it by id, never by name).
       if (!(e instanceof FileNetError) || !FILENET_PROTOCOL.notUniquePattern.test(e.message)) throw e;
-      created = await this.createDocument(folder, uniquifyName(name), input, props);
+      return this.createDocument(folder, uniquifyName(name), input, a.props, a.className, a.perms);
     }
-    return {
-      storeRef: `filenet:${this.config.objectStore}:${created.id}`, storeType: 'filenet', byteSize: input.bytes.length,
-      meta: this.metaOf(created, folder, created.name ?? name, { repositoryVersioning: false }),
-    };
+  }
+
+  /** ACL state after create: read back and compared, or the reason it was not written. */
+  private async aclOutcome(id: string, level: Confidentiality, entries: AclEntry[], notWritten: string | null): Promise<Record<string, unknown>> {
+    const base = { mode: 'groups', level, grantees: entries.map((e) => ({ name: e.granteeName, access: e.access })), at: new Date().toISOString() };
+    if (notWritten) return { ...base, status: 'FAILED', attempts: 1, error: notWritten.slice(0, 500) };
+    try {
+      const back = await this.readPermissions(id);
+      const m = aclMatches(entries, back);
+      return m.ok
+        ? { ...base, status: 'APPLIED', appliedLevel: level, readBack: back.length }
+        : { ...base, status: 'FAILED', attempts: 1, error: `read-back is missing ${m.missing.join(', ')}` };
+    } catch (e: any) {
+      return { ...base, status: 'UNVERIFIED', attempts: 1, error: `written, but the read-back failed: ${String(e?.message ?? e).slice(0, 400)}` };
+    }
+  }
+
+  /** Model properties for a check-in, limited to what the version series' class has. */
+  private async checkinModelProps(prevId: string, tenantId: string, p: Record<string, string>, sha256: string, legacyProps: Record<string, string> | null): Promise<Record<string, ModelValue> | null> {
+    const d = await this.graphql<{ document: { className: string } | null }>(
+      `query TfClassOf($os: String!, $id: String!) { document(repositoryIdentifier: $os, identifier: $id) { id className } }`,
+      { os: this.config.objectStore, id: prevId },
+    );
+    const cls = d.document?.className;
+    if (!cls || !(TF_CLASSES as string[]).includes(cls)) return legacyProps;
+    const c = (await this.modelStatus()).classes.find((x) => x.name === cls);
+    if (!c?.exists) return legacyProps;
+    const values = modelPropertyValues(cls as TfClassName, tenantId, p, sha256);
+    return c.present ? Object.fromEntries(Object.entries(values).filter(([k]) => c.present!.includes(k))) : values;
   }
 
   /** store_meta for a created / checked-in document (no secrets, no content). */
@@ -454,12 +597,15 @@ export class FileNetStore implements ContentStore {
     folder: string,
     name: string,
     input: { fileName: string; mimeType: string; bytes: Buffer },
-    props: Record<TfPropertyName, string> | null,
+    props: Record<string, ModelValue> | null,
+    className: string = this.config.docClass,
+    perms: AclEntry[] | null = null,
   ): Promise<CreatedDocument> {
     const cv = FILENET_PROTOCOL.contentVariable;
     // PropertyIdentifierAndScalarValue is a custom scalar written as {SymbolicName: value} (IBM samples);
     // inlined as literals exactly like IBM's samples, values escaped as GraphQL strings.
     const propsLiteral = this.propsLiteral(props);
+    const permsLiteral = perms && perms.length ? permissionsLiteral(perms) : '';
     const query = `mutation TfCreateDocument($os: String!, $cls: String!, $folder: String!, $name: String!, $mime: String!, $${cv}: String) {
       createDocument(
         repositoryIdentifier: $os
@@ -469,13 +615,14 @@ export class FileNetStore implements ContentStore {
         documentProperties: {
           name: $name
           ${propsLiteral}
+          ${permsLiteral}
           contentElements: { replace: [{ type: CONTENT_TRANSFER, contentType: $mime, subContentTransfer: { content: $${cv}, retrievalName: $name } }] }
         }
       ) { ${CREATED_SELECTION} }
     }`;
     const data = await this.graphql<{ createDocument: CreatedDocument | null }>(
       query,
-      { os: this.config.objectStore, cls: this.config.docClass, folder, name, mime: input.mimeType || 'application/octet-stream' },
+      { os: this.config.objectStore, cls: className, folder, name, mime: input.mimeType || 'application/octet-stream' },
       { bytes: input.bytes, fileName: name, mimeType: input.mimeType },
     );
     if (!data.createDocument?.id) throw new FileNetError('FileNet createDocument: server returned no document id');
@@ -483,8 +630,8 @@ export class FileNetStore implements ContentStore {
   }
 
   /** documentProperties.properties literal: custom scalar written as {SymbolicName: value}, as in IBM's samples. */
-  private propsLiteral(props: Record<string, string> | null): string {
-    return props ? `properties: [${Object.entries(props).map(([k, v]) => `{${k}: ${gqlString(v)}}`).join(' ')}]` : '';
+  private propsLiteral(props: Record<string, ModelValue> | null): string {
+    return props && Object.keys(props).length ? `properties: [${Object.entries(props).map(([k, v]) => `{${k}: ${scalarLiteral(v)}}`).join(' ')}]` : '';
   }
 
   /**
@@ -494,7 +641,7 @@ export class FileNetStore implements ContentStore {
    * multipart part, exactly like createDocument. On a failed check-in the reservation is cancelled (best effort)
    * and the error is thrown with the server's text — never a silent fallback to a new document.
    */
-  private async checkInNewVersion(sourceId: string, name: string, input: { mimeType: string; bytes: Buffer }, props: Record<string, string> | null): Promise<CreatedDocument> {
+  private async checkInNewVersion(sourceId: string, name: string, input: { mimeType: string; bytes: Buffer }, props: Record<string, ModelValue> | null): Promise<CreatedDocument> {
     let reservationId: string;
     try {
       const out = await this.graphql<{ checkoutDocument: { id: string; reservation: { id: string } | null } | null }>(
@@ -558,17 +705,24 @@ export class FileNetStore implements ContentStore {
   }
 
   /** Property names TenderFlow asks for: only names the ACCE runbook defines, and only when that feature is enabled. */
-  describePropertyNames(): string[] {
+  describePropertyNames(model?: ClassStatus | null): string[] {
     const names: string[] = ['DocumentTitle'];
-    if (this.config.setCustomProperties) names.push(...TF_PROPERTY_NAMES);
-    if (this.config.recordsMode === 'property') names.push(...TF_RECORD_PROPERTY_NAMES);
-    if (this.config.aiProperties) for (const n of TF_AI_PROPERTY_NAMES) if (!names.includes(n)) names.push(n);
+    const add = (n: string) => { if (!names.includes(n)) names.push(n); };
+    if (this.config.setCustomProperties) TF_PROPERTY_NAMES.forEach(add);
+    if (this.config.recordsMode === 'property') TF_RECORD_PROPERTY_NAMES.forEach(add);
+    if (this.config.aiProperties) TF_AI_PROPERTY_NAMES.forEach(add);
+    // A TF_* model class: every model property the repository reports on that class (never a name it does not have).
+    if (model?.exists && model.present) for (const p of expectedProperties(model.name)) if (model.present.includes(p.name)) add(p.name);
     return names;
   }
 
   /** Repository view of one document: class, id, version, version series, folders, content elements, properties. */
-  async describe(storeRef: string): Promise<RepositoryDescription> {
+  async describe(storeRef: string, opts: { className?: string | null } = {}): Promise<RepositoryDescription> {
     const { id } = this.parseStoreRef(storeRef);
+    let model: ClassStatus | null = null;
+    if (this.config.classModel === 'subclasses' && opts.className && (TF_CLASSES as string[]).includes(opts.className)) {
+      try { model = (await this.modelStatus()).classes.find((c) => c.name === opts.className) ?? null; } catch { model = null; }
+    }
     const retention = this.config.recordsMode === 'retention' ? 'cmRetentionDate' : '';
     const data = await this.graphql<{ document: any }>(
       `query TfDescribeFull($os: String!, $id: String!, $props: [String!]) {
@@ -582,7 +736,7 @@ export class FileNetStore implements ContentStore {
           versions { documents { id majorVersionNumber minorVersionNumber isCurrentVersion dateCheckedIn } }
         }
       }`,
-      { os: this.config.objectStore, id, props: this.describePropertyNames() },
+      { os: this.config.objectStore, id, props: this.describePropertyNames(model) },
     );
     const d = data.document;
     if (!d) throw new FileNetError(`FileNet describe: ${id} not found in ${this.config.objectStore}`);
@@ -658,7 +812,7 @@ export class FileNetStore implements ContentStore {
    */
   async setProperties(storeRef: string, props: Record<string, string | boolean>): Promise<{ ok: boolean; detail: string; readBack?: Record<string, unknown> }> {
     if (!this.config.aiProperties) return { ok: false, detail: 'FILENET_AI_PROPERTIES is not enabled' };
-    if (this.config.docClass !== 'TF_Document') return { ok: false, detail: `FILENET_DOC_CLASS is ${this.config.docClass}; TF_DocType / TF_ExpiryDate / TF_AIReviewed exist only on TF_Document` };
+    if (this.config.docClass !== 'TF_Document' && this.config.classModel !== 'subclasses') return { ok: false, detail: `FILENET_DOC_CLASS is ${this.config.docClass}; TF_DocType / TF_ExpiryDate / TF_AIReviewed exist only on TF_Document and its subclasses` };
     const entries = Object.entries(props).filter(([k]) => /^TF_[A-Za-z0-9]{1,60}$/.test(k));
     if (!entries.length) return { ok: false, detail: 'no properties to write' };
     const { id } = this.parseStoreRef(storeRef);
@@ -775,6 +929,165 @@ export class FileNetStore implements ContentStore {
     }
   }
 
+  // ---------------------------------------------------------------- class model (classDescription)
+
+  private modelCache: { at: number; value: Promise<ModelStatus> } | null = null;
+  static readonly MODEL_CACHE_MS = 5 * 60_000;
+
+  /**
+   * Which TF_* classes and properties exist in the object store (classDescription), cached for 5 minutes.
+   * ASSUMED (not verified live): ClassDescription.propertyDescriptions { symbolicName }. When the server refuses that
+   * selection, class existence is still checked and the property list is reported as unknown.
+   */
+  modelStatus(opts: { force?: boolean } = {}): Promise<ModelStatus> {
+    if (this.modelCache && !opts.force && Date.now() - this.modelCache.at < FileNetStore.MODEL_CACHE_MS) return this.modelCache.value;
+    const value = (async (): Promise<ModelStatus> => {
+      const classes = await Promise.all(TF_CLASSES.map((c) => this.classStatus(c)));
+      return {
+        mode: this.config.classModel, checkedAt: new Date().toISOString(), fallbackClass: this.config.docClass, classes,
+        ready: classes.every((c) => c.exists === true && c.present !== null && c.missing.length === 0),
+      };
+    })();
+    const entry = { at: Date.now(), value };
+    this.modelCache = entry;
+    value.catch(() => { if (this.modelCache === entry) this.modelCache = null; });
+    return value;
+  }
+
+  private async classStatus(name: TfClassName): Promise<ClassStatus> {
+    const base: ClassStatus = { name, parent: name === TF_BASE_CLASS ? 'Document' : TF_BASE_CLASS, ownerTypes: name === TF_BASE_CLASS ? [] : ownerTypesOf(name), exists: null, present: null, missing: [] };
+    const expected = expectedProperties(name).map((p) => p.name);
+    try {
+      const data = await this.graphql<{ classDescription: { symbolicName: string; propertyDescriptions?: { symbolicName: string }[] | null } | null }>(
+        `query TfClassModel($os: String!, $cls: String!) { classDescription(repositoryIdentifier: $os, identifier: $cls) { symbolicName propertyDescriptions { symbolicName } } }`,
+        { os: this.config.objectStore, cls: name },
+      );
+      if (!data.classDescription) return { ...base, exists: false, missing: expected };
+      const present = (data.classDescription.propertyDescriptions ?? []).map((p) => p.symbolicName).filter(Boolean);
+      return { ...base, exists: true, present, missing: expected.filter((p) => !present.includes(p)) };
+    } catch (e: any) {
+      if (e instanceof FileNetError && e.graphqlErrors && FILENET_PROTOCOL.notFoundPattern.test(e.message)) return { ...base, exists: false, missing: expected };
+      if (!(e instanceof FileNetError) || !e.graphqlErrors) return { ...base, error: String(e?.message ?? e).slice(0, 500) };
+      // The property list selection was refused: check the class alone.
+      try {
+        const exists = await this.classExists(name);
+        return { ...base, exists, missing: exists ? [] : expected, error: exists ? `property list not available: ${String(e.message).slice(0, 300)}` : undefined };
+      } catch (e2: any) {
+        return { ...base, error: String(e2?.message ?? e2).slice(0, 500) };
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------- security (permission list)
+
+  /** Permission list of a document, read back from the repository (ASSUMED selection, see filenet-model.ts). */
+  async readPermissions(idOrRef: string): Promise<{ granteeName: string | null; accessMask: number | null; accessType: string | null; permissionSource: string | null }[]> {
+    const id = idOrRef.startsWith('filenet:') ? this.parseStoreRef(idOrRef).id : idOrRef;
+    const data = await this.graphql<{ document: { id: string; permissions?: any[] | null } | null }>(
+      `query TfPermissions($os: String!, $id: String!) { document(repositoryIdentifier: $os, identifier: $id) { id ${PERMISSIONS_SELECTION} } }`,
+      { os: this.config.objectStore, id },
+    );
+    if (!data.document) throw new FileNetError(`FileNet readPermissions: ${id} not found`);
+    return (data.document.permissions ?? []).map((p: any) => ({
+      granteeName: p?.granteeName ?? null, accessMask: typeof p?.accessMask === 'number' ? p.accessMask : null,
+      accessType: p?.accessType ?? null, permissionSource: p?.permissionSource ?? null,
+    }));
+  }
+
+  /** Grantees and masks a confidentiality level maps to (FILENET_ACL_MODE=groups), or null when ACLs are off. */
+  aclFor(level: Confidentiality): AclEntry[] | null {
+    return this.config.acl.mode === 'groups' ? aclEntriesFor(this.config.acl, level) : null;
+  }
+
+  /** Replaces the document's permission list for `level` and reads it back. Throws when the server refuses or the read-back differs. */
+  async setAccess(storeRef: string, level: Confidentiality): Promise<{ ok: boolean; detail: string; entries?: AclEntry[]; readBack?: unknown[] }> {
+    const entries = this.aclFor(level);
+    if (!entries) return { ok: false, detail: 'FILENET_ACL_MODE=off' };
+    const { id } = this.parseStoreRef(storeRef);
+    await this.graphql(
+      `mutation TfSetAccess($os: String!, $id: String!) {
+        updateDocument(repositoryIdentifier: $os, identifier: $id, documentProperties: { ${permissionsLiteral(entries)} }) { id }
+      }`,
+      { os: this.config.objectStore, id },
+    );
+    const back = await this.readPermissions(id);
+    const m = aclMatches(entries, back);
+    if (!m.ok) throw new FileNetError(`FileNet setAccess: read-back of ${id} is missing ${m.missing.join(', ')}`);
+    return { ok: true, detail: `${level}: ${entries.map((e) => `${e.granteeName} ${e.access === 'FULL_CONTROL' ? ACCESS_MASK.FULL_CONTROL : ACCESS_MASK.VIEW_CONTENT}`).join(', ')} on ${id}`, entries, readBack: back };
+  }
+
+  // ---------------------------------------------------------------- search (CE SQL)
+
+  /**
+   * CE SQL search through documents(repositoryIdentifier, from, where, pageSize). `where` must come from
+   * filenet-model.ts buildSearchWhere (whitelisted values); `from` must be a TF class or FILENET_DOC_CLASS.
+   */
+  async search(from: string, where: string, pageSize: number, propertyNames: string[]): Promise<{ documents: { id: string; name: string | null; className: string; majorVersionNumber: number | null; minorVersionNumber: number | null; dateCreated: string | null; properties: Record<string, unknown> }[]; more: boolean }> {
+    if (!(TF_CLASSES as string[]).includes(from) && from !== this.config.docClass) throw new FileNetError(`FileNet search: class ${from} is not searchable`);
+    if (!where.startsWith("TF_TenantId = '")) throw new FileNetError('FileNet search: the condition must start with the tenant');
+    const n = Math.max(1, Math.min(50, Math.trunc(pageSize) || 25));
+    const data = await this.graphql<{ documents: { documents: any[] | null; pageInfo?: { token: string | null } | null } | null }>(
+      `query TfSearch($os: String!, $from: String!, $where: String!, $n: Int!, $props: [String!]) {
+        documents(repositoryIdentifier: $os, from: $from, where: $where, pageSize: $n) {
+          documents { id name className majorVersionNumber minorVersionNumber dateCreated properties(includes: $props) { id value } }
+          pageInfo { token }
+        }
+      }`,
+      { os: this.config.objectStore, from, where, n, props: propertyNames.length ? propertyNames : ['DocumentTitle'] },
+    );
+    const docs = data.documents?.documents ?? [];
+    return {
+      documents: docs.map((d: any) => ({
+        id: d.id, name: d.name ?? null, className: d.className, majorVersionNumber: d.majorVersionNumber ?? null, minorVersionNumber: d.minorVersionNumber ?? null,
+        dateCreated: d.dateCreated ?? null, properties: Object.fromEntries((d.properties ?? []).map((p: any) => [p.id, p.value])),
+      })),
+      more: !!data.documents?.pageInfo?.token,
+    };
+  }
+
+  // ---------------------------------------------------------------- model properties after upload (AI classification)
+
+  /**
+   * Writes model properties (e.g. TF_AiClassification / TF_AiConfidence) on a stored document, only those the
+   * document's class has according to modelStatus(), and reads them back. ok:false (never thrown) when the class has none.
+   */
+  async setModelProperties(storeRef: string, className: string | null | undefined, props: Record<string, ModelValue>): Promise<{ ok: boolean; detail: string; written?: Record<string, ModelValue>; readBack?: Record<string, unknown> }> {
+    const { id } = this.parseStoreRef(storeRef);
+    let cls = className ?? null;
+    if (!cls) {
+      const d = await this.graphql<{ document: { className: string } | null }>(
+        `query TfClassOf($os: String!, $id: String!) { document(repositoryIdentifier: $os, identifier: $id) { id className } }`, { os: this.config.objectStore, id });
+      cls = d.document?.className ?? null;
+    }
+    if (!cls || !(TF_CLASSES as string[]).includes(cls)) return { ok: false, detail: `class ${cls ?? '?'} is not a TenderFlow model class (FILENET_CLASS_MODEL=${this.config.classModel})` };
+    const status = (await this.modelStatus()).classes.find((c) => c.name === cls);
+    if (!status?.exists) return { ok: false, detail: `class ${cls} is not available in ${this.config.objectStore}` };
+    const entries = Object.entries(props).filter(([k, v]) => /^TF_[A-Za-z0-9]{1,60}$/.test(k) && v !== undefined && v !== null && (!status.present || status.present.includes(k)));
+    if (!entries.length) return { ok: false, detail: `class ${cls} has none of ${Object.keys(props).join(', ')}` };
+    const literal = entries.map(([k, v]) => `{${k}: ${scalarLiteral(v)}}`).join(' ');
+    const names = entries.map(([k]) => gqlString(k)).join(', ');
+    const data = await this.graphql<{ updateDocument: { id: string; properties: { id: string; value: unknown }[] } | null }>(
+      `mutation TfSetModelProperties($os: String!, $id: String!) {
+        updateDocument(repositoryIdentifier: $os, identifier: $id, documentProperties: { properties: [${literal}] }) { id properties(includes: [${names}]) { id value } }
+      }`,
+      { os: this.config.objectStore, id },
+    );
+    const readBack = Object.fromEntries((data.updateDocument?.properties ?? []).map((p) => [p.id, p.value]));
+    for (const [k, v] of entries) {
+      const got = readBack[k];
+      const same = typeof v === 'number' ? typeof got === 'number' ? Math.abs(got - v) < 1e-9 : Math.abs(Number(got) - v) < 1e-9 : String(got) === String(v);
+      if (!same) throw new FileNetError(`FileNet setModelProperties: ${k} on ${id} reads back as ${JSON.stringify(got ?? null)}`);
+    }
+    return { ok: true, detail: `wrote ${entries.map(([k]) => k).join(', ')} on ${id} (${cls})`, written: Object.fromEntries(entries), readBack };
+  }
+
+  // ---------------------------------------------------------------- Navigator / ACCE
+
+  /** Navigator for evidence links (probe cached 5 minutes); null when FILENET_NAVIGATOR_URL=off. */
+  resolveNavigator(opts: { force?: boolean } = {}): Promise<ResolvedNavigator | null> {
+    return this.config.navigator ? probeNavigator(this.config.navigator, opts) : Promise.resolve(null);
+  }
+
   // ---------------------------------------------------------------- helpers
 
   parseStoreRef(storeRef: string): { objectStore: string; id: string } {
@@ -815,6 +1128,27 @@ export class FileNetStore implements ContentStore {
     const u = new URL(this.config.graphqlUrl);
     return `${u.origin}${u.pathname}`;
   }
+}
+
+interface CreateAttempt { className: string; props: Record<string, ModelValue> | null; perms?: AclEntry[] | null }
+interface UploadPlan {
+  requestedClass: string;
+  primary: CreateAttempt;
+  fallbackAttempt: CreateAttempt;
+  /** True when primary uses a TF_* model class (FILENET_CLASS_MODEL=subclasses and the class exists). */
+  model: boolean;
+  fallback?: string;
+  acl: { level: Confidentiality; entries: AclEntry[] } | null;
+}
+
+/** GraphQL literal of a property value: string (JSON-escaped), boolean, or finite number. */
+function scalarLiteral(v: ModelValue): string {
+  if (typeof v === 'boolean') return String(v);
+  if (typeof v === 'number') {
+    if (!Number.isFinite(v)) throw new FileNetError('FileNet: property value must be a finite number');
+    return String(v);
+  }
+  return gqlString(String(v));
 }
 
 export function formatGraphQLErrors(errors: any[]): string {

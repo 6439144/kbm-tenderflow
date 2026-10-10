@@ -61,7 +61,7 @@ export interface ContentStore {
     supersedesRef?: string }): Promise<StoredObject>;
   get(storeRef: string): Promise<Buffer>;
   /** Optional: repository-side description of a stored object (class, id, version, folder, properties). */
-  describe?(storeRef: string): Promise<RepositoryDescription>;
+  describe?(storeRef: string, opts?: { className?: string | null }): Promise<RepositoryDescription>;
   /** Optional: declare the object a record / lock it against change. Must not fake success. */
   declareRecord?(storeRef: string, info: { reason: string }): Promise<{ ok: boolean; detail: string }>;
   /**
