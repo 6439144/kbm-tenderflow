@@ -429,6 +429,7 @@ export class FileNetStore implements ContentStore {
       const next: CreateAttempt[] = permsLikely
         ? [{ ...plan.primary, perms: null }, ...(plan.model ? [{ ...plan.fallbackAttempt, perms: null }] : [])]
         : [...(plan.model ? [{ ...plan.fallbackAttempt, perms }] : []), ...(perms ? [{ ...(plan.model ? plan.fallbackAttempt : plan.primary), perms: null }] : [])];
+      if (!next.length) throw e; // nothing to fall back to: the server's error, unchanged (rc3 behaviour)
       for (const a of next) {
         try {
           return { created: await this.createOnce(folder, name, input, a), attempt: a, errors };
@@ -931,8 +932,10 @@ export class FileNetStore implements ContentStore {
 
   // ---------------------------------------------------------------- class model (classDescription)
 
-  private modelCache: { at: number; value: Promise<ModelStatus> } | null = null;
+  private modelCache: { at: number; ttl: number; value: Promise<ModelStatus> } | null = null;
   static readonly MODEL_CACHE_MS = 5 * 60_000;
+  /** A status with classes that could not be checked (repository unreachable) is kept only briefly. */
+  static readonly MODEL_RETRY_MS = 30_000;
 
   /**
    * Which TF_* classes and properties exist in the object store (classDescription), cached for 5 minutes.
@@ -940,15 +943,17 @@ export class FileNetStore implements ContentStore {
    * selection, class existence is still checked and the property list is reported as unknown.
    */
   modelStatus(opts: { force?: boolean } = {}): Promise<ModelStatus> {
-    if (this.modelCache && !opts.force && Date.now() - this.modelCache.at < FileNetStore.MODEL_CACHE_MS) return this.modelCache.value;
+    if (this.modelCache && !opts.force && Date.now() - this.modelCache.at < this.modelCache.ttl) return this.modelCache.value;
+    const entry = { at: Date.now(), ttl: FileNetStore.MODEL_CACHE_MS, value: null as unknown as Promise<ModelStatus> };
     const value = (async (): Promise<ModelStatus> => {
       const classes = await Promise.all(TF_CLASSES.map((c) => this.classStatus(c)));
+      if (classes.some((c) => c.exists === null)) entry.ttl = FileNetStore.MODEL_RETRY_MS;
       return {
         mode: this.config.classModel, checkedAt: new Date().toISOString(), fallbackClass: this.config.docClass, classes,
         ready: classes.every((c) => c.exists === true && c.present !== null && c.missing.length === 0),
       };
     })();
-    const entry = { at: Date.now(), value };
+    entry.value = value;
     this.modelCache = entry;
     value.catch(() => { if (this.modelCache === entry) this.modelCache = null; });
     return value;

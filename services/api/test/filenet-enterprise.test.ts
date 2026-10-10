@@ -530,6 +530,34 @@ describe('API with FileNet (class model, ACLs, search, evidence, opening)', () =
     assert.equal(off.body.results.length, 0, 'the officer still cannot read bids');
   });
 
+  test('two envelopes: technical envelopes open at the opening; financial ones only for bids that passed', async () => {
+    const gt: Record<string, string> = {};
+    for (const u of ['chair', 'evaluator1']) gt[u] = await login(run, 'gcia', u, DEMO_PASSWORD);
+    const jetty = (await q<{ id: string }>(`SELECT id FROM tenders WHERE tenant_id='gcia' AND title_en='Marine Jetty Rehabilitation'`))[0].id;
+    const docs = async () => q<any>(`SELECT d.id, d.owner_type, d.bid_id, d.store_meta FROM documents d WHERE d.tender_id=$1 AND d.owner_type LIKE 'BID_%' ORDER BY d.created_at`, [jetty]);
+    const settle = async (pred: (rows: any[]) => boolean) => { for (let i = 0; i < 100; i++) { if (pred(await docs())) return; await sleep(50); } };
+    const o = await api(run, 'POST', `/api/v1/tenders/${jetty}/open`, { token: gt.chair, json: { attendees: ['Chair (test)'] } });
+    assert.equal(o.status, 200, o.text);
+    await settle((rows) => rows.filter((d) => d.owner_type === 'BID_TECHNICAL').every((d) => d.store_meta.acl?.status === 'APPLIED' && d.store_meta.acl.level === 'COMMITTEE'));
+    let rows = await docs();
+    assert.ok(rows.filter((d) => d.owner_type === 'BID_TECHNICAL').every((d) => d.store_meta.acl.level === 'COMMITTEE'));
+    assert.ok(rows.filter((d) => d.owner_type === 'BID_FINANCIAL').every((d) => d.store_meta.acl.level === 'SEALED'), 'financial envelopes stay sealed');
+    for (const d of rows.filter((x) => x.owner_type === 'BID_FINANCIAL')) assert.deepEqual((await fakeObj(d.id)).acl!.map((a) => a.granteeName), ['svc_tf']);
+
+    const bidIds = [...new Set(rows.map((d) => d.bid_id as string))];
+    const scores = (n: number) => ({ scores: [{ criterion: 'technical', score: n, comment: 't' }, { criterion: 'experience', score: n, comment: 'e' }] });
+    assert.equal((await api(run, 'POST', `/api/v1/bids/${bidIds[0]}/evaluation`, { token: gt.evaluator1, json: scores(90) })).status, 200);
+    assert.equal((await api(run, 'POST', `/api/v1/bids/${bidIds[1]}/evaluation`, { token: gt.evaluator1, json: scores(20) })).status, 200);
+    const f = await api(run, 'POST', `/api/v1/tenders/${jetty}/open-financial`, { token: gt.chair, json: {} });
+    assert.equal(f.status, 200, f.text);
+    await settle((r) => r.some((d) => d.owner_type === 'BID_FINANCIAL' && d.store_meta.acl.level === 'COMMITTEE' && d.store_meta.acl.status === 'APPLIED'));
+    rows = await docs();
+    const fin = (bid: string) => rows.find((d) => d.owner_type === 'BID_FINANCIAL' && d.bid_id === bid)!;
+    assert.deepEqual([fin(bidIds[0]).store_meta.acl.level, fin(bidIds[0]).store_meta.acl.status], ['COMMITTEE', 'APPLIED'], 'passed: financial envelope opened in FileNet');
+    assert.equal(fin(bidIds[1]).store_meta.acl.level, 'SEALED', 'failed the technical stage: stays sealed in FileNet');
+    assert.deepEqual((await fakeObj(fin(bidIds[1]).id)).acl!.map((a) => a.granteeName), ['svc_tf']);
+  });
+
   test('failures are recorded and retried by the filenet-access-retry job; uploads succeed meanwhile', async () => {
     fake.failPermissions = 'FNRCE0003E: E_ACCESS_DENIED: the user does not have WRITE_ACL on this object';
     const up = await api(run, 'POST', '/api/v1/vendors/me/documents', { token: tok.vendor2, form: fileForm({ title: 'Profile', file: { name: 'profile.md', content: '# Company profile\nFictitious.' } }) });
