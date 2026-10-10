@@ -9,7 +9,9 @@
     "apps/web"
   ],
   "scripts": {
+    "prebuild": "node scripts/check-deps.mjs",
     "build": "npm run build -w apps/web && npm run build -w services/api",
+    "prestart": "node scripts/check-deps.mjs",
     "start": "npm start -w services/api",
     "dev": "npm run dev -w services/api",
     "test": "npm test -w services/api",
