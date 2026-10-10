@@ -19,7 +19,9 @@
     "verify:filenet": "node services/api/dist/tools/verify-filenet.js",
     "verify:ai": "node services/api/dist/tools/verify-ai.js",
     "evals": "node services/api/dist/tools/run-evals.js",
-    "demo:reset": "node scripts/demo-reset.mjs"
+    "demo:reset": "node scripts/demo-reset.mjs",
+    "config:check": "node services/api/dist/tools/config-check.js",
+    "entity:create": "node services/api/dist/tools/entity-create.js"
   },
   "keywords": [
     "tendering",

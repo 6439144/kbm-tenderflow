@@ -1,0 +1,29 @@
+# Only the OpenShift router may reach the pods (port 4000). Kubelet probes are not affected.
+# Egress is left open: FileNet, watsonx Orchestrate, PostgreSQL, SMTP and SMS endpoints differ per site
+# (see README.md for an optional egress policy).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: tenderflow-allow-router
+  labels:
+    app.kubernetes.io/name: tenderflow
+    app.kubernetes.io/component: api
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: tenderflow
+      app.kubernetes.io/component: api
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        # OpenShift 4.x router namespace (OVN-Kubernetes and OpenShift SDN labels)
+        - namespaceSelector:
+            matchLabels:
+              policy-group.network.openshift.io/ingress: ""
+        - namespaceSelector:
+            matchLabels:
+              network.openshift.io/policy-group: ingress
+      ports:
+        - protocol: TCP
+          port: 4000

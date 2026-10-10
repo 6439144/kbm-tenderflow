@@ -1,0 +1,16 @@
+# /data: embedded PGlite database (demo), filesystem content store, evidence reports.
+# Base = ReadWriteOnce (one pod). The production overlay switches to ReadWriteMany for several replicas.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: tenderflow-data
+  labels:
+    app.kubernetes.io/name: tenderflow
+    app.kubernetes.io/component: data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  # storageClassName: <cluster default when omitted>

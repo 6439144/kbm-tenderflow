@@ -38,16 +38,23 @@ export class TokenService {
     if (config.jwtPrivateKeyPem) {
       privateKey = crypto.createPrivateKey(config.jwtPrivateKeyPem);
     } else {
-      const rows = await db.query<{ private_pem: string }>('SELECT private_pem FROM signing_keys ORDER BY created_at DESC LIMIT 1');
-      if (rows[0]) privateKey = crypto.createPrivateKey(rows[0].private_pem);
-      else {
-        privateKey = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey;
-        const pem = privateKey.export({ type: 'pkcs8', format: 'pem' }).toString();
-        const jwk = crypto.createPublicKey(privateKey).export({ format: 'jwk' }) as JWK;
+      const latest = () => db.query<{ private_pem: string }>('SELECT private_pem FROM signing_keys ORDER BY created_at DESC, kid LIMIT 1');
+      let rows = await latest();
+      if (!rows[0]) {
+        // Several replicas may start together on an empty database: insert-if-absent under a transaction-scoped
+        // advisory lock, then read back, so every process signs with the same (first) key.
+        const candidate = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey;
+        const pem = candidate.export({ type: 'pkcs8', format: 'pem' }).toString();
+        const jwk = crypto.createPublicKey(candidate).export({ format: 'jwk' }) as JWK;
         const kid = await calculateJwkThumbprint(jwk);
-        await db.query('INSERT INTO signing_keys (kid, private_pem, public_jwk) VALUES ($1,$2,$3::jsonb)',
-          [kid, pem, JSON.stringify({ ...jwk, kid, alg: 'RS256', use: 'sig' })]);
+        await db.tx(async (q) => {
+          await q.query('SELECT pg_advisory_xact_lock(hashtext($1))', ['tenderflow:signing-key']);
+          await q.query(`INSERT INTO signing_keys (kid, private_pem, public_jwk) SELECT $1,$2,$3::jsonb
+                          WHERE NOT EXISTS (SELECT 1 FROM signing_keys)`, [kid, pem, JSON.stringify({ ...jwk, kid, alg: 'RS256', use: 'sig' })]);
+        });
+        rows = await latest();
       }
+      privateKey = crypto.createPrivateKey(rows[0].private_pem);
     }
     if (privateKey.asymmetricKeyType !== 'rsa') throw new Error('JWT signing key must be an RSA private key');
     const publicKey = crypto.createPublicKey(privateKey);

@@ -1,0 +1,39 @@
+# TenderFlow on OpenShift — base. Apply an overlay, not the base: oc apply -k deploy/openshift/overlays/<demo|production>
+# The Secret `tenderflow-secrets` is NOT part of this kustomization: create it first (secret.template.yaml, README.md).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: tenderflow
+      app.kubernetes.io/managed-by: kustomize
+    includeSelectors: false
+
+resources:
+  - deployment.yaml
+  - service.yaml
+  - route.yaml
+  - pvc.yaml
+  - networkpolicy.yaml
+  - pdb.yaml
+
+# Non-secret settings. Overlays merge their own values; a change rolls the pods (hashed name).
+configMapGenerator:
+  - name: tenderflow-config
+    literals:
+      - PORT=4000
+      - DATA_DIR=/data
+      - TF_EVIDENCE_DIR=/data/evidence
+      - TRUST_PROXY=1
+      - PUBLIC_BASE_URL=https://tenderflow.apps.cluster.example.com
+      - CONTENT_STORE_TYPE=filesystem
+      - SCHEDULER_ENABLED=true
+      - SHUTDOWN_DELAY_MS=5000
+      - SHUTDOWN_TIMEOUT_MS=25000
+      - NODE_OPTIONS=--max-old-space-size=768
+      - LOGIN_RATE_LIMIT_PER_MIN=30
+
+images:
+  - name: tenderflow
+    newName: image-registry.openshift-image-registry.svc:5000/tenderflow/tenderflow
+    newTag: 1.0.0-rc3

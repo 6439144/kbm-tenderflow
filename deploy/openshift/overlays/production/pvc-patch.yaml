@@ -1,0 +1,14 @@
+# Several pods share /data (evidence reports; the filesystem content store if FileNet is not used), so the claim
+# must be ReadWriteMany (e.g. OpenShift Data Foundation CephFS: storageClassName ocs-storagecluster-cephfs).
+# With FileNet as the content store /data holds no system-of-record data; it may then be replaced by an emptyDir.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: tenderflow-data
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Gi
+  # storageClassName: ocs-storagecluster-cephfs

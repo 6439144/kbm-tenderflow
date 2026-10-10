@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { productionProblems, tfEnvOf, TF_ENVS, type TfEnv } from './ops/checks.js';
 
 export const API_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const REPO_ROOT = path.resolve(API_ROOT, '..', '..');
@@ -45,6 +46,15 @@ export interface Config {
   staffNetworkBreakGlass: boolean;
   /** OIDC_ALLOW_HTTP=true — allow a plain-http OIDC issuer other than localhost (never in production). */
   oidcAllowHttp: boolean;
+  // --- ops ---
+  /** TF_ENV — development (default) | demo | test | production. production enforces ops/checks.ts at start-up. */
+  tfEnv: TfEnv;
+  /** TRUST_PROXY — Express 'trust proxy' (hops, true/false or a list of addresses); default 1 (one router hop). */
+  trustProxy: boolean | number | string;
+  /** SHUTDOWN_DELAY_MS — on SIGTERM, keep serving (answering /ready with 503) this long before closing the listener. */
+  shutdownDelayMs: number;
+  /** SHUTDOWN_TIMEOUT_MS — after this, connections still open are closed and the process exits. */
+  shutdownTimeoutMs: number;
 }
 
 export class ConfigError extends Error {}
@@ -102,12 +112,19 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const mfaEncKey = opt(env.MFA_ENC_KEY);
   if (mfaEncKey && Buffer.from(mfaEncKey, 'base64').length !== 32) problems.push('MFA_ENC_KEY must be base64 of exactly 32 bytes');
 
+  // --- ops --- TF_ENV=production: refuse to start on any production-safety finding (all reasons listed at once).
+  const tfEnv = tfEnvOf(env);
+  if (!tfEnv) problems.push(`TF_ENV must be one of ${TF_ENVS.join(', ')}`);
+  const refused = productionProblems(env);
+  problems.push(...refused);
+
   if (missing.length || problems.length) {
     const lines = [
       ...missing.map((m) => `  - missing required environment variable: ${m}`),
       ...problems.map((p) => `  - ${p}`),
     ];
-    throw new ConfigError(`TenderFlow configuration error:\n${lines.join('\n')}`);
+    const head = refused.length ? 'TenderFlow refuses to start with TF_ENV=production' : 'TenderFlow configuration error';
+    throw new ConfigError(`${head}:\n${lines.join('\n')}\n(run \`npm run config:check\` for the full report)`);
   }
 
   const port = Number(opt(env.PORT) ?? 4000);
@@ -140,8 +157,22 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     // --- insight ---
     publicBoardRateLimit: Math.max(1, Number(opt(env.PUBLIC_BOARD_RATE_LIMIT_PER_MIN) ?? 60) || 60),
     notify: loadNotifyConfig(env),
+    // --- ops ---
+    tfEnv: tfEnv!,
+    trustProxy: parseTrustProxy(opt(env.TRUST_PROXY)),
+    shutdownDelayMs: nonNegative(opt(env.SHUTDOWN_DELAY_MS), 0),
+    shutdownTimeoutMs: nonNegative(opt(env.SHUTDOWN_TIMEOUT_MS), 20_000),
   };
 }
+
+// --- ops ---
+function parseTrustProxy(v: string | undefined): boolean | number | string {
+  if (v === undefined) return 1;
+  if (/^\d+$/.test(v)) return Number(v);
+  if (/^(true|false)$/i.test(v)) return v.toLowerCase() === 'true';
+  return v; // e.g. 'loopback, 10.128.0.0/14'
+}
+const nonNegative = (v: string | undefined, d: number) => { const n = Number(v); return v !== undefined && Number.isFinite(n) && n >= 0 ? n : d; };
 
 // --- notify --- (docs/NOTIFICATIONS-AND-ESCALATION.md)
 export interface NotifyConfig {
