@@ -22,7 +22,7 @@ approver ≠ creator, award approver ≠ recommender, append-only HMAC-chained a
 - Both IBM services are optional at start-up: without them the product runs on a local file store and every AI feature says
   "not connected" — never fake output.
 
-Docs: [BUILD-SPEC](docs/BUILD-SPEC.md) · [Implemented user stories](docs/USER-STORIES.md) ·
+Docs: [BUILD-SPEC](docs/BUILD-SPEC.md) · [Installation & operations (Windows, OpenShift, PostgreSQL, backups, upgrades)](docs/INSTALLATION-AND-OPERATIONS.md) · [Implemented user stories](docs/USER-STORIES.md) ·
 [What is verified (rc3)](docs/release-notes-v1.0.0-rc3.md) · [MOI reference configuration](docs/MOI-REFERENCE-CONFIGURATION.md) ·
 [Security](docs/SECURITY-FEATURES.md) · [Notifications & escalation](docs/NOTIFICATIONS-AND-ESCALATION.md) · [Analytics & evidence](docs/ANALYTICS-AND-EVIDENCE.md) · FileNet: [README](docs/filenet/README.md), [showcase](docs/filenet/SHOWCASE.md) ·
 AI agents: [agents/README.md](agents/README.md) · [Document intelligence](docs/DOCUMENT-INTELLIGENCE.md)
@@ -108,6 +108,11 @@ Data (database + files) lives in `.\data`. Delete that folder (or `npm run demo:
 - Sealed bids: each file is AES-256-GCM encrypted by TenderFlow with a per-bid key (wrapped by `BID_MASTER_KEY`) before it reaches the content store, so not even content-store administrators can read a bid before the recorded opening.
 - Segregation of duties: tender approver ≠ creator; award approver ≠ recommender; opening only by the committee chair after the deadline.
 - Audit events are append-only (database trigger) and HMAC-chained; `GET /api/v1/audit/verify` detects tampering.
+
+## Operations
+`npm run config:check` (every setting OK/WARN/FAIL, secrets never printed) · `npm run entity:create -- --code … --name-en … --name-ar …`
+(new government entity with its first administrator) · `TF_ENV=production` refuses unsafe settings at start-up ·
+OpenShift: [`Containerfile`](Containerfile) and [`deploy/openshift`](deploy/openshift/README.md) · `GET /api/v1/version`, `/health`, `/ready`.
 
 ## Development
 `npm test` (API integration tests incl. the full cycle, plus the FileNet store and showcase tests in `services/api/test/`) · `npx tsx --test services/api/src/ai/*.test.ts` (AI unit tests) · `npm run dev` (API with reload) · `npm run dev -w apps/web` (UI on :5173, proxied to :4000).

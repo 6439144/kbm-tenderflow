@@ -8,7 +8,7 @@ import { evaluateConfig, isSecretVar, tfEnvOf, type CheckLevel } from './checks.
 export interface ReportLine { id: string; level: CheckLevel; message: string }
 export interface ConfigReport { tfEnv: string; checks: ReportLine[]; fails: number; warns: number; exitCode: 0 | 1 }
 
-/** Replace any secret value (and the password of DATABASE_URL) that might appear in `text`. */
+/** Replace any secret value (and the password of DATABASE_URL) that might appear in `text` (values shorter than 4 characters cannot be told apart from ordinary words). */
 export function scrubSecrets(text: string, env: NodeJS.ProcessEnv): string {
   const values = new Set<string>();
   for (const [k, v] of Object.entries(env)) {
@@ -19,7 +19,7 @@ export function scrubSecrets(text: string, env: NodeJS.ProcessEnv): string {
   }
   try {
     const u = env.DATABASE_URL ? new URL(env.DATABASE_URL) : null;
-    if (u?.password) { values.add(u.password); values.add(decodeURIComponent(u.password)); }
+    if (u?.password) for (const pw of [u.password, decodeURIComponent(u.password)]) if (pw.length >= 4) values.add(pw);
   } catch { /* not a URL */ }
   let out = text;
   for (const v of [...values].sort((a, b) => b.length - a.length)) out = out.split(v).join('***');
@@ -36,7 +36,7 @@ export async function buildConfigReport(env: NodeJS.ProcessEnv, opts: { connect?
   } catch (err) {
     if (!(err instanceof ConfigError)) throw err;
     const reasons = err.message.split('\n').filter((l) => l.startsWith('  - ')).map((l) => l.slice(4));
-    checks.push({ id: 'STARTUP', level: 'FAIL', message: `the API would refuse to start (${reasons.length} reason${reasons.length === 1 ? '' : 's'} above)` });
+    checks.push({ id: 'STARTUP', level: 'FAIL', message: `the API would refuse to start: ${reasons.length} reason${reasons.length === 1 ? '' : 's'} (see the FAIL lines)` });
   }
 
   if (opts.connect) {

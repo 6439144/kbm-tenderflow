@@ -1,0 +1,22 @@
+# PGlite is a single-process database in /data: exactly one pod, and the old pod must stop before the new one
+# opens the same files (Recreate, never RollingUpdate).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tenderflow
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+    rollingUpdate: null
+  template:
+    spec:
+      containers:
+        - name: api
+          resources:
+            requests:
+              cpu: 250m
+              memory: 768Mi
+            limits:
+              cpu: "1"
+              memory: 1536Mi

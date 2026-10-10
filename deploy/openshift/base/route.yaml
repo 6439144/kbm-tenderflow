@@ -1,0 +1,25 @@
+# Edge TLS at the OpenShift router; plain http is redirected to https. The app sees the client IP through
+# X-Forwarded-For (TRUST_PROXY=1). Without spec.host the router generates <route>-<namespace>.<apps domain>;
+# PUBLIC_BASE_URL must equal the final https URL (token issuer, links in e-mails).
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: tenderflow
+  labels:
+    app.kubernetes.io/name: tenderflow
+    app.kubernetes.io/component: api
+  annotations:
+    # Orchestrate calls (WXO_TIMEOUT_MS, default 90 s) and uploads can take longer than the router default (30 s).
+    haproxy.router.openshift.io/timeout: 120s
+    haproxy.router.openshift.io/hsts_header: max-age=31536000;includeSubDomains
+spec:
+  to:
+    kind: Service
+    name: tenderflow
+    weight: 100
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+  wildcardPolicy: None

@@ -417,3 +417,55 @@ test('PostgreSQL: two pools migrating at once apply each migration once; one sig
     await admin.close();
   }
 });
+
+// ---------------------------------------------------------------- packaging (checked by reading; the image itself is built outside the test suite)
+const REPO = path.resolve(API_DIR, '..', '..');
+const read = (p: string) => fs.readFileSync(path.join(REPO, p), 'utf8');
+
+test('Containerfile: UBI multi-stage, non-root, production deps only, port, healthcheck, labels; ignore files keep secrets out', () => {
+  const cf = read('Containerfile');
+  assert.match(cf, /FROM \$\{BUILDER_IMAGE\} AS build/);
+  assert.match(cf, /ubi9\/nodejs-22:latest/);
+  assert.match(cf, /ubi9\/nodejs-22-minimal:latest/);
+  assert.match(cf, /npm ci --omit=dev/);
+  assert.match(cf, /chown -R 1001:0 \/data && chmod -R g=u \/data/);
+  assert.match(cf, /\nUSER 1001\n/);
+  assert.match(cf, /\nEXPOSE 4000\n/);
+  assert.match(cf, /HEALTHCHECK [\s\S]*\/health/);
+  assert.match(cf, /CMD \["node", "services\/api\/dist\/server\.js"\]/);
+  for (const l of ['name=', 'version=', 'vendor="KBM"']) assert.ok(cf.includes(l), l);
+  for (const f of ['.containerignore', '.dockerignore']) {
+    const lines = read(f).split('\n').map((l) => l.trim());
+    for (const must of ['.env', '.env.*', '!.env.example', 'data', '**/node_modules', '.git']) assert.ok(lines.includes(must), `${f}: ${must}`);
+  }
+});
+
+test('OpenShift manifests: probes, security context, demo = 1 pod Recreate PGlite, production = 2 pods PostgreSQL; secret template has placeholders only', () => {
+  const dep = read('deploy/openshift/base/deployment.yaml');
+  for (const re of [/readinessProbe:\s+httpGet:\s+path: \/ready/, /livenessProbe:\s+httpGet:\s+path: \/health/, /runAsNonRoot: true/,
+    /allowPrivilegeEscalation: false/, /readOnlyRootFilesystem: true/, /mountPath: \/data/, /claimName: tenderflow-data/, /secretRef:\s+name: tenderflow-secrets/])
+    assert.match(dep, re);
+  assert.doesNotMatch(dep, /^\s+runAsUser:/m, 'OpenShift assigns the UID');
+  assert.match(read('deploy/openshift/base/route.yaml'), /termination: edge\s+insecureEdgeTerminationPolicy: Redirect/);
+  const base = read('deploy/openshift/base/kustomization.yaml');
+  assert.doesNotMatch(base, /^\s*-\s*secret\.template\.yaml/m, 'the template is never applied');
+  const demo = read('deploy/openshift/overlays/demo/kustomization.yaml') + read('deploy/openshift/overlays/demo/deployment-patch.yaml');
+  for (const re of [/TF_ENV=demo/, /DEMO_MODE=true/, /replicas: 1/, /type: Recreate/]) assert.match(demo, re);
+  const prod = read('deploy/openshift/overlays/production/kustomization.yaml') + read('deploy/openshift/overlays/production/deployment-patch.yaml');
+  for (const re of [/TF_ENV=production/, /TRUST_PROXY=1/, /DEMO_MODE=false/, /SEED_DEMO=false/, /replicas: 2/]) assert.match(prod, re);
+  assert.doesNotMatch(prod, /DATABASE_URL=|PASSWORD=|_KEY=/, 'no secret values in the production overlay');
+
+  // every value in the Secret template is a <placeholder>, and production refuses to start with the template as-is
+  const tpl = read('deploy/openshift/base/secret.template.yaml');
+  const values = [...tpl.matchAll(/^ {2}([A-Z0-9_]+): "(.*)"$/gm)].map((m) => [m[1], m[2]] as const);
+  assert.ok(values.length >= 10);
+  for (const [k, v] of values) assert.match(v, /<[^>]+>/, `${k} must be a placeholder`);
+  const env = { ...Object.fromEntries(values), TF_ENV: 'production', PUBLIC_BASE_URL: 'https://x.example.gov.kw', DATA_DIR: tmp() } as Record<string, string>;
+  delete env.DEMO_PASSWORD;
+  assert.throws(() => loadConfig(env), ConfigError);
+});
+
+test('config:check does not mangle messages for a short database password', async () => {
+  const r = await buildConfigReport({ ...goodProd(), DATABASE_URL: 'postgresql://a:b@db.example.local/tf' });
+  assert.ok(r.checks.some((c) => c.id === 'BID_MASTER_KEY' && /32 bytes/.test(c.message)));
+});

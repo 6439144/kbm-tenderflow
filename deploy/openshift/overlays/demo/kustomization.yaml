@@ -1,0 +1,34 @@
+# Demo / presentation environment: ONE pod, embedded PGlite on the PVC, guided demo with fictitious seed data.
+#   oc new-project tenderflow-demo
+#   oc create secret generic tenderflow-secrets --from-env-file=tenderflow-demo-secrets.env   # BID_MASTER_KEY, AUDIT_SIGNING_KEY, DEMO_PASSWORD
+#   oc apply -k deploy/openshift/overlays/demo
+# Never expose a demo deployment with real data: DEMO_MODE lets any signed-in presenter switch persona.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: tenderflow-demo
+
+resources:
+  - ../../base
+
+labels:
+  - pairs:
+      app.kubernetes.io/instance: tenderflow-demo
+    includeSelectors: false
+
+configMapGenerator:
+  - name: tenderflow-config
+    behavior: merge
+    literals:
+      - TF_ENV=demo
+      - DEMO_MODE=true
+      - SEED_DEMO=true
+      - CONTENT_STORE_TYPE=filesystem
+      - PUBLIC_BASE_URL=https://tenderflow-demo.apps.cluster.example.com
+
+patches:
+  - path: deployment-patch.yaml
+
+images:
+  - name: tenderflow
+    newName: image-registry.openshift-image-registry.svc:5000/tenderflow-demo/tenderflow
+    newTag: 1.0.0-rc3

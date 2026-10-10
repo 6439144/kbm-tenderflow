@@ -1,0 +1,15 @@
+# Voluntary disruptions (node drains, upgrades) evict at most one pod at a time.
+# With one replica (demo) a drain may still evict it; with two or more one pod always keeps serving.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: tenderflow
+  labels:
+    app.kubernetes.io/name: tenderflow
+    app.kubernetes.io/component: api
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tenderflow
+      app.kubernetes.io/component: api

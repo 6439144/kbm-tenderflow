@@ -1,0 +1,24 @@
+# Build context exclusions (Podman/Buildah read .containerignore, Docker reads .dockerignore; keep both identical).
+# Never send secrets, local data or installed modules into the image build.
+.git
+.github
+.claude
+.claude-sync
+.env
+.env.*
+!.env.example
+data
+**/data/pg
+**/node_modules
+**/dist
+**/*.tsbuildinfo
+**/*.log
+coverage
+docs
+deploy
+services/api/test
+tenderflow-sbom.json
+*.sqlite
+*.sqlite3
+.DS_Store
+Thumbs.db

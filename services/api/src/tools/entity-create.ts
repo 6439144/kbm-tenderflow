@@ -69,20 +69,21 @@ async function main() {
     const nothing = !c.tenant && !c.profile && !c.admin && !c.templates && !c.documentTypes && !c.notificationTemplates && !c.approvalSla;
     console.log(nothing ? `Entity '${r.tenantId}' is already fully provisioned: nothing changed (${db.kind}).`
       : `${dryRun ? '[dry run] would provision' : 'Provisioned'} entity '${r.tenantId}' (${db.kind}):`);
-    console.log(`  entity record ............ ${c.tenant ? 'created' : 'already existed'}`);
-    console.log(`  entity profile ........... ${c.profile ? 'created' : 'unchanged'}`);
-    console.log(`  administrator ............ ${r.adminUsername} ${c.admin ? 'created' : '(already existed)'}`);
-    console.log(`  cycle templates .......... ${c.templates} created`);
+    const made = dryRun ? 'would be created' : 'created';
+    console.log(`  entity record ............ ${c.tenant ? made : 'already existed'}`);
+    console.log(`  entity profile ........... ${c.profile ? made : 'unchanged'}`);
+    console.log(`  administrator ............ ${r.adminUsername} ${c.admin ? made : '(already existed)'}`);
+    console.log(`  cycle templates .......... ${c.templates} ${made}`);
     console.log(`  document types ........... ${dryRun ? 'defaults' : `${c.documentTypes} installed`}`);
     console.log(`  notification templates ... ${dryRun ? 'defaults' : `${c.notificationTemplates} installed`}`);
-    console.log(`  approval service level ... ${c.approvalSla ? 'created (48 h, escalate to next level)' : 'unchanged'}`);
+    console.log(`  approval service level ... ${c.approvalSla ? `${made} (48 h, escalate to next level)` : 'unchanged'}`);
     for (const w of r.warnings) console.log(`  note: ${w}`);
     if (r.oneTimePassword) {
       console.log('\nOne-time password for the administrator (shown only now; stored only as a hash):');
       console.log(`  ${r.oneTimePassword}`);
       console.log('Hand it over through a secure channel. The administrator should enrol two-step verification at first sign-in and');
       console.log('create named administrator accounts; then reset or disable this bootstrap account (Admin → Identity & access).');
-    } else if (c.admin) console.log('\nAdministrator password: taken from TF_ENTITY_ADMIN_PASSWORD (not printed).');
+    } else if (c.admin && !dryRun) console.log('\nAdministrator password: taken from TF_ENTITY_ADMIN_PASSWORD (not printed).');
   } finally {
     await db.close();
   }
