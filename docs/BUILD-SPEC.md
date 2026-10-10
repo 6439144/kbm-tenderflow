@@ -4,6 +4,15 @@ Built by Claude's agents on branch `claude/v1-full-cycle`. Supersedes TONIGHT.md
 where they conflict. Rules 9–13 in AGENTS.md apply: no simulated success, no canned AI, no claims
 without evidence.
 
+## 0. Deployment model (added for 1.0: dedicated entity edition)
+
+One installation per government entity (`TENANCY_MODE=dedicated`, the default; `ENTITY_ID` required in production).
+Every request is bound to that entity: sign-in and supplier registration need no entity id, any other entity id is
+answered with 404, tokens of another entity are refused, entity creation is disabled, jobs are scoped, and the public
+board and feeds show only the entity. `TENANCY_MODE=shared` (several entities, the original multi-tenant behaviour) is
+kept for KBM's multi-entity demo and the tests. Full description: [DEPLOYMENT-MODEL.md](DEPLOYMENT-MODEL.md).
+Where sections below say "tenant", read "entity"; in a dedicated installation there is exactly one.
+
 ## 1. The full cycle (what the product does, end to end)
 
 | # | Stage | Actor (role) | What happens | Stored where | Status after |
@@ -81,14 +90,15 @@ audit_events(seq bigserial pk, id uuid, tenant_id, actor_id, actor_roles text[],
 
 ## 6. REST API (all JSON; `Authorization: Bearer <jwt>`; errors `{code,message}`)
 Auth & meta
-- `POST /api/v1/auth/login` {tenantId, username, password} → {token, user:{id,username,displayName,roles,tenantId,vendorId}}  (public)
+- `GET /api/v1/public/deployment` → {mode: 'dedicated'|'shared', entity: {id,nameEn,nameAr,primaryColor,logoText}|null}  (public)
+- `POST /api/v1/auth/login` {tenantId (optional in a dedicated installation; must be its entity), username, password} → {token, user:{id,username,displayName,roles,tenantId,vendorId}}  (public)
 - `GET /api/v1/auth/me` → user
 - `GET /api/v1/public/tenants` → [{id,nameEn,nameAr,primaryColor}]  (public)
 - `GET /health` (process) · `GET /ready` (real checks: db, content store ping, ai configured/ok; anonymous callers and probes get `{status}` only, details for a signed-in TENANT_ADMIN/AUDITOR — docs/SECURITY-FEATURES.md §6.4)
 - `GET /.well-known/jwks.json`
 
 Vendors
-- `POST /api/v1/public/vendors/register` {tenantId, legalNameEn, legalNameAr, crNumber, email, phone, categories[], username, password} → vendor (public; creates PENDING vendor + VENDOR user)
+- `POST /api/v1/public/vendors/register` {tenantId (optional in a dedicated installation; must be its entity), legalNameEn, legalNameAr, crNumber, email, phone, categories[], username, password} → vendor (public; creates PENDING vendor + VENDOR user)
 - `POST /api/v1/vendors/me/documents` multipart(file, title) → document  (VENDOR)
 - `GET /api/v1/vendors` ?status= (OFFICER, DIRECTOR, ADMIN, AUDITOR) · `GET /api/v1/vendors/:id` (+documents)
 - `POST /api/v1/vendors/:id/decision` {decision:'APPROVE'|'REJECT', reason} (OFFICER)

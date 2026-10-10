@@ -1,4 +1,5 @@
 // Tender lifecycle: draft → approve → publish → (auto) close; cancel; pack/addendum documents; clarifications.
+import { boundEntity } from '../tenancy.js';
 import type { Ctx } from '../ctx.js';
 import { auditTx, hasRole, isStaff, isVendor } from '../ctx.js';
 import type { Actor } from '../auth/tokens.js';
@@ -93,7 +94,9 @@ export async function autoClose(ctx: Ctx, t: TenderRow): Promise<TenderRow> {
 
 /** Interval job: close every due tender (all tenants). */
 export async function closeDueTenders(ctx: Ctx): Promise<number> {
-  const due = await ctx.db.query<TenderRow>(`SELECT * FROM tenders WHERE status='PUBLISHED' AND submission_deadline <= $1`, [now()]);
+  // Dedicated installation: only its own entity's tenders (tenancy.ts); shared: every entity.
+  const due = await ctx.db.query<TenderRow>(`SELECT * FROM tenders WHERE status='PUBLISHED' AND submission_deadline <= $1 AND ($2::text IS NULL OR tenant_id=$2)`,
+    [now(), boundEntity(ctx.config)]);
   for (const t of due) await autoClose(ctx, t);
   return due.length;
 }

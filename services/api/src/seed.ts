@@ -18,6 +18,7 @@ import { installDemoLowcode } from './lowcode/seed-content.js';
 import { setClassification, upsertActivityCode, purchaseDocuments } from './services/eligibility.js';
 import { createRequest } from './services/requests.js';
 import { seedMoi } from './seed-moi.js';
+import { DEMO_ENTITIES } from './tenancy.js';
 
 export const SEED_FILES_DIR = path.join(REPO_ROOT, 'seed', 'files');
 
@@ -78,11 +79,24 @@ async function codes(ctx: Ctx, admin: Actor, list: [string, string, string][]) {
   for (const [code, nameEn, nameAr] of list) await upsertActivityCode(ctx, admin, { code, nameEn, nameAr });
 }
 
-export async function seedDemo(ctx: Ctx): Promise<void> {
+/**
+ * Seed the demo entities (all three by default; a dedicated installation passes its one entity — DEMO_ENTITY).
+ * Each entity is seeded by its own function and never depends on another entity's data.
+ */
+export async function seedDemo(ctx: Ctx, entities: readonly string[] = DEMO_ENTITIES): Promise<void> {
   const password = ctx.config.demoPassword!;
-  console.log('[seed] creating demo entities, cycle templates, users, vendors, requests and tenders …');
+  const unknown = entities.filter((e) => !(DEMO_ENTITIES as readonly string[]).includes(e));
+  if (unknown.length) throw new Error(`the demo seed has no entity ${unknown.join(', ')} (known: ${DEMO_ENTITIES.join(', ')})`);
+  console.log(`[seed] creating demo ${entities.length === 1 ? 'entity' : 'entities'} ${entities.join(', ')}: cycle templates, users, vendors, requests and tenders …`);
+  if (entities.includes('kea')) await seedKea(ctx, password);
+  if (entities.includes('gcia')) await seedGcia(ctx, password);
+  if (entities.includes('moi')) await seedMoi(ctx, password); // MOI reference configuration (fictitious demo data)
+  await (await import('./features/notify.js')).seedNotifications(ctx); // NOTIFY: notification templates + sample approval SLA
+  console.log(`[seed] done: ${entities.join(', ')}; users officer/director/undersecretary/chair/evaluator1/evaluator2/admin/auditor/vendor1..4 (moi: see README)`);
+}
 
-  // ---------------- Entity 1: Kuwait Energy Authority (fictitious) — public tender, one envelope ----------------
+/** Entity kea — Kuwait Energy Authority (fictitious): public tender, one envelope. */
+async function seedKea(ctx: Ctx, password: string): Promise<void> {
   await createTenant(ctx, { id: 'kea', nameEn: 'Kuwait Energy Authority (fictitious)', nameAr: 'هيئة الطاقة الكويتية (وهمية)', primaryColor: '#0B4F6C' });
   await ctx.db.query(`UPDATE tenants SET profile=$1::jsonb WHERE id='kea'`, [JSON.stringify({
     numberingPattern: 'KEA-{YYYY}-{SEQ3}', receiptPattern: 'KEA-R-{YYYY}-{SEQ5}', identityProvider: 'LOCAL',
@@ -164,8 +178,11 @@ export async function seedDemo(ctx: Ctx): Promise<void> {
   } finally {
     setClockOffset(0);
   }
+  await tenders.closeDueTenders(ctx);
+}
 
-  // ---------------- Entity 2: Gulf Coast Infrastructure Authority (fictitious) — RFP, two envelopes ----------------
+/** Entity gcia — Gulf Coast Infrastructure Authority (fictitious): RFP, two envelopes. */
+async function seedGcia(ctx: Ctx, password: string): Promise<void> {
   await createTenant(ctx, { id: 'gcia', nameEn: 'Gulf Coast Infrastructure Authority (fictitious)', nameAr: 'هيئة البنية التحتية الساحلية (وهمية)', primaryColor: '#7A4B0B' });
   await ctx.db.query(`UPDATE tenants SET profile=$1::jsonb WHERE id='gcia'`, [JSON.stringify({
     numberingPattern: 'GCIA-RFP-{YYYY}-{SEQ3}', receiptPattern: 'GCIA-R-{YYYY}-{SEQ5}', identityProvider: 'LOCAL',
@@ -219,7 +236,4 @@ export async function seedDemo(ctx: Ctx): Promise<void> {
     setClockOffset(0);
   }
   await tenders.closeDueTenders(ctx);
-  await seedMoi(ctx, password); // entity 3: MOI reference configuration (fictitious demo data)
-  await (await import('./features/notify.js')).seedNotifications(ctx); // NOTIFY: notification templates + sample approval SLA
-  console.log('[seed] done: entities kea (public tender) and gcia (two-envelope RFP); users officer/director/undersecretary/chair/evaluator1/evaluator2/admin/auditor/vendor1..4');
 }

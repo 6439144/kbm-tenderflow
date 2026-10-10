@@ -71,6 +71,20 @@ export function evaluateConfig(env: NodeJS.ProcessEnv): ConfigCheck[] {
   if (tfEnv === null) fail('TF_ENV', `TF_ENV must be one of ${TF_ENVS.join(', ')} (got '${String(env.TF_ENV).slice(0, 20)}')`);
   else ok('TF_ENV', `TF_ENV=${tfEnv}${production ? ' (production safety rules enforced at start-up)' : ''}`);
 
+  // --- deployment model (docs/DEPLOYMENT-MODEL.md) ---
+  const mode = (opt(env.TENANCY_MODE) ?? 'dedicated').toLowerCase();
+  const entityId = opt(env.ENTITY_ID)?.toLowerCase();
+  if (mode !== 'dedicated' && mode !== 'shared') fail('TENANCY_MODE', `TENANCY_MODE must be dedicated or shared (got '${mode.slice(0, 20)}')`);
+  else if (mode === 'shared') {
+    if (production) warn('TENANCY_MODE', 'TENANCY_MODE=shared: several government entities in one installation (KBM multi-entity demo); the product is sold as one installation per entity (TENANCY_MODE=dedicated)');
+    else ok('TENANCY_MODE', 'TENANCY_MODE=shared (several entities in one installation)');
+  } else ok('TENANCY_MODE', `TENANCY_MODE=dedicated (one installation = one government entity)`);
+  if (entityId !== undefined && !/^[a-z0-9_-]{2,40}$/.test(entityId)) fail('ENTITY_ID', 'ENTITY_ID must be an entity code of 2-40 characters a-z, 0-9, _ or -');
+  else if (mode === 'dedicated') {
+    if (entityId) ok('ENTITY_ID', `ENTITY_ID=${entityId}`);
+    else rule('ENTITY_ID', 'ENTITY_ID is not set: a dedicated installation must name the government entity it serves (the code given to `npm run entity:create`)');
+  }
+
   // --- keys ---
   const bidRaw = opt(env.BID_MASTER_KEY);
   const auditKey = opt(env.AUDIT_SIGNING_KEY);

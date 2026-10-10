@@ -15,6 +15,7 @@ import { apiRouter, errorHandler } from './routes.js';
 import { securityGate } from './features/security.js';
 import { closeDueTenders } from './services/tenders.js';
 import { seedDemo } from './seed.js';
+import { resolveTenancy } from './tenancy.js';
 
 /**
  * HARDEN: Content-Security-Policy of the single-page app and the API (docs/SECURITY-FEATURES.md). No inline or remote
@@ -41,11 +42,18 @@ export interface AppHandle {
   startDraining(): void;
 }
 
-export async function createApp(config: Config, overrides: { store?: ContentStore; ai?: AiService } = {}): Promise<AppHandle> {
-  fs.mkdirSync(config.dataDir, { recursive: true });
-  const db = await openDb({ databaseUrl: config.databaseUrl, dataDir: config.dataDir });
+export async function createApp(baseConfig: Config, overrides: { store?: ContentStore; ai?: AiService } = {}): Promise<AppHandle> {
+  fs.mkdirSync(baseConfig.dataDir, { recursive: true });
+  const db = await openDb({ databaseUrl: baseConfig.databaseUrl, dataDir: baseConfig.dataDir });
+  // Deployment model (tenancy.ts): bind a dedicated installation to its entity before anything can serve a request.
+  let config: Config;
+  let tenantIds: string[];
   try {
     await migrate(db);
+    tenantIds = (await db.query<{ id: string }>('SELECT id FROM tenants ORDER BY id')).map((r) => r.id);
+    const t = resolveTenancy(baseConfig, tenantIds);
+    for (const w of t.warnings) console.warn(`[tenancy] ${w}`);
+    config = { ...baseConfig, tenancyMode: t.mode, entityId: t.entityId ?? undefined };
   } catch (err) {
     await db.close();
     throw err;
@@ -55,10 +63,12 @@ export async function createApp(config: Config, overrides: { store?: ContentStor
   const tokens = await TokenService.init(db, config);
   const ctx: Ctx = { db, config, store, ai, tokens };
 
-  if (config.seedDemo) {
-    const tenants = await db.query<{ n: string }>('SELECT count(*)::text AS n FROM tenants');
-    if (Number(tenants[0].n) === 0) await seedDemo(ctx);
-  }
+  // Demo seed on an empty database: a dedicated installation seeds only its own (demo) entity, shared mode all three.
+  if (config.seedDemo && tenantIds.length === 0)
+    await seedDemo(ctx, config.tenancyMode === 'dedicated' && config.entityId ? [config.entityId] : undefined);
+  if (!process.env.NODE_TEST_CONTEXT) console.log(config.tenancyMode === 'dedicated'
+    ? `[tenancy] dedicated installation for entity '${config.entityId ?? '(not provisioned yet)'}'`
+    : '[tenancy] shared installation (several entities)');
 
   const app = express();
   app.disable('x-powered-by');

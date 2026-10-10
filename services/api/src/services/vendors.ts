@@ -9,6 +9,7 @@ import { insertDocument, publicDoc, putDocument, validateUpload, type DocumentRo
 import { emitDocumentEvent } from './document-events.js';
 import { notifyApplicationReceived } from './vendor-lifecycle.js';
 import { policiesOf } from './entity-policies.js';
+import { publicEntity } from '../tenancy.js';
 
 export interface VendorRow {
   id: string; tenant_id: string; legal_name_en: string; legal_name_ar: string; cr_number: string; email: string;
@@ -17,7 +18,8 @@ export interface VendorRow {
 }
 
 export async function registerVendor(ctx: Ctx, body: any) {
-  const tenantId = reqStr(body?.tenantId, 'tenantId', 40);
+  // Dedicated installation: suppliers register with this entity only; another tenantId → 404 (tenancy.ts).
+  const tenantId = publicEntity(ctx.config, body?.tenantId) ?? reqStr(body?.tenantId, 'tenantId', 40);
   const t = await ctx.db.query(`SELECT 1 FROM tenants WHERE id=$1 AND status='ACTIVE'`, [tenantId]);
   if (!t.length) throw notFound('Tenant');
   const categories = Array.isArray(body?.categories) ? body.categories.filter((c: unknown) => typeof c === 'string' && c.trim()).map((c: string) => c.trim()) : [];

@@ -18,7 +18,7 @@ approver ≠ creator, award approver ≠ recommender, append-only HMAC-chained a
   through Active Directory (OIDC) and a staff network allowlist. Tender documents can be view-only or downloaded
   as a watermarked copy. Editable bilingual notifications go out by in-app, e-mail and SMS, with a delivery log.
   Approval service levels escalate automatically. Every role has a dashboard, there are procurement analytics, an
-  auditor evidence pack, and a public tender board across entities.
+  auditor evidence pack, and a public tender board of the entity's open tenders.
 - **Low-code Process Studio:** each entity customises its process without code — custom fields and calculated values on
   tender, request and vendor forms; visual rules that route approvals, stop steps until conditions are met, create tasks,
   notify and call other systems through signed webhooks; drafts, simulation, versioning and four-eyes publishing; packages
@@ -26,12 +26,22 @@ approver ≠ creator, award approver ≠ recommender, append-only HMAC-chained a
 - Both IBM services are optional at start-up: without them the product runs on a local file store and every AI feature says
   "not connected" — never fake output.
 
-Docs: [BUILD-SPEC](docs/BUILD-SPEC.md) · [Installation & operations (Windows, OpenShift, PostgreSQL, backups, upgrades)](docs/INSTALLATION-AND-OPERATIONS.md) · [Implemented user stories](docs/USER-STORIES.md) ·
+**One installation per government entity.** TenderFlow is sold to each government entity separately and each works in
+separation: by default (`TENANCY_MODE=dedicated`, `ENTITY_ID=<entity code>`) an installation serves exactly one entity
+with its own database, FileNet object store (or root folder), Orchestrate instance, keys, committees, suppliers and
+branding. Sign-in and supplier registration have no entity picker, the public board shows only that entity, and any
+other entity id is answered with 404. `TENANCY_MODE=shared` (several entities in one installation) is kept for KBM's
+multi-entity demo and the tests. Details: [docs/DEPLOYMENT-MODEL.md](docs/DEPLOYMENT-MODEL.md).
+
+Docs: [Deployment model](docs/DEPLOYMENT-MODEL.md) · [BUILD-SPEC](docs/BUILD-SPEC.md) · [Installation & operations (Windows, OpenShift, PostgreSQL, backups, upgrades)](docs/INSTALLATION-AND-OPERATIONS.md) · [Implemented user stories](docs/USER-STORIES.md) ·
 [What is verified (rc5)](docs/release-notes-v1.0.0-rc5.md) · [Low-code Process Studio](docs/LOW-CODE-STUDIO.md) · [MOI reference configuration](docs/MOI-REFERENCE-CONFIGURATION.md) ·
 [Security](docs/SECURITY-FEATURES.md) · [Notifications & escalation](docs/NOTIFICATIONS-AND-ESCALATION.md) · [Analytics & evidence](docs/ANALYTICS-AND-EVIDENCE.md) · FileNet: [README](docs/filenet/README.md), [showcase](docs/filenet/SHOWCASE.md) ·
 AI agents: [agents/README.md](agents/README.md) · [Document intelligence](docs/DOCUMENT-INTELLIGENCE.md)
 
 ## Three demo entities, three different cycles (all demo data is fictitious)
+
+A dedicated installation seeds **one** of them (`DEMO_ENTITY=kea|gcia|moi`, default `kea`). To show all three side by
+side in one installation (KBM's multi-entity demo), set `TENANCY_MODE=shared` and leave `ENTITY_ID` empty.
 
 | Entity | Default cycle | What it shows |
 |---|---|---|
@@ -68,7 +78,7 @@ All use the password you set in `DEMO_PASSWORD`.
 ## Guided demo for presentations
 
 Set `DEMO_MODE=true` in `.env` (never in production). After login a **Guided demo** button opens the Demo Story:
-13 chapters for `kea`, a "different cycle" track for `gcia` and an 8-chapter MOI reference track, each switching persona (real token, audited),
+13 chapters for `kea`, a "different cycle" track for `gcia` and an 8-chapter MOI reference track (a dedicated installation shows only its own entity's track), each switching persona (real token, audited),
 opening the right screen, highlighting what to click and showing live FileNet / Orchestrate evidence.
 First-time users of every role also get a short tour of their screens. To start again from clean demo data:
 `npm run demo:reset` (dry run) then `npm run demo:reset -- --yes`.
@@ -81,6 +91,7 @@ copy .env.example .env                            # first time only
 npm install
 npm run gen-keys                                  # first time only: paste both printed lines into .env
 notepad .env                                      # DEMO_PASSWORD=<choose one>, SEED_DEMO=true, DEMO_MODE=true
+                                                  # one entity (default): DEMO_ENTITY=kea | all three: TENANCY_MODE=shared
 npm run build
 npm start                                         # then open http://localhost:4000
 ```
@@ -108,14 +119,14 @@ Data (database + files) lives in `.\data`. Delete that folder (or `npm run demo:
 
 ## Security model (summary)
 - RS256 JWTs issued by TenderFlow (JWKS at `/.well-known/jwks.json`); an external OIDC IdP can be trusted via `EXTERNAL_OIDC_ISSUER`. No shared secrets.
-- Tenant comes only from the token; every query is tenant-scoped.
+- Tenant comes only from the token; every query is tenant-scoped. A dedicated installation additionally refuses any token, sign-in, registration or public read for another entity (404 / 401).
 - Sealed bids: each file is AES-256-GCM encrypted by TenderFlow with a per-bid key (wrapped by `BID_MASTER_KEY`) before it reaches the content store, so not even content-store administrators can read a bid before the recorded opening.
 - Segregation of duties: tender approver ≠ creator; award approver ≠ recommender; opening only by the committee chair after the deadline.
 - Audit events are append-only (database trigger) and HMAC-chained; `GET /api/v1/audit/verify` detects tampering.
 
 ## Operations
 `npm run config:check` (every setting OK/WARN/FAIL, secrets never printed) · `npm run entity:create -- --code … --name-en … --name-ar …`
-(new government entity with its first administrator) · `TF_ENV=production` refuses unsafe settings at start-up ·
+(the installation's entity with its first administrator; a dedicated installation refuses any code other than `ENTITY_ID`) · `TF_ENV=production` refuses unsafe settings at start-up ·
 OpenShift: [`Containerfile`](Containerfile) and [`deploy/openshift`](deploy/openshift/README.md) · `GET /api/v1/version`, `/health`, `/ready`.
 
 ## Development

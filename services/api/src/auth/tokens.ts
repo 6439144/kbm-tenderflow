@@ -5,6 +5,7 @@ import { SignJWT, jwtVerify, decodeJwt, createRemoteJWKSet, calculateJwkThumbpri
 import type { Db } from '../db.js';
 import type { Config } from '../config.js';
 import { ApiError } from '../util.js';
+import { foreignEntity } from '../tenancy.js';
 
 export const AUDIENCE = 'tenderflow';
 /** Audience of the short-lived second-factor token: never accepted as a session (verify() requires AUDIENCE). */
@@ -68,6 +69,7 @@ export class TokenService {
   jwks() { return { keys: [this.publicJwk] }; }
 
   async issue(u: { id: string; tenant_id: string; roles: string[]; vendor_id: string | null; username: string }): Promise<string> {
+    if (foreignEntity(this.config, u.tenant_id)) throw unauthorized('This installation does not serve that entity');
     return new SignJWT({ tenant_id: u.tenant_id, roles: u.roles, vendor_id: u.vendor_id, preferred_username: u.username })
       .setProtectedHeader({ alg: 'RS256', kid: this.publicJwk.kid!, typ: 'JWT' })
       .setSubject(u.id)
@@ -96,6 +98,7 @@ export class TokenService {
       const { payload } = await jwtVerify(token, this.publicKey, { algorithms: ['RS256'], issuer: this.config.publicBaseUrl, audience: MFA_AUDIENCE });
       if (typeof payload.sub !== 'string' || typeof payload.tenant_id !== 'string' || (payload.purpose !== 'verify' && payload.purpose !== 'enrol'))
         throw new Error('bad claims');
+      if (foreignEntity(this.config, payload.tenant_id)) throw new Error('other entity');
       return { userId: payload.sub, tenantId: payload.tenant_id, purpose: payload.purpose, iat: payload.iat ?? 0 };
     } catch {
       throw new ApiError(401, 'MFA_TOKEN_INVALID', 'Sign-in step expired; enter your password again');
@@ -123,6 +126,8 @@ export class TokenService {
     }
     const tenantId = payload.tenant_id;
     if (typeof tenantId !== 'string' || !tenantId) throw unauthorized('Token has no tenant_id claim');
+    // Dedicated installation: a token for any other entity (e.g. from the external IdP) is never accepted.
+    if (foreignEntity(this.config, tenantId)) throw unauthorized('Token is for an entity this installation does not serve');
     if (typeof payload.sub !== 'string' || !payload.sub) throw unauthorized('Token has no subject');
     const rawRoles = Array.isArray(payload.roles) ? payload.roles
       : Array.isArray((payload as any).realm_access?.roles) ? (payload as any).realm_access.roles : [];

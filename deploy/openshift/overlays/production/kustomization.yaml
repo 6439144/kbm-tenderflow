@@ -20,6 +20,11 @@ configMapGenerator:
     behavior: merge
     literals:
       - TF_ENV=production
+      # One installation per government entity (docs/DEPLOYMENT-MODEL.md): set ENTITY_ID to the entity code given to
+      # `entity:create`. The API refuses to start in production while it is empty. Use one namespace
+      # (e.g. tenderflow-<entity>), one database and one FileNet object store / root folder per entity.
+      - TENANCY_MODE=dedicated
+      - ENTITY_ID=
       - TRUST_PROXY=1
       - DEMO_MODE=false
       - SEED_DEMO=false

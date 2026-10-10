@@ -23,8 +23,16 @@ export function homeFor(user: User): string {
   return '/procurement';
 }
 
+/** Colour used when no entity colour is given: a dedicated installation's own colour (deployment.tsx). */
+let defaultColor: string | null = null;
+export function setDefaultTheme(color: string | null | undefined): void {
+  defaultColor = color ?? null;
+  applyTheme(null);
+}
+
 export function applyTheme(color: string | null | undefined): void {
-  const c = color && /^#?[0-9a-fA-F]{3,8}$/.test(color) ? (color.startsWith('#') ? color : `#${color}`) : null;
+  const v = color || defaultColor;
+  const c = v && /^#?[0-9a-fA-F]{3,8}$/.test(v) ? (v.startsWith('#') ? v : `#${v}`) : null;
   const root = document.documentElement;
   if (c) root.style.setProperty('--primary', c);
   else root.style.removeProperty('--primary');

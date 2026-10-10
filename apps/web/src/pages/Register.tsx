@@ -8,10 +8,13 @@ import { Badge, Button, ErrorBox, Field, Spinner, useAsync } from '../components
 import { CustomFieldsForm, lowcode } from '../features/lowcode';
 import { defaults as cfDefaults } from '../features/lowcode/engine';
 import type { FormDefinition } from '../features/lowcode/api';
+import { useDeployment } from '../deployment';
 
 export default function Register() {
   const { t, te, pick } = useI18n();
   const tenants = useAsync(() => api.tenants(), []);
+  // Dedicated installation: suppliers register with this entity only (no picker); accounts are per entity.
+  const { deployment, dedicated, entity, entityName } = useDeployment();
   const [tenantId, setTenantId] = useState('');
   const [f, setF] = useState({ legalNameEn: '', legalNameAr: '', crNumber: '', email: '', phone: '', username: '', password: '' });
   const [cats, setCats] = useState<string[]>([]);
@@ -21,8 +24,12 @@ export default function Register() {
   const [touched, setTouched] = useState(false);
 
   useEffect(() => {
+    if (dedicated) {
+      if (entity && tenantId !== entity.id) setTenantId(entity.id);
+      return;
+    }
     if (!tenantId && tenants.data?.length) setTenantId(tenants.data[0].id);
-  }, [tenants.data, tenantId]);
+  }, [tenants.data, tenantId, dedicated, entity]);
   const tenant = tenants.data?.find((x) => x.id === tenantId);
   // Low-code: the public fields of the entity's vendor registration form.
   const [cf, setCf] = useState<{ def: FormDefinition; values: Record<string, unknown> } | null>(null);
@@ -61,7 +68,7 @@ export default function Register() {
         <div className="auth-card auth-card-wide card">
           <div className="card-body">
             <h1>{t('reg.title')}</h1>
-            <p className="muted">{t('reg.subtitle')}</p>
+            <p className="muted">{dedicated && entity ? t('ded.reg.subtitle', { entity: entityName }) : t('reg.subtitle')}</p>
             {done ? (
               <div className="stack">
                 <div className="alert alert-success" role="status">
@@ -79,9 +86,16 @@ export default function Register() {
             ) : (
               <form onSubmit={submit}>
                 {err ? <ErrorBox error={err} /> : null}
-                <Field label={t('login.tenant')} required>
+                {dedicated ? (
+                  entity ? (
+                    <div className="alert alert-info" role="note">{t('ded.reg.separate', { entity: entityName })}</div>
+                  ) : (
+                    <div className="alert alert-info" role="status">{t('ded.notProvisioned')}</div>
+                  )
+                ) : (
+                <Field label={t('login.tenant')} required hint={t('ded.reg.sharedNote')}>
                   {(id) =>
-                    tenants.loading && !tenants.data ? (
+                    !deployment || (tenants.loading && !tenants.data) ? (
                       <Spinner />
                     ) : tenants.error ? (
                       <ErrorBox error={tenants.error} onRetry={tenants.reload} />
@@ -96,6 +110,7 @@ export default function Register() {
                     )
                   }
                 </Field>
+                )}
                 <fieldset>
                   <legend>{t('reg.company')}</legend>
                   <div className="grid-2">

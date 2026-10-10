@@ -15,9 +15,15 @@ deploy/openshift/
 │   ├── pdb.yaml                maxUnavailable 1
 │   └── secret.template.yaml    placeholders only, NOT applied (see "Secret")
 └── overlays/
-    ├── demo/                   1 pod, Recreate, embedded PGlite on the PVC, TF_ENV=demo, DEMO_MODE + SEED_DEMO
-    └── production/             2 pods, PostgreSQL, FileNet, TF_ENV=production, TRUST_PROXY=1, ReadWriteMany PVC
+    ├── demo/                   1 pod, Recreate, embedded PGlite on the PVC, TF_ENV=demo, DEMO_MODE + SEED_DEMO,
+    │                           TENANCY_MODE=shared (KBM's three-entity demo)
+    └── production/             2 pods, PostgreSQL, FileNet, TF_ENV=production, TRUST_PROXY=1, ReadWriteMany PVC,
+                                TENANCY_MODE=dedicated + ENTITY_ID (set it: one installation per entity)
 ```
+
+**One installation per government entity** ([docs/DEPLOYMENT-MODEL.md](../../docs/DEPLOYMENT-MODEL.md)): apply the
+production overlay once per entity, each in its own namespace (`tenderflow-<code>`) with its own Secret, database and
+FileNet object store (or root folder), and `ENTITY_ID=<code>` in the ConfigMap.
 
 ## What the manifests guarantee
 

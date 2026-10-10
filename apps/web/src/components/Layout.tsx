@@ -3,6 +3,7 @@ import { NavLink, Navigate, Outlet } from 'react-router-dom';
 import { downloadFile, openFile, type Role } from '../api';
 import { useI18n, type TKey } from '../i18n';
 import { useSession } from '../session';
+import { useDeployment } from '../deployment';
 import { Button, useToast, errText } from './ui';
 import { NotificationsBell } from '../features/cycle';
 import { DemoLauncher } from '../features/demo';
@@ -17,21 +18,35 @@ export interface NavItem {
 export function Header({ children }: { children?: ReactNode }) {
   const { t, te, lang, setLang, pick } = useI18n();
   const { user, tenant, signOut } = useSession();
+  const { dedicated, entity, entityName } = useDeployment();
+  // Dedicated installation: the entity's own brand (logo text, name, colour); TenderFlow is the product line below it.
+  const own = dedicated && entity;
   return (
     <header className="topbar">
       <a className="skip" href="#main">
         {t('nav.skip')}
       </a>
-      <div className="brand">
-        <span className="brand-mark" aria-hidden="true">
-          <svg width="22" height="22" viewBox="0 0 32 32">
-            <path d="M7 9h18M16 9v16" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" fill="none" />
-          </svg>
+      <div className={`brand ${own ? 'brand-own' : ''}`}>
+        <span className={`brand-mark ${own && entity.logoText ? 'brand-mark-text' : ''}`} aria-hidden="true">
+          {own && entity.logoText ? (
+            <span dir="ltr">{entity.logoText}</span>
+          ) : (
+            <svg width="22" height="22" viewBox="0 0 32 32">
+              <path d="M7 9h18M16 9v16" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" fill="none" />
+            </svg>
+          )}
         </span>
-        <div>
-          <div className="brand-name">{t('app.name')}</div>
-          {tenant && <div className="brand-tenant">{pick(tenant.nameEn, tenant.nameAr)}</div>}
-        </div>
+        {own ? (
+          <div>
+            <div className="brand-name">{entityName}</div>
+            <div className="brand-tenant">{t('ded.brand.product')}</div>
+          </div>
+        ) : (
+          <div>
+            <div className="brand-name">{t('app.name')}</div>
+            {tenant && <div className="brand-tenant">{pick(tenant.nameEn, tenant.nameAr)}</div>}
+          </div>
+        )}
       </div>
       {children}
       <div className="topbar-end">

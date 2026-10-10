@@ -5,7 +5,8 @@
 // can delete history. A demo reset therefore happens outside the app, with the server STOPPED:
 //   npm run demo:reset            → dry run: shows what would be deleted
 //   npm run demo:reset -- --yes   → deletes DATA_DIR (embedded database + filesystem content store)
-// Then start the server again with SEED_DEMO=true and it reseeds both demo entities.
+// Then start the server again with SEED_DEMO=true and it reseeds the demo: DEMO_ENTITY in a dedicated installation
+// (TENANCY_MODE=dedicated, the default), all three entities with TENANCY_MODE=shared.
 //
 // DATA_DIR is resolved exactly like services/api/src/config.ts: environment first, then the repo-root .env
 // (without overriding), default ./data, relative paths relative to the repo root.
@@ -63,7 +64,11 @@ console.log(`  content store : ${cst}${cst === 'filenet' ? ' — documents alrea
 if (!exists) process.exit(0);
 if (!yes) {
   console.log('\nDry run. Stop the server, then run `npm run demo:reset -- --yes` to delete DATA_DIR.');
-  console.log('Next start with SEED_DEMO=true reseeds both demo entities (kea, gcia).');
+  const mode = (opt(process.env.TENANCY_MODE) ?? 'dedicated').toLowerCase();
+  const demo = opt(process.env.DEMO_ENTITY) ?? (['kea', 'gcia', 'moi'].includes(opt(process.env.ENTITY_ID) ?? '') ? opt(process.env.ENTITY_ID) : 'kea');
+  console.log(mode === 'shared'
+    ? 'Next start with SEED_DEMO=true reseeds the three demo entities (kea, gcia, moi) — TENANCY_MODE=shared.'
+    : `Next start with SEED_DEMO=true reseeds the demo entity ${demo} only — TENANCY_MODE=dedicated (DEMO_ENTITY=${demo}).`);
   process.exit(0);
 }
 fs.rmSync(dataDir, { recursive: true, force: true });

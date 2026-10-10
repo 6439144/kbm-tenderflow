@@ -1,5 +1,7 @@
-// Public tender board (TenderScout): the consolidated, cross-entity list of open tenders, readable without login.
-// This is the ONLY cross-tenant read in TenderFlow, so it is deliberately narrow:
+// Public tender board (TenderScout): the list of open tenders, readable without login.
+// Dedicated installation (TENANCY_MODE=dedicated, the default): only this installation's entity; an `entity` filter
+// naming any other entity answers 404. Shared installation: the consolidated cross-entity list — the ONLY cross-tenant
+// read in TenderFlow, so it is deliberately narrow:
 //   - only tenders in status PUBLISHED whose deadline has not passed,
 //   - only of ACTIVE entities whose profile setting `publicBoard` is not false (default: on; MOI keeps it off
 //     because it shows tenders only to eligible vendors),
@@ -11,6 +13,7 @@ import type { Ctx } from '../../ctx.js';
 import { h } from '../../routes.js';
 import { configOf } from '../../services/templates.js';
 import { escapeHtml, now } from '../../util.js';
+import { boundEntity, isDedicated, publicEntity } from '../../tenancy.js';
 
 export interface PublicTender {
   entity: { id: string; nameEn: string; nameAr: string };
@@ -53,12 +56,15 @@ export function parseFilters(query: Record<string, unknown>): Filters {
 }
 
 async function boardEntities(ctx: Ctx) {
+  const bound = boundEntity(ctx.config);
+  if (isDedicated(ctx.config) && !bound) return [];
   const rows = await ctx.db.query<{ id: string; name_en: string; name_ar: string; profile: unknown }>(
-    `SELECT id, name_en, name_ar, profile FROM tenants WHERE status='ACTIVE' ORDER BY id`);
+    `SELECT id, name_en, name_ar, profile FROM tenants WHERE status='ACTIVE' AND ($1::text IS NULL OR id=$1) ORDER BY id`, [bound]);
   return rows.filter((r) => publicBoardEnabled(r.profile)).map((r) => ({ id: r.id, nameEn: r.name_en, nameAr: r.name_ar }));
 }
 
 export async function listPublicTenders(ctx: Ctx, f: Filters) {
+  if (f.entity && isDedicated(ctx.config)) publicEntity(ctx.config, f.entity); // another entity → 404 (tenancy.ts)
   const entities = await boardEntities(ctx);
   const ids = entities.map((e) => e.id);
   const base = ctx.config.publicBaseUrl;
@@ -98,7 +104,8 @@ export async function listPublicTenders(ctx: Ctx, f: Filters) {
         channel: p.channel, reference: p.reference ?? null,
         publishedOn: p.published_on ? (p.published_on instanceof Date ? p.published_on.toISOString().slice(0, 10) : String(p.published_on).slice(0, 10)) : null,
       })),
-      url: `${base}/tenders?entity=${encodeURIComponent(r.tenant_id)}&q=${encodeURIComponent(r.tender_number)}`,
+      url: isDedicated(ctx.config) ? `${base}/tenders?q=${encodeURIComponent(r.tender_number)}`
+        : `${base}/tenders?entity=${encodeURIComponent(r.tenant_id)}&q=${encodeURIComponent(r.tender_number)}`,
     };
   });
 
@@ -120,7 +127,22 @@ export async function listPublicTenders(ctx: Ctx, f: Filters) {
   };
 }
 
-function rss(ctx: Ctx, list: PublicTender[]): string {
+/** Feed title and description: the entity's own name in a dedicated installation, otherwise the cross-entity board. */
+async function feedTexts(ctx: Ctx) {
+  if (isDedicated(ctx.config)) {
+    const bound = boundEntity(ctx.config);
+    const e = bound ? (await ctx.db.query<{ name_en: string; name_ar: string }>('SELECT name_en, name_ar FROM tenants WHERE id=$1', [bound]))
+      .map((r) => ({ nameEn: r.name_en, nameAr: r.name_ar }))[0] : undefined;
+    const en = e?.nameEn ?? 'TenderFlow';
+    const ar = e?.nameAr ?? 'تندرفلو';
+    return { title: `Public tenders of ${en} / المناقصات العامة — ${ar}`,
+      description: `Open tenders published by ${en} / المناقصات المفتوحة المنشورة من ${ar}` };
+  }
+  return { title: 'TenderFlow — Public tenders / المناقصات العامة',
+    description: 'Open tenders published by participating government entities / المناقصات المفتوحة المنشورة من الجهات المشاركة' };
+}
+
+function rss(ctx: Ctx, list: PublicTender[], texts: { title: string; description: string }): string {
   const base = ctx.config.publicBaseUrl;
   const x = escapeHtml;
   const items = list.map((t) => {
@@ -146,10 +168,10 @@ function rss(ctx: Ctx, list: PublicTender[]): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
-    <title>TenderFlow — Public tenders / المناقصات العامة</title>
+    <title>${x(texts.title)}</title>
     <link>${x(`${base}/tenders`)}</link>
     <atom:link href="${x(`${base}/api/v1/public/tenders.rss`)}" rel="self" type="application/rss+xml"/>
-    <description>Open tenders published by participating government entities / المناقصات المفتوحة المنشورة من الجهات المشاركة</description>
+    <description>${x(texts.description)}</description>
     <lastBuildDate>${now().toUTCString()}</lastBuildDate>
     <ttl>15</ttl>
 ${items}
@@ -158,11 +180,12 @@ ${items}
 `;
 }
 
-function jsonFeed(ctx: Ctx, list: PublicTender[]) {
+function jsonFeed(ctx: Ctx, list: PublicTender[], texts: { title: string; description: string }) {
   const base = ctx.config.publicBaseUrl;
   return {
     version: 'https://jsonfeed.org/version/1.1',
-    title: 'TenderFlow — Public tenders / المناقصات العامة',
+    title: texts.title,
+    description: texts.description,
     home_page_url: `${base}/tenders`,
     feed_url: `${base}/api/v1/public/tenders.json`,
     language: 'ar-KW',
@@ -189,11 +212,11 @@ export function registerPublicBoardRoutes(r: express.Router, ctx: Ctx): void {
   r.get('/public/tenders.rss', limiter, h(async (req, res) => {
     const out = await listPublicTenders(ctx, parseFilters(req.query as Record<string, unknown>));
     cache(res);
-    res.type('application/rss+xml; charset=utf-8').send(rss(ctx, out.tenders));
+    res.type('application/rss+xml; charset=utf-8').send(rss(ctx, out.tenders, await feedTexts(ctx)));
   }));
   r.get('/public/tenders.json', limiter, h(async (req, res) => {
     const out = await listPublicTenders(ctx, parseFilters(req.query as Record<string, unknown>));
     cache(res);
-    res.type('application/feed+json; charset=utf-8').send(JSON.stringify(jsonFeed(ctx, out.tenders)));
+    res.type('application/feed+json; charset=utf-8').send(JSON.stringify(jsonFeed(ctx, out.tenders, await feedTexts(ctx))));
   }));
 }

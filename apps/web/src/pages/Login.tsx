@@ -7,6 +7,7 @@ import { Header } from '../components/Layout';
 import { Button, ErrorBox, Field, Spinner, useAsync, useToast } from '../components/ui';
 import { Enrolment, RecoveryCodes, secApi, VerifyStep, type LoginResult } from '../features/security';
 import { isSuspendedError, SuspendedNotice } from '../features/moi';
+import { useDeployment } from '../deployment';
 
 type TenantWithSso = Tenant & { sso?: { labelEn: string; labelAr: string } | null };
 type Step = { kind: 'password' } | { kind: 'verify'; mfaToken: string } | { kind: 'enrol'; mfaToken: string } | { kind: 'codes'; codes: string[]; result: LoginResult };
@@ -16,6 +17,8 @@ export default function Login() {
   const { signIn, session, expired } = useSession();
   const navigate = useNavigate();
   const toast = useToast();
+  // Dedicated installation: the entity is fixed (no picker); the server ignores/verifies the id it is sent.
+  const { deployment, dedicated, entity, entityName } = useDeployment();
   const tenants = useAsync(() => api.tenants() as Promise<TenantWithSso[]>, []);
   // Optional prefill (guided demo switching entity, SSO return): tenant and username only — never a password.
   const [params, setParams] = useSearchParams();
@@ -33,8 +36,12 @@ export default function Login() {
   }, [session, navigate]);
 
   useEffect(() => {
+    if (dedicated) {
+      if (entity && tenantId !== entity.id) setTenantId(entity.id);
+      return;
+    }
     if (tenants.data && tenants.data.length > 0 && (!tenantId || !tenants.data.some((x) => x.id === tenantId))) setTenantId(tenants.data[0].id);
-  }, [tenants.data, tenantId]);
+  }, [tenants.data, tenantId, dedicated, entity]);
 
   const tenant = tenants.data?.find((x) => x.id === tenantId) ?? null;
   useEffect(() => {
@@ -104,7 +111,7 @@ export default function Login() {
             {step.kind === 'password' && (
               <>
                 <h1>{t('login.title')}</h1>
-                <p className="muted">{t('login.subtitle')}</p>
+                <p className="muted">{dedicated && entity ? t('ded.login.subtitle', { entity: entityName }) : t('login.subtitle')}</p>
                 {expired && (
                   <div className="alert alert-info" role="status">
                     {t('err.unauthorized')}
@@ -113,9 +120,12 @@ export default function Login() {
                 {ssoBusy && <Spinner label={t('security.sso.completing')} />}
                 {err ? (isSuspendedError(err) ? <SuspendedNotice error={err} /> : <ErrorBox error={err} />) : null}
                 <form onSubmit={submit} noValidate={false}>
+                  {dedicated ? (
+                    !entity && <div className="alert alert-info" role="status">{t('ded.notProvisioned')}</div>
+                  ) : (
                   <Field label={t('login.tenant')} required>
                     {(id) =>
-                      tenants.loading && !tenants.data ? (
+                      !deployment || (tenants.loading && !tenants.data) ? (
                         <Spinner />
                       ) : tenants.error ? (
                         <ErrorBox error={tenants.error} onRetry={tenants.reload} />
@@ -132,6 +142,7 @@ export default function Login() {
                       )
                     }
                   </Field>
+                  )}
                   {sso && (
                     <div className="security-sso">
                       <a className="btn btn-secondary btn-block" href={secApi.ssoStartUrl(tenantId)}>

@@ -2,6 +2,7 @@
 // background jobs for event automation and webhook delivery. docs/LOW-CODE-STUDIO.md
 import type express from 'express';
 import type { Ctx } from '../ctx.js';
+import { publicEntity } from '../tenancy.js';
 import { STAFF_ROLES } from '../ctx.js';
 import { actor, h, requireRoles } from '../routes.js';
 import { badRequest, notFound } from '../util.js';
@@ -94,7 +95,9 @@ export function registerLowcodeRoutes(r: express.Router, ctx: Ctx) {
 /** Vendor self-registration renders the public fields of the entity's vendor form before login. */
 export function registerLowcodePublicRoutes(r: express.Router, ctx: Ctx) {
   r.get('/public/forms/vendor', h(async (req) => {
-    const tenant = typeof req.query.tenant === 'string' && /^[a-z0-9_-]{2,40}$/.test(req.query.tenant) ? req.query.tenant : null;
+    // Dedicated installation: always this entity's form; another `tenant` → 404 (tenancy.ts).
+    const requested = publicEntity(ctx.config, req.query.tenant);
+    const tenant = typeof requested === 'string' && /^[a-z0-9_-]{2,40}$/.test(requested) ? requested : null;
     if (!tenant) throw badRequest('tenant is required');
     const f = await liveForm(ctx.db, tenant, 'VENDOR');
     return { form: f ? { id: f.pin.id, version: f.pin.version, definition: publicDefinition(f.def) } : null };

@@ -1,6 +1,7 @@
 // Presenter panel: docked (not modal), collapsible, RTL-aware. Runs the Demo Story chapters with persona
 // switching, navigation, spotlight, the deadline demo control and IBM callouts backed by live evidence.
 import { useEffect, useState, type ReactNode } from 'react';
+import { useDeployment } from '../../deployment';
 import { useNavigate } from 'react-router-dom';
 import { api, clearSession, saveSession, type Role } from '../../api';
 import { translate, useI18n, type Lang } from '../../i18n';
@@ -276,8 +277,13 @@ export function DemoPanel({ status }: { status: DemoStatus }) {
   const { user, session } = useSession();
   const navigate = useNavigate();
   const st = useDemoState();
-  const chapters = TRACKS[st.track];
-  const idx = Math.min(Math.max(st.chapter[st.track] ?? 0, 0), chapters.length - 1);
+  // Dedicated installation: only this entity's track (no chapters that run in other entities).
+  const { dedicated } = useDeployment();
+  const ownTrack = user && (Object.keys(TRACKS) as EntityId[]).find((tr) => tr === user.tenantId);
+  const track: EntityId = dedicated && ownTrack ? ownTrack : st.track;
+  const tracks = dedicated ? (ownTrack ? [ownTrack] : []) : (Object.keys(TRACKS) as EntityId[]);
+  const chapters = TRACKS[track];
+  const idx = Math.min(Math.max(st.chapter[track] ?? 0, 0), chapters.length - 1);
   const ch = chapters[idx];
   const [busy, setBusy] = useState<number | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -311,12 +317,13 @@ export function DemoPanel({ status }: { status: DemoStatus }) {
     return () => window.clearInterval(iv);
   }, []);
 
-  useEffect(() => setErr(null), [st.track, idx]);
+  useEffect(() => setErr(null), [track, idx]);
 
   if (!user || !session) return null;
+  if (dedicated && !ownTrack) return null; // no guided story for this entity
   const wrongEntity = ch.entity !== user.tenantId;
   const otherLang: Lang = lang === 'ar' ? 'en' : 'ar';
-  const setChapter = (n: number) => setDemo((s) => ({ chapter: { ...s.chapter, [s.track]: n }, spot: null }));
+  const setChapter = (n: number) => setDemo((s) => ({ chapter: { ...s.chapter, [track]: n }, spot: null }));
   const setTrack = (tr: EntityId) => setDemo({ track: tr, spot: null });
 
   const go = async (m: Move, i: number) => {
@@ -383,14 +390,16 @@ export function DemoPanel({ status }: { status: DemoStatus }) {
         </button>
       </header>
 
-      <div className="demo-tracks" role="group" aria-label={t('demo.chapters')}>
-        {(Object.keys(TRACKS) as EntityId[]).map((tr) => (
-          <button key={tr} type="button" className={`demo-track ${st.track === tr ? 'on' : ''}`} aria-pressed={st.track === tr} onClick={() => setTrack(tr)}>
-            {t(TRACK_LABEL[tr])}
-          </button>
-        ))}
-      </div>
-      <p className="demo-track-hint">{t(TRACK_HINT[st.track])}</p>
+      {tracks.length > 1 && (
+        <div className="demo-tracks" role="group" aria-label={t('demo.chapters')}>
+          {tracks.map((tr) => (
+            <button key={tr} type="button" className={`demo-track ${track === tr ? 'on' : ''}`} aria-pressed={track === tr} onClick={() => setTrack(tr)}>
+              {t(TRACK_LABEL[tr])}
+            </button>
+          ))}
+        </div>
+      )}
+      <p className="demo-track-hint">{t(TRACK_HINT[track])}</p>
 
       <nav className="demo-steps" aria-label={t('demo.chapters')}>
         {chapters.map((c, i) => (
