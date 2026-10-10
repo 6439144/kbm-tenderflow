@@ -3,6 +3,7 @@ import type { Ctx } from '../ctx.js';
 import { auditTx } from '../ctx.js';
 import type { Actor } from '../auth/tokens.js';
 import { badRequest, camel, conflict, forbidden, isUuid, notFound, now, reqStr, str, uuid } from '../util.js';
+import { newObjectCustom, withCustom } from '../lowcode/objects.js';
 import { insertUser, publicUser, validatePassword } from './identity.js';
 import { insertDocument, publicDoc, putDocument, validateUpload, type DocumentRow, type UploadFile } from './documents.js';
 import { emitDocumentEvent } from './document-events.js';
@@ -28,20 +29,22 @@ export async function registerVendor(ctx: Ctx, body: any) {
     id: uuid(), legalNameEn: reqStr(body?.legalNameEn, 'legalNameEn', 300), legalNameAr: reqStr(body?.legalNameAr, 'legalNameAr', 300),
     crNumber: reqStr(body?.crNumber, 'crNumber', 50), phone: str(body?.phone, 'phone', { max: 50 }) ?? null,
   };
+  // Low-code: the public fields of the entity's vendor form (validated; the form version is pinned on the vendor).
+  const custom = await newObjectCustom(ctx.db, tenantId, 'VENDOR', body?.customFields, { vendorSelf: true });
   return ctx.db.tx(async (q) => {
     const dup = await q.query('SELECT 1 FROM vendors WHERE tenant_id=$1 AND cr_number=$2', [tenantId, v.crNumber]);
     if (dup.length) throw conflict('VENDOR_EXISTS', 'A vendor with this CR number is already registered');
     const rows = await q.query<VendorRow>(
-      `INSERT INTO vendors (id, tenant_id, legal_name_en, legal_name_ar, cr_number, email, phone, categories, status, created_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8::text[],'PENDING_REVIEW',$9) RETURNING *`,
-      [v.id, tenantId, v.legalNameEn, v.legalNameAr, v.crNumber, email, v.phone, categories, now()]);
+      `INSERT INTO vendors (id, tenant_id, legal_name_en, legal_name_ar, cr_number, email, phone, categories, status, created_at, custom_fields, custom_form)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8::text[],'PENDING_REVIEW',$9,$10::jsonb,$11::jsonb) RETURNING *`,
+      [v.id, tenantId, v.legalNameEn, v.legalNameAr, v.crNumber, email, v.phone, categories, now(), JSON.stringify(custom.values), custom.pin ? JSON.stringify(custom.pin) : null]);
     const user = await insertUser(ctx, q, { id: 'SELF_REGISTRATION', roles: ['VENDOR'] }, {
       tenantId, username: body?.username, password: body.password, displayName: v.legalNameEn, roles: ['VENDOR'], vendorId: v.id,
     });
     await auditTx(ctx, q, { tenantId, actor: { id: user.id, roles: ['VENDOR'] }, action: 'VENDOR_REGISTERED', resourceType: 'VENDOR',
       resourceId: v.id, newState: 'PENDING_REVIEW', details: { crNumber: v.crNumber, categories } });
     await notifyApplicationReceived(q, tenantId, v.id, v.legalNameEn, v.legalNameAr); // NOT-002
-    return { vendor: camel(rows[0]), user: publicUser(user) };
+    return { vendor: await withCustom(q, rows[0] as any, camel(rows[0]), true), user: publicUser(user) };
   });
 }
 
@@ -60,7 +63,7 @@ async function vendorDocs(ctx: Ctx, tenantId: string, vendorId: string) {
 export async function myVendor(ctx: Ctx, actor: Actor) {
   if (!actor.vendorId) throw forbidden('Not a vendor user');
   const v = await getVendorRow(ctx, actor.tenantId, actor.vendorId);
-  return { ...camel(v), documents: await vendorDocs(ctx, actor.tenantId, v.id) };
+  return { ...(await withCustom(ctx.db, v as any, camel(v), true)), documents: await vendorDocs(ctx, actor.tenantId, v.id) };
 }
 
 export async function uploadVendorDocument(ctx: Ctx, actor: Actor, file: UploadFile | undefined, title: unknown) {
@@ -90,7 +93,7 @@ export async function listVendors(ctx: Ctx, actor: Actor, status?: unknown) {
 
 export async function getVendor(ctx: Ctx, actor: Actor, id: string) {
   const v = await getVendorRow(ctx, actor.tenantId, id);
-  return { ...camel(v), documents: await vendorDocs(ctx, actor.tenantId, v.id) };
+  return { ...(await withCustom(ctx.db, v as any, camel(v), false)), documents: await vendorDocs(ctx, actor.tenantId, v.id) };
 }
 
 export async function decideVendor(ctx: Ctx, actor: Actor, id: string, body: any) {

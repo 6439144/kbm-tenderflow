@@ -10,6 +10,7 @@ import { emitDocumentEvent } from './document-events.js';
 import { DEFAULT_CONFIG, applyPattern, type CycleConfig } from './templates.js';
 import { approvalChainView, createTender, currentRound, nextLevel } from './tenders.js';
 import { notifyRole } from './notifications.js';
+import { newObjectCustom, withCustom } from '../lowcode/objects.js';
 
 export interface RequestRow {
   id: string; tenant_id: string; request_number: string; department: string; subject: string; description: string;
@@ -40,6 +41,7 @@ export async function createRequest(ctx: Ctx, actor: Actor, b: any, file: Upload
   const id = uuid();
   const n = Number((await ctx.db.query<{ n: string }>('SELECT count(*)::text AS n FROM procurement_requests WHERE tenant_id=$1', [actor.tenantId]))[0].n) + 1;
   const number = applyPattern(`${actor.tenantId.toUpperCase()}-REQ-{YYYY}-{SEQ4}`, n);
+  const custom = await newObjectCustom(ctx.db, actor.tenantId, 'REQUEST', b?.customFields);
   const prepared = f ? await putDocument(ctx, {
     tenantId: actor.tenantId, ownerType: 'REQUEST_LETTER', ownerId: id, folderKey: `requests/${number}`,
     title: str(b?.letterTitle, 'letterTitle', { max: 300 }) ?? `GM letter ${number}`, fileName: f.originalname, mimeType: f.detectedMime,
@@ -49,11 +51,11 @@ export async function createRequest(ctx: Ctx, actor: Actor, b: any, file: Upload
     const doc = prepared ? await insertDocument(q, prepared) : null;
     const rows = await q.query<RequestRow>(
       `INSERT INTO procurement_requests (id, tenant_id, request_number, department, subject, description, source, source_reference,
-         estimated_budget, letter_document_id, suggested_template, status, created_by, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'SUBMITTED',$12,$13,$13) RETURNING *`,
+         estimated_budget, letter_document_id, suggested_template, status, created_by, created_at, updated_at, custom_fields, custom_form)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'SUBMITTED',$12,$13,$13,$14::jsonb,$15::jsonb) RETURNING *`,
       [id, actor.tenantId, number, reqStr(b?.department, 'department', 200), reqStr(b?.subject, 'subject', 500),
         str(b?.description, 'description', { max: 8000 }) ?? '', source, sourceReference, budget, doc?.id ?? null,
-        str(b?.suggestedTemplate, 'suggestedTemplate', { max: 60 }) ?? null, actor.id, now()]);
+        str(b?.suggestedTemplate, 'suggestedTemplate', { max: 60 }) ?? null, actor.id, now(), JSON.stringify(custom.values), custom.pin ? JSON.stringify(custom.pin) : null]);
     await auditTx(ctx, q, { tenantId: actor.tenantId, actor, action: 'REQUEST_SUBMITTED', resourceType: 'REQUEST', resourceId: id,
       newState: 'SUBMITTED', details: { requestNumber: number, source, sourceReference, letterDocumentId: doc?.id ?? null, storeRef: doc?.store_ref ?? null } });
     return pub(rows[0]);
@@ -76,7 +78,7 @@ export async function listRequests(ctx: Ctx, actor: Actor) {
 export async function getRequest(ctx: Ctx, actor: Actor, id: string) {
   const r = await loadRequest(ctx, actor, id);
   const chain = await requestChain(ctx, actor.tenantId);
-  const out = pub(r);
+  const out = await withCustom(ctx.db, r as any, pub(r), false);
   out.approvalChain = await approvalChainView(ctx.db, r.id, 'REQUEST', chain);
   out.letter = r.letter_document_id ? camel((await ctx.db.query(
     'SELECT id, title, mime_type, byte_size, sha256_plain, store_type, store_meta, created_at FROM documents WHERE id=$1', [r.letter_document_id]))[0] ?? null) : null;

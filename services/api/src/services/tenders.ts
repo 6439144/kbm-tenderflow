@@ -11,6 +11,7 @@ import { applyPattern, configOf, getProfile, resolveTemplate, snapshotOf, stageL
 import { checkEligibility, purchaseOf, ruleOf } from './eligibility.js';
 import { notify, notifyRole, notifyVendorsOfTender } from './notifications.js';
 import { assertVendorTenderAccess, filterVendorTenders, packUnlocked } from './vendor-lifecycle.js';
+import { enforceTenderGate, formById, pinForNewTender, routedLevels, tenderCustomValues } from '../lowcode/gates.js';
 
 export interface TenderRow {
   id: string; tenant_id: string; tender_number: string; title_en: string; title_ar: string; description_en: string;
@@ -21,12 +22,14 @@ export interface TenderRow {
   awarded_at: Date | null; created_at: Date; updated_at: Date;
   template_id?: string | null; template_snapshot?: any; request_id?: string | null; eligibility?: any;
   financial_opened_at?: Date | null; records_locked_at?: Date | null;
+  /** Low-code: custom field values, the pinned form version, the pinned gate rules and rule-added approval levels. */
+  custom_fields?: Record<string, unknown>; custom_form?: { id: string; version: number } | null; process_snapshot?: any; routing?: any;
 }
 
 export const PUBLISHED_PLUS = ['PUBLISHED', 'CLOSED', 'OPENED', 'EVALUATION', 'AWARDED'];
 
 export const publicTender = (t: TenderRow) => {
-  const o = camel<any>({ ...t, template_snapshot: undefined });
+  const o = camel<any>({ ...t, template_snapshot: undefined, custom_fields: undefined, custom_form: undefined, process_snapshot: undefined, routing: undefined });
   o.estimatedBudget = t.estimated_budget === null ? null : Number(t.estimated_budget);
   const snap = t.template_snapshot;
   o.template = snap ? { id: snap.templateId, code: snap.code, version: snap.version, nameEn: snap.nameEn, nameAr: snap.nameAr } : null;
@@ -139,6 +142,9 @@ export async function createTender(ctx: Ctx, actor: Actor, b: any) {
   return ctx.db.tx(async (q) => {
     const tpl = await resolveTemplate(ctx, q, actor.tenantId, b?.templateId);
     const snapshot = snapshotOf(tpl);
+    // Low-code: validate custom fields against the live tender form; pin it and the live gate rules on the tender.
+    const pin = await pinForNewTender(q, actor.tenantId);
+    const customValues = tenderCustomValues(pin.form?.def ?? null, b?.customFields, undefined, t.budget);
     if (snapshot?.config.envelopes === 'TWO') {
       const fin = snapshot.config.evaluation.financialCriteria;
       if (!t.criteria.some((c) => fin.includes(c.key)) || t.criteria.every((c) => fin.includes(c.key)))
@@ -156,13 +162,15 @@ export async function createTender(ctx: Ctx, actor: Actor, b: any) {
     const rows = await q.query<TenderRow>(
       `INSERT INTO tenders (id, tenant_id, tender_number, title_en, title_ar, description_en, description_ar, category, estimated_budget,
          currency, submission_deadline, criteria, required_documents, status, created_by, created_at, updated_at,
-         template_id, template_snapshot, eligibility, request_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13::jsonb,'DRAFT',$14,$15,$15,$16,$17::jsonb,$18::jsonb,$19) RETURNING *`,
+         template_id, template_snapshot, eligibility, request_id, custom_fields, custom_form, process_snapshot)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13::jsonb,'DRAFT',$14,$15,$15,$16,$17::jsonb,$18::jsonb,$19,$20::jsonb,$21::jsonb,$22::jsonb) RETURNING *`,
       [t.id, actor.tenantId, num, t.titleEn, t.titleAr, t.descriptionEn, t.descriptionAr, t.category, t.budget, t.currency, deadline,
         JSON.stringify(t.criteria), JSON.stringify(t.requiredDocuments), actor.id, now(),
-        tpl?.id ?? null, snapshot ? JSON.stringify(snapshot) : null, JSON.stringify(t.eligibility), requestId]);
+        tpl?.id ?? null, snapshot ? JSON.stringify(snapshot) : null, JSON.stringify(t.eligibility), requestId,
+        JSON.stringify(customValues), pin.form ? JSON.stringify(pin.form.pin) : null, pin.snapshot ? JSON.stringify(pin.snapshot) : null]);
     await auditTx(ctx, q, { tenantId: actor.tenantId, actor, action: 'TENDER_CREATED', resourceType: 'TENDER', resourceId: t.id,
-      newState: 'DRAFT', details: { tenderNumber: num, template: snapshot ? `${snapshot.code} v${snapshot.version}` : 'default', requestId } });
+      newState: 'DRAFT', details: { tenderNumber: num, template: snapshot ? `${snapshot.code} v${snapshot.version}` : 'default', requestId,
+        ...(pin.form ? { customForm: `v${pin.form.pin.version}` } : {}), ...(pin.snapshot ? { processRules: `v${pin.snapshot.version}` } : {}) } });
     return publicTender(rows[0]);
   });
 }
@@ -187,6 +195,12 @@ export async function patchTender(ctx: Ctx, actor: Actor, id: string, b: any) {
   if (b?.criteria !== undefined) set('criteria', JSON.stringify(parseCriteria(b.criteria)), '::jsonb');
   if (b?.requiredDocuments !== undefined) set('required_documents', JSON.stringify(parseRequiredDocs(b.requiredDocuments)), '::jsonb');
   if (b?.eligibility !== undefined) set('eligibility', JSON.stringify(parseEligibility(b.eligibility)), '::jsonb');
+  if (b?.customFields !== undefined || (b?.estimatedBudget !== undefined && t.custom_form)) {
+    // Calculated fields may depend on the budget, so a budget change recomputes them.
+    const form = await formById(ctx.db, t.custom_form?.id);
+    const budget = b?.estimatedBudget !== undefined ? parseBudget(b.estimatedBudget) : (t.estimated_budget === null ? null : Number(t.estimated_budget));
+    set('custom_fields', JSON.stringify(tenderCustomValues(form, b?.customFields, t.custom_fields ?? {}, budget)), '::jsonb');
+  }
   if (!sets.length) throw badRequest('No editable fields given');
   set('updated_at', now());
   vals.push(id, actor.tenantId);
@@ -287,9 +301,13 @@ export async function approveTender(ctx: Ctx, actor: Actor, id: string, b: any) 
     const docs = await ctx.db.query(`SELECT 1 FROM documents WHERE tender_id=$1 AND owner_type='TENDER_PACK' LIMIT 1`, [t.id]);
     if (!docs.length) throw conflict('PACK_MISSING', 'Upload at least one tender pack document before approval');
   }
-  const chain = configOf(t).approvals.publish;
+  // Low-code gate on submission (first approval from DRAFT): may stop it, or add approval levels for this tender.
+  let routed: ApprovalLevel[] | null = null;
+  if (t.status === 'DRAFT') routed = routedLevels(await enforceTenderGate(ctx, actor, t, 'TENDER_SUBMIT'));
+  const chain = routed ? [...configOf({ template_snapshot: t.template_snapshot }).approvals.publish, ...routed] : configOf(t).approvals.publish;
   const reason = str(b?.reason, 'reason', { max: 2000 }) ?? null;
   return ctx.db.tx(async (q) => {
+    if (routed) await q.query(`UPDATE tenders SET routing = jsonb_set(COALESCE(routing, '{}'::jsonb), '{publish}', $1::jsonb) WHERE id=$2`, [JSON.stringify(routed), t.id]);
     const done = await currentRound(q, t.id, 'PUBLISH');
     const { levelNo, level, final } = nextLevel(chain, done, actor, [{ id: t.created_by, why: 'the creator cannot approve their own tender' }]);
     const to = final ? 'APPROVED' : 'PENDING_APPROVAL';
@@ -303,7 +321,8 @@ export async function approveTender(ctx: Ctx, actor: Actor, id: string, b: any) 
     if (nxt) await notifyRole(q, t.tenant_id, nxt.role, { kind: 'APPROVAL_WAITING',
       titleEn: `Approval level ${levelNo + 1} waiting: ${t.tender_number}`, titleAr: `بانتظار اعتماد المستوى ${levelNo + 1}: ${t.tender_number}`, body: { tenderId: t.id } });
     await auditTx(ctx, q, { tenantId: t.tenant_id, actor, action: final ? 'TENDER_APPROVED' : 'TENDER_APPROVAL_LEVEL_APPROVED', resourceType: 'TENDER',
-      resourceId: t.id, prevState: t.status, newState: to, reason, details: { level: levelNo, of: chain.length, role: level.role } });
+      resourceId: t.id, prevState: t.status, newState: to, reason, details: { level: levelNo, of: chain.length, role: level.role,
+        ...(routed?.length ? { addedByRules: routed.map((l) => `${l.role} (${l.ruleId})`) } : {}) } });
     return publicTender(rows[0]);
   });
 }
@@ -316,7 +335,8 @@ export async function returnTender(ctx: Ctx, actor: Actor, id: string, b: any) {
   if (!['DRAFT', 'PENDING_APPROVAL', 'APPROVED'].includes(t.status)) throw conflict('INVALID_STATE', `Tender is ${t.status}; it cannot be returned`);
   return ctx.db.tx(async (q) => {
     const rows = await q.query<TenderRow>(
-      `UPDATE tenders SET status='DRAFT', approved_by=NULL, updated_at=$1 WHERE id=$2 AND status=$3 RETURNING *`, [now(), t.id, t.status]);
+      `UPDATE tenders SET status='DRAFT', approved_by=NULL, updated_at=$1, routing = CASE WHEN routing IS NULL THEN NULL ELSE routing - 'publish' END
+        WHERE id=$2 AND status=$3 RETURNING *`, [now(), t.id, t.status]);
     if (!rows[0]) throw conflict('INVALID_STATE', 'Tender state changed concurrently');
     const lvl = (await currentRound(q, t.id, 'PUBLISH')).length + 1;
     await q.query(`INSERT INTO approvals (id, tenant_id, subject_type, subject_id, gate, level, role, approver_id, decision, reason, decided_at)
@@ -331,6 +351,7 @@ export async function publishTender(ctx: Ctx, actor: Actor, id: string) {
   const t = await loadTender(ctx, actor, id);
   if (t.status === 'APPROVED' && new Date(t.submission_deadline) <= now())
     throw conflict('DEADLINE_PASSED', 'Submission deadline has passed; return the tender to DRAFT and set a new deadline');
+  if (t.status === 'APPROVED') await enforceTenderGate(ctx, actor, t, 'TENDER_PUBLISH');
   const out = await transition(ctx, actor, t, ['APPROVED'], 'PUBLISHED', 'TENDER_PUBLISHED', { sets: 'published_at=$2' });
   await ctx.db.tx(async (q) => {
     await q.query(`INSERT INTO publications (id, tenant_id, tender_id, channel, status, reference, published_on, created_by, approved_by, created_at, updated_at)

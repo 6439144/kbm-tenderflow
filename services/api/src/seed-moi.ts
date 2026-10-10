@@ -12,6 +12,7 @@ import * as tenders from './services/tenders.js';
 import type { UploadFile } from './services/documents.js';
 import { SYSTEM_ACTOR } from './services/audit.js';
 import { createTemplate, publishTemplate } from './services/templates.js';
+import { installDemoLowcode } from './lowcode/seed-content.js';
 import { upsertActivityCode } from './services/eligibility.js';
 import { convertRequest, createRequest, decideRequest } from './services/requests.js';
 import { installPolicies } from './services/entity-policies.js';
@@ -167,11 +168,15 @@ export async function seedMoi(ctx: Ctx, password: string) {
   await pay('vendor5', await grade(v5, [{ activityCode: 'ITE-303', grade: 1 }, { activityCode: 'SEC-101', grade: 2 }]));
   await life.setVendorExemption(ctx, u.admin, v5, { feeExempt: true, reason: 'Government-owned supplier — exempt from tender document fees (illustrative, FR-018 open).' });
 
+  // Low-code Process Studio content (illustrative): request / tender fields and two process rules.
+  await ctx.db.tx((q) => installDemoLowcode(ctx, q, u.admin, 'moi'));
+
   // ---------------- requests: one from Raslni, one by GM letter (sample scan)
   const raslni = await createRequest(ctx, u.tenderdept, {
     source: 'RASLNI', sourceReference: 'RASLNI-2026-004512 (fictitious)', department: 'Border Security Department (fictitious)',
     subject: 'Perimeter CCTV upgrade for three border posts', estimatedBudget: 380000,
     description: 'Replace analogue cameras with IP cameras, add thermal cameras at gates and a central recording server (demo data).',
+    customFields: { sector: 'IT', classified: false },
   }, undefined);
   await decideRequest(ctx, u.director, raslni.id, { decision: 'APPROVE', reason: 'Level 1 — budget available (demo)' });
   await decideRequest(ctx, u.undersecretary, raslni.id, { decision: 'APPROVE', reason: 'Level 2 — approved (demo)' });

@@ -11,6 +11,8 @@ import { ApiError, badRequest, camel, conflict, isUuid, notFound, now, reqStr, s
 
 export interface ApprovalLevel {
   role: string; labelEn: string; labelAr: string;
+  /** Set when a low-code routing rule added this level (shown as "added by rule …"). */
+  ruleId?: string; ruleNameEn?: string; ruleNameAr?: string;
   /** Service level of this approval step in hours (stored and validated here; escalation is a notifications feature). */
   dueHours?: number;
 }
@@ -164,9 +166,14 @@ export function parseConfig(raw: any): CycleConfig {
 }
 
 /** The effective config of a tender (its pinned snapshot, or the v1 default). */
-export function configOf(t: { template_snapshot?: any }): CycleConfig {
+export function configOf(t: { template_snapshot?: any; routing?: any }): CycleConfig {
   const snap = t.template_snapshot?.config;
-  return snap ? (snap as CycleConfig) : DEFAULT_CONFIG;
+  const base = snap ? (snap as CycleConfig) : DEFAULT_CONFIG;
+  // Low-code conditional routing: approval levels added by the tender's pinned gate rules (lowcode/gates.ts).
+  const r = t.routing;
+  if (!r || (!r.publish?.length && !r.award?.length)) return base;
+  return { ...base, approvals: { ...base.approvals,
+    publish: [...base.approvals.publish, ...(r.publish ?? [])], award: [...base.approvals.award, ...(r.award ?? [])] } };
 }
 
 /** Ordered list of stages a template switches on, for previews and the tender stepper. */
@@ -349,6 +356,8 @@ export interface EntityProfile {
   documentIntelligenceAuto?: boolean;
   /** List this entity's PUBLISHED tenders on the public cross-entity tender board (unset = on). */
   publicBoard?: boolean;
+  /** Low-code Process Studio: the last editor of a form / rule-set draft cannot publish it (four-eyes on configuration). */
+  configFourEyes?: boolean;
 }
 
 export function parseProfile(b: any): EntityProfile {
@@ -369,6 +378,7 @@ export function parseProfile(b: any): EntityProfile {
     sector: str(b?.sector, 'sector', { max: 100 }),
     documentIntelligenceAuto: typeof b?.documentIntelligenceAuto === 'boolean' ? b.documentIntelligenceAuto : undefined,
     publicBoard: typeof b?.publicBoard === 'boolean' ? b.publicBoard : undefined,
+    configFourEyes: typeof b?.configFourEyes === 'boolean' ? b.configFourEyes : undefined,
   };
 }
 
@@ -388,7 +398,9 @@ export async function getProfile(ctx: Ctx, tenantId: string): Promise<EntityProf
 export async function updateProfile(ctx: Ctx, actor: Actor, b: any) {
   const profile = parseProfile(b);
   // A save that does not mention publicBoard keeps the current setting (never silently re-publishes an entity).
-  if (profile.publicBoard === undefined) profile.publicBoard = (await getProfile(ctx, actor.tenantId)).publicBoard;
+  const current = await getProfile(ctx, actor.tenantId);
+  if (profile.publicBoard === undefined) profile.publicBoard = current.publicBoard;
+  if (profile.configFourEyes === undefined) profile.configFourEyes = current.configFourEyes;
   const color = str(b?.primaryColor, 'primaryColor', { max: 9 });
   if (color && !/^#[0-9a-fA-F]{6}$/.test(color)) throw badRequest('primaryColor must be #RRGGBB');
   await ctx.db.tx(async (q) => {

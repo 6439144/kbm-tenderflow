@@ -14,6 +14,7 @@ import { submitBid } from './services/bids.js';
 import type { UploadFile } from './services/documents.js';
 import { SYSTEM_ACTOR } from './services/audit.js';
 import { installStarterTemplates } from './services/templates.js';
+import { installDemoLowcode } from './lowcode/seed-content.js';
 import { setClassification, upsertActivityCode, purchaseDocuments } from './services/eligibility.js';
 import { createRequest } from './services/requests.js';
 import { seedMoi } from './seed-moi.js';
@@ -88,6 +89,8 @@ export async function seedDemo(ctx: Ctx): Promise<void> {
     channels: { knet: false, gazette: true, capt: false }, fiscalYearStartMonth: 4, logoText: 'KEA', sector: 'Energy and utilities' })]);
   const u = await seedTenantUsers(ctx, 'kea', password);
   await installStarterTemplates(ctx, { ...u.admin, tenantId: 'kea' }, 'PUBLIC_TENDER');
+  // Low-code Process Studio content: custom tender / vendor / request fields and process rules (docs/LOW-CODE-STUDIO.md)
+  await ctx.db.tx((q) => installDemoLowcode(ctx, q, u.admin, 'kea'));
   await codes(ctx, u.admin, [
     ['IT-01', 'Software and systems integration', 'البرمجيات وتكامل الأنظمة'],
     ['IT-02', 'Networks and telecommunications', 'الشبكات والاتصالات'],
@@ -115,6 +118,8 @@ export async function seedDemo(ctx: Ctx): Promise<void> {
     descriptionAr: 'استبدال محولات الشبكة الرئيسية وشبكة الوصول في المقر الرئيسي ومحطتين فرعيتين.',
     estimatedBudget: 450000, currency: 'KWD', submissionDeadline: iso(21 * 24 * HOUR), criteria: CRITERIA, requiredDocuments: REQUIRED_DOCS,
     eligibility: { activityCodes: ['IT-02'], minGrade: 2 },
+    customFields: { fundingSource: 'CAPEX', strategicProject: true, bidBondPercent: 2, securityClearance: true,
+      clearanceNotes: 'Substation visits need a security pass: send names and civil ID copies 5 working days before the visit (demo).' },
   });
   await tenders.uploadTenderDocument(ctx, u.officer, draft.id, file('kea-network-refresh-pack.md'), { title: 'Network refresh — tender pack (EN/AR)' });
 
@@ -125,6 +130,7 @@ export async function seedDemo(ctx: Ctx): Promise<void> {
     descriptionAr: 'توريد وتنفيذ نظام مؤسسي لإدارة الوثائق مع التعرف الضوئي على النصوص العربية.',
     estimatedBudget: 300000, currency: 'KWD', submissionDeadline: iso(2 * 24 * HOUR), criteria: CRITERIA, requiredDocuments: REQUIRED_DOCS,
     eligibility: { activityCodes: ['IT-01'], minGrade: null },
+    customFields: { fundingSource: 'OPEX', budgetLine: 'OPX-2026-031', bidBondPercent: 2, localContentPercent: 30 },
   });
   await tenders.uploadTenderDocument(ctx, u.officer, pub.id, file('kea-dms-rfp-pack.md'), { title: 'DMS RFP pack (EN)' });
   await tenders.uploadTenderDocument(ctx, u.officer, pub.id, file('kea-dms-rfp-pack-ar.md'), { title: 'كراسة شروط نظام إدارة الوثائق (AR)' });
@@ -144,6 +150,7 @@ export async function seedDemo(ctx: Ctx): Promise<void> {
       descriptionAr: 'توريد وتنفيذ ودعم لمدة 3 سنوات لمنصة مكتب خدمة متوافقة مع ITIL.',
       estimatedBudget: 180000, currency: 'KWD', submissionDeadline: iso(-1 * HOUR), criteria: CRITERIA, requiredDocuments: REQUIRED_DOCS,
       eligibility: { activityCodes: ['IT-01'], minGrade: null },
+      customFields: { fundingSource: 'OPEX', budgetLine: 'OPX-2026-017', bidBondPercent: 1.5 },
     });
     await tenders.uploadTenderDocument(ctx, u.officer, closed.id, file('kea-it-rfp-pack.md'), { title: 'IT Service Desk RFP pack (EN)' });
     await tenders.uploadTenderDocument(ctx, u.officer, closed.id, file('kea-it-rfp-pack-ar.md'), { title: 'كراسة شروط منصة مكتب الخدمة (AR)' });

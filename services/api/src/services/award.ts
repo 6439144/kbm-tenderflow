@@ -6,6 +6,7 @@ import { badRequest, camel, conflict, forbidden, now, reqStr, str, uuid } from '
 import { loadTender, type TenderRow } from './tenders.js';
 import { financialSealed, loadBid } from './bids.js';
 import { configOf } from './templates.js';
+import { enforceTenderGate, routedLevels } from '../lowcode/gates.js';
 import { approvalChainView, currentRound, nextLevel } from './tenders.js';
 import { notify, notifyRole } from './notifications.js';
 import { uuid as newId } from '../util.js';
@@ -82,7 +83,10 @@ export async function recommendAward(ctx: Ctx, actor: Actor, tenderId: string, b
     if (bid.technical_result !== 'PASSED') throw conflict('TECHNICAL_FAILED', 'Only a bid that passed the technical stage can be recommended');
   }
   const justification = reqStr(b?.justification, 'justification', 8000);
+  // Low-code gate: may stop the recommendation or add award approval levels (e.g. a high-value award).
+  const routed = routedLevels(await enforceTenderGate(ctx, actor, t, 'AWARD_RECOMMEND', { bidId: bid.id }));
   return ctx.db.tx(async (q) => {
+    await q.query(`UPDATE tenders SET routing = jsonb_set(COALESCE(routing, '{}'::jsonb), '{award}', $1::jsonb) WHERE id=$2`, [JSON.stringify(routed), t.id]);
     const ex = await q.query<any>('SELECT * FROM awards WHERE tender_id=$1', [t.id]);
     if (ex[0]?.status === 'APPROVED') throw conflict('INVALID_STATE', 'Award already approved');
     const rows = ex[0]
@@ -91,7 +95,7 @@ export async function recommendAward(ctx: Ctx, actor: Actor, tenderId: string, b
       : await q.query(`INSERT INTO awards (id, tenant_id, tender_id, bid_id, recommended_by, justification, status, created_at)
                        VALUES ($1,$2,$3,$4,$5,$6,'RECOMMENDED',$7) RETURNING *`, [uuid(), actor.tenantId, t.id, bid.id, actor.id, justification, now()]);
     await auditTx(ctx, q, { tenantId: actor.tenantId, actor, action: 'AWARD_RECOMMENDED', resourceType: 'TENDER', resourceId: t.id,
-      newState: 'RECOMMENDED', reason: justification, details: { bidId: bid.id } });
+      newState: 'RECOMMENDED', reason: justification, details: { bidId: bid.id, ...(routed.length ? { addedByRules: routed.map((l) => `${l.role} (${l.ruleId})`) } : {}) } });
     return camel(rows[0]);
   });
 }

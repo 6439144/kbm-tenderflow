@@ -57,7 +57,7 @@ test('production: a safe configuration starts; TF_ENV must be a known value', ()
   assert.deepEqual(productionProblems(goodProd()), []);
   assert.throws(() => loadConfig({ ...goodProd(), TF_ENV: 'prod' }), (e: unknown) => e instanceof ConfigError && /TF_ENV must be one of/.test(e.message));
   assert.equal(loadConfig({ BID_MASTER_KEY, AUDIT_SIGNING_KEY }).tfEnv, 'development');
-  assert.equal(loadConfig({ BID_MASTER_KEY, AUDIT_SIGNING_KEY, TRUST_PROXY: 'loopback, 10.128.0.0/14' }).trustProxy, 'loopback, 10.128.0.0/14');
+  assert.deepEqual(loadConfig({ BID_MASTER_KEY, AUDIT_SIGNING_KEY, TRUST_PROXY: 'loopback, 10.128.0.0/14' }).trustProxy, ['loopback', '10.128.0.0/14']);
   assert.equal(loadConfig({ BID_MASTER_KEY, AUDIT_SIGNING_KEY, TRUST_PROXY: 'false' }).trustProxy, false);
 });
 
