@@ -9,6 +9,7 @@
 // A job receives `tenantId` when an entity admin runs it manually: it must then only touch that entity's data.
 import crypto from 'node:crypto';
 import type { Ctx } from '../ctx.js';
+import { boundEntity } from '../tenancy.js';
 
 export interface JobContext { tenantId?: string; trigger: 'SCHEDULE' | 'MANUAL' }
 export type JobFn = (ctx: Ctx, opts: JobContext) => Promise<Record<string, unknown> | void>;
@@ -84,6 +85,9 @@ export function requestRun(ctx: Ctx, name: string, delayMs = 250): void {
 
 /** Run one job now (lease-guarded). Never throws for job errors: they are recorded and returned. */
 export async function runJob(ctx: Ctx, name: string, opts: JobContext): Promise<JobRunResult> {
+  // Dedicated installation: every run (scheduled ones too) is scoped to the installation's entity (tenancy.ts).
+  const bound = boundEntity(ctx.config);
+  if (bound && opts.tenantId !== bound) opts = { ...opts, tenantId: bound };
   const j = registry.get(name);
   if (!j) throw new Error(`unknown job '${name}'`);
   const rt = runtimes.get(ctx);

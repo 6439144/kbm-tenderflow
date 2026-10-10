@@ -18,6 +18,7 @@ import { installDefaultDocumentTypes } from '../services/doc-catalogue.js';
 import { installStarterTemplates, STARTER_TEMPLATES } from '../services/templates.js';
 import { installDefaultTemplates } from '../features/notify/engine.js';
 import { badRequest } from '../util.js';
+import { assertMayCreateEntity } from '../tenancy.js';
 
 export interface EntityInput {
   code: string;
@@ -74,6 +75,7 @@ export function validateEntityInput(i: EntityInput): Required<Omit<EntityInput, 
 
 export async function provisionEntity(ctx: Ctx, input: EntityInput, opts: { dryRun?: boolean } = {}): Promise<EntityResult> {
   const v = validateEntityInput(input);
+  await assertMayCreateEntity(ctx, v.code); // dedicated installation: only its own entity (tenancy.ts)
   const dryRun = !!opts.dryRun;
   const tenantId = v.code;
   const warnings: string[] = [];

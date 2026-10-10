@@ -13,6 +13,7 @@ import { ApiError, now, uuid } from '../../util.js';
 import { completeLogin, type UserRow } from '../../services/identity.js';
 import { enforceStaffNetwork, type ReqLike } from './network.js';
 import { loadSettings, type OidcConfig } from './settings.js';
+import { foreignEntity } from '../../tenancy.js';
 
 export class SsoError extends ApiError {
   constructor(code: string, message: string, status = 401) { super(status, code, message); }
@@ -128,6 +129,7 @@ export async function ssoCallback(ctx: Ctx, query: Record<string, unknown>, req:
   if (row.tenant_id !== bound.t || sha(row.nonce) !== bound.n)
     throw new SsoError('SSO_BROWSER_MISMATCH', 'This sign-in was not started in this browser; start again');
   const tenantId = row.tenant_id;
+  if (foreignEntity(ctx.config, tenantId)) throw new SsoError('SSO_NOT_CONFIGURED', 'Unknown entity', 404); // dedicated installation
   if (typeof query.error === 'string')
     return refuse(ctx, tenantId, 'SSO_IDP_ERROR', `The identity provider refused the sign-in: ${query.error}${typeof query.error_description === 'string' ? ` — ${query.error_description.slice(0, 300)}` : ''}`, { idpError: query.error });
   const code = typeof query.code === 'string' ? query.code : '';

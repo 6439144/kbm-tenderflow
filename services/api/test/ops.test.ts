@@ -34,6 +34,7 @@ const goodProd = (): Record<string, string> => ({
   DATABASE_URL: 'postgresql://tf_app:pg-pass-marker-77@db.tenderflow.svc:5432/tenderflow', PUBLIC_BASE_URL: 'https://tenders.example.gov.kw',
   CONTENT_STORE_TYPE: 'filenet', FILENET_GRAPHQL_URL: 'https://filenet.example.local/content-services-graphql/graphql', FILENET_OBJECT_STORE: 'OS1',
   FILENET_SERVICE_USER: 'svc_tenderflow', FILENET_SERVICE_PASSWORD: 'fn-pass-marker-31', TRUST_PROXY: '1', DATA_DIR: tmp(),
+  ENTITY_ID: 'kea', // dedicated installation (default TENANCY_MODE): production requires the entity it serves
 });
 
 function run(args: string[], env: Record<string, string>, timeoutMs = 60_000): Promise<{ code: number | null; out: string; err: string }> {
@@ -235,7 +236,7 @@ test('entity:create provisions an entity, its administrator, templates and catal
 });
 
 test('entity:create CLI prints the one-time password once; a re-run changes nothing', async () => {
-  const env = { BID_MASTER_KEY, AUDIT_SIGNING_KEY, DATA_DIR: tmp() };
+  const env = { BID_MASTER_KEY, AUDIT_SIGNING_KEY, DATA_DIR: tmp(), TENANCY_MODE: 'shared' }; // two entities in one database
   const args = ['src/tools/entity-create.ts', '--code', 'cli', '--name-en', 'CLI Authority (fictitious)', '--name-ar', 'هيئة سطر الأوامر (وهمية)'];
   const first = await run(args, env);
   assert.equal(first.code, 0, first.out + first.err);

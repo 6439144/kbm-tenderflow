@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { productionProblems, tfEnvOf, TF_ENVS, type TfEnv } from './ops/checks.js';
+import { DEMO_ENTITIES, ENTITY_ID_RE, TENANCY_MODES, type DemoEntity, type TenancyMode } from './tenancy.js';
 
 export const API_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const REPO_ROOT = path.resolve(API_ROOT, '..', '..');
@@ -60,6 +61,14 @@ export interface Config {
   /** TRUST_PROXY — Express 'trust proxy' (default false: X-Forwarded-For is ignored). A hop count such as 1 behind the
    *  OpenShift router, or a comma-separated list of proxy addresses / CIDRs / loopback|linklocal|uniquelocal. */
   trustProxy: false | number | string[];
+  // --- deployment model (docs/DEPLOYMENT-MODEL.md) ---
+  /** TENANCY_MODE — dedicated (default: one installation = one government entity) | shared (several entities). */
+  tenancyMode: TenancyMode;
+  /** ENTITY_ID — the entity a dedicated installation serves (required with TF_ENV=production). After start-up
+   *  (createApp) this holds the resolved entity, which may come from the database when ENTITY_ID is unset. */
+  entityId?: string;
+  /** DEMO_ENTITY — the demo entity seeded in dedicated mode (kea | gcia | moi; default ENTITY_ID or kea). */
+  demoEntity: DemoEntity;
 }
 
 export class ConfigError extends Error {}
@@ -136,6 +145,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     lockMinutes: lockNum('LOGIN_LOCKOUT_MINUTES', 15, 1),
   };
   const trustProxy = parseTrustProxy(opt(env.TRUST_PROXY), problems);
+  // --- deployment model ---
+  const tenancy = parseTenancy(env, seedDemo, problems);
 
   if (missing.length || problems.length) {
     const lines = [
@@ -183,7 +194,40 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     tfEnv: tfEnv!,
     shutdownDelayMs: nonNegative(opt(env.SHUTDOWN_DELAY_MS), 0),
     shutdownTimeoutMs: nonNegative(opt(env.SHUTDOWN_TIMEOUT_MS), 20_000),
+    // --- deployment model ---
+    ...tenancy,
   };
+}
+
+/**
+ * TENANCY_MODE / ENTITY_ID / DEMO_ENTITY. Default mode is dedicated everywhere (one installation per entity); the test
+ * suite and KBM's multi-entity demo set TENANCY_MODE=shared explicitly. ENTITY_ID is required in production when
+ * dedicated (the production rule lives in ops/checks.ts so `config:check` shows it too); outside production it may be
+ * left empty and is then taken from the database at start-up (see tenancy.ts resolveTenancy).
+ */
+export function parseTenancy(env: NodeJS.ProcessEnv, seedDemo: boolean, problems: string[]):
+  { tenancyMode: TenancyMode; entityId?: string; demoEntity: DemoEntity } {
+  const rawMode = (opt(env.TENANCY_MODE) ?? 'dedicated').toLowerCase();
+  let tenancyMode: TenancyMode = 'dedicated';
+  if ((TENANCY_MODES as readonly string[]).includes(rawMode)) tenancyMode = rawMode as TenancyMode;
+  else problems.push(`TENANCY_MODE must be one of ${TENANCY_MODES.join(', ')} (got '${rawMode.slice(0, 20)}')`);
+  const rawEntity = opt(env.ENTITY_ID)?.toLowerCase();
+  let entityId: string | undefined;
+  if (rawEntity !== undefined) {
+    if (ENTITY_ID_RE.test(rawEntity)) entityId = rawEntity;
+    else problems.push(`ENTITY_ID must be an entity code of 2-40 characters a-z, 0-9, _ or - (got '${rawEntity.slice(0, 40)}')`);
+  }
+  if (tenancyMode === 'shared' && entityId) problems.push('ENTITY_ID is only used with TENANCY_MODE=dedicated; remove it or set TENANCY_MODE=dedicated');
+  const rawDemo = opt(env.DEMO_ENTITY)?.toLowerCase();
+  let demoEntity: DemoEntity = entityId && (DEMO_ENTITIES as readonly string[]).includes(entityId) ? entityId as DemoEntity : 'kea';
+  if (rawDemo !== undefined) {
+    if ((DEMO_ENTITIES as readonly string[]).includes(rawDemo)) demoEntity = rawDemo as DemoEntity;
+    else problems.push(`DEMO_ENTITY must be one of ${DEMO_ENTITIES.join(', ')} (got '${rawDemo.slice(0, 20)}')`);
+  }
+  if (tenancyMode === 'dedicated' && seedDemo && entityId && entityId !== demoEntity)
+    problems.push(`SEED_DEMO=true in a dedicated installation seeds DEMO_ENTITY (${demoEntity}), but ENTITY_ID is '${entityId}': `
+      + `set both to the same demo entity (${DEMO_ENTITIES.join(' | ')})`);
+  return { tenancyMode, entityId, demoEntity };
 }
 
 // --- ops ---

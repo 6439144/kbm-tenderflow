@@ -12,6 +12,7 @@ import { enforceStaffNetwork, type ReqLike } from '../features/security/network.
 import { secondStepFor, startEnrolment, confirmEnrolment, verifySecondFactor } from '../features/security/mfa.js';
 import { loadSettings } from '../features/security/settings.js';
 import { assertLoginAllowed } from './vendor-lifecycle.js';
+import { assertMayCreateEntity, boundEntity, publicEntity } from '../tenancy.js';
 import { assertNotLocked, clearLoginFailures, lockStates, lockedError, recordLoginFailure } from './login-lockout.js';
 
 export interface UserRow {
@@ -27,6 +28,7 @@ export const publicUser = (u: UserRow) => ({
 
 export async function createTenant(ctx: Ctx, t: { id: string; nameEn: string; nameAr: string; primaryColor?: string }) {
   if (!/^[a-z0-9_-]{2,40}$/.test(t.id)) throw badRequest('tenant id must be 2-40 chars [a-z0-9_-]');
+  await assertMayCreateEntity(ctx, t.id); // dedicated installation: only its own entity (tenancy.ts)
   return ctx.db.tx(async (q) => {
     await q.query('INSERT INTO tenants (id, name_en, name_ar, primary_color) VALUES ($1,$2,$3,$4)',
       [t.id, t.nameEn, t.nameAr, t.primaryColor ?? '#0B4F6C']);
@@ -88,7 +90,8 @@ const DUMMY_HASH = bcrypt.hashSync('tenderflow-dummy-password', 10);
  * session token is issued only by /auth/mfa/verify or /auth/mfa/enrol/confirm.
  */
 export async function login(ctx: Ctx, body: any, req?: ReqLike) {
-  const tenantId = reqStr(body?.tenantId, 'tenantId', 40);
+  // Dedicated installation: the entity is fixed; a tenantId from the client is optional and must match (else 404).
+  const tenantId = publicEntity(ctx.config, body?.tenantId) ?? reqStr(body?.tenantId, 'tenantId', 40);
   const username = reqStr(body?.username, 'username', 80).toLowerCase();
   const password = typeof body?.password === 'string' ? body.password : '';
   await assertNotLocked(ctx, tenantId, username); // HARDEN: same answer whether or not the user exists
@@ -183,7 +186,10 @@ export async function me(ctx: Ctx, actor: Actor) {
 }
 
 export async function publicTenants(ctx: Ctx) {
-  const rows = camel<any[]>(await ctx.db.query(`SELECT id, name_en, name_ar, primary_color FROM tenants WHERE status='ACTIVE' ORDER BY id`));
+  // Dedicated installation: only its own entity is listed (never the others a database might hold).
+  const bound = boundEntity(ctx.config);
+  if (ctx.config.tenancyMode === 'dedicated' && !bound) return [];
+  const rows = camel<any[]>(await ctx.db.query(`SELECT id, name_en, name_ar, primary_color FROM tenants WHERE status='ACTIVE' AND ($1::text IS NULL OR id=$1) ORDER BY id`, [bound]));
   // Staff single sign-on button on the login page (only what the page needs: label, never issuer/client details).
   for (const t of rows) {
     const o = (await loadSettings(ctx, t.id)).oidc;

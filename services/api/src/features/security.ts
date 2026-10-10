@@ -9,6 +9,7 @@ import type { Actor } from '../auth/tokens.js';
 import { unauthorized } from '../auth/tokens.js';
 import { actor, h, requireRoles, sendDoc } from '../routes.js';
 import { conflict, reqStr } from '../util.js';
+import { publicEntity } from '../tenancy.js';
 import * as identity from '../services/identity.js';
 import type { UserRow } from '../services/identity.js';
 import { ipInList } from '../auth/cidr.js';
@@ -53,7 +54,9 @@ export function registerSecurityPublicRoutes(r: express.Router, ctx: Ctx) {
 
   // Staff SSO (OIDC). Browser navigations: errors come back to the login page as ?ssoError=CODE.
   const toLogin = (res: express.Response, params: Record<string, string>) => res.redirect(302, `/login?${new URLSearchParams(params).toString()}`);
-  r.get('/auth/oidc/:tenantId/start', limiter, (req, res) => {
+  r.get('/auth/oidc/:tenantId/start', limiter, (req, res, next) => {
+    // Dedicated installation: only its own entity; any other id → 404 like an unknown route (tenancy.ts).
+    try { publicEntity(ctx.config, req.params.tenantId); } catch (e) { next(e); return; }
     ssoStart(ctx, req.params.tenantId)
       .then(({ url, cookie }) => { res.setHeader('Set-Cookie', cookie); res.setHeader('Cache-Control', 'no-store'); res.redirect(302, url); })
       .catch((e) => toLogin(res, { ssoError: e instanceof SsoError || e?.code ? String(e.code) : 'SSO_FAILED', tenant: req.params.tenantId }));

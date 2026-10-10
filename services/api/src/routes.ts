@@ -19,6 +19,7 @@ import { verifyAudit } from './services/audit.js';
 import { registerPlatformRoutes } from './routes-platform.js';
 import { registerFeatureRoutes, registerPublicFeatureRoutes } from './features/index.js';
 import { registerSecurityPublicRoutes, securityGate } from './features/security.js';
+import { deploymentInfo } from './tenancy.js';
 
 declare module 'express-serve-static-core' {
   interface Request { actor?: Actor }
@@ -73,6 +74,7 @@ export function apiRouter(ctx: Ctx): express.Router {
   r.post('/auth/login', loginLimiter, h((req) => identity.login(ctx, req.body, req)));
   registerSecurityPublicRoutes(r, ctx); // SEC: MFA second step, staff SSO
   r.get('/public/tenants', h(() => identity.publicTenants(ctx)));
+  r.get('/public/deployment', h(async (_req, res) => { res.setHeader('Cache-Control', 'no-store'); return deploymentInfo(ctx); }));
   r.post('/public/vendors/register', loginLimiter, h(async (req, res) => { res.status(201); return vendors.registerVendor(ctx, req.body); }));
   registerPublicFeatureRoutes(r, ctx);
 
