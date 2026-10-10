@@ -19,6 +19,10 @@ Facts include budget, category, cycle template, envelopes, days until deadline, 
 count, recommended bid's score and rank, vendor status, categories and grade, request budget, department and source, document kind, size and type,
 the acting user's roles, and **every custom field**.
 
+**Describe it instead of building it.** Administrators can also ask the watsonx Orchestrate agent in **Admin → AI builder** for
+forms, rules and cycle templates in plain language (Arabic or English). It produces a proposal that the server validates with the same
+rules as this Studio and creates drafts only when the administrator applies it — see [ADMIN-AI-BUILDER.md](ADMIN-AI-BUILDER.md).
+
 ## What can never be changed (locked controls)
 
 - Bids are encrypted (AES-256-GCM) until the opening; no fact, message or webhook can contain bid prices, files or bidder identities before opening.
