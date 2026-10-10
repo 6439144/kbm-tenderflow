@@ -1,8 +1,9 @@
 // npm run verify:ai — live check of the watsonx Orchestrate integration.
-// 1) config presence (no secret values printed) 2) IAM token 3) all ten agents present 4) one real clarification
+// 1) config presence (no secret values printed) 2) IAM token 3) all eleven agents present 4) one real clarification
 // on an embedded bilingual sample, printing the parsed answer and citations 5) one real turn of the supervisor
 // tenderflow_assistant on a small role-scoped context 6) one real document-intelligence run on an embedded bilingual
-// commercial registration (classification + cited fields, validated). Exits non-zero on any failure.
+// commercial registration (classification + cited fields, validated) 7) one real admin-builder turn (a plain-language
+// admin request → a strictly validated change proposal containing an ADD_RULE). Exits non-zero on any failure.
 // Per-agent quality for the other specialists: `npm run evals -- agents`.
 import { loadRepoEnv, findRepoRoot } from '../ai/tools/env.js';
 import { readAiConfig, missingSettings, type AgentRole } from '../ai/config.js';
@@ -131,6 +132,29 @@ async function main(): Promise<number> {
   } catch (e) {
     console.error(`\nFAIL: live document intelligence failed: ${(e as Error).message}`);
     return 11;
+  }
+  const adminMsg = 'Tenders above 1,000,000 KWD need the Undersecretary';
+  console.log(`\nLive admin builder (tenderflow_admin_builder): ${adminMsg}`);
+  const t3 = Date.now();
+  try {
+    const res = await ai.buildAdminProposal({
+      message: adminMsg, currentOperations: null, history: [], customFacts: [],
+      state: [
+        { section: 'Cycle templates of this entity', text: '- PUBLIC_TENDER — Public tender (one envelope) — published v1 (default) — one envelope; publication approvals: Procurement Director' },
+        { section: 'Process rules', text: 'Rule set PROCESS: nothing published.' },
+      ],
+    });
+    const meta = res.raw as { runId?: string; repaired?: boolean } | undefined;
+    line('agent / model', `${res.agent} / ${res.model ?? '(not reported)'}`);
+    line('run id', meta?.runId ?? '-');
+    line('elapsed', `${Date.now() - t3} ms`);
+    line('repair turn used', String(meta?.repaired ?? false));
+    line('operations', res.output.operations.map((o) => o.op).join(', ') || '(none)');
+    console.log(`reply (en): ${res.output.reply.en}\nreply (ar): ${res.output.reply.ar}`);
+    if (!res.output.operations.some((o) => o.op === 'ADD_RULE')) { console.error('\nFAIL: expected an ADD_RULE operation (TenderFlow validates the rule itself when it is proposed in the app).'); return 12; }
+  } catch (e) {
+    console.error(`\nFAIL: live admin builder failed: ${(e as Error).message}`);
+    return 13;
   }
   console.log('\nOK: watsonx Orchestrate integration verified.');
   return 0;

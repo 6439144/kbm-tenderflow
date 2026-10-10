@@ -1,12 +1,12 @@
-# TenderFlow - import the ten watsonx Orchestrate agents into an Orchestrate (IBM Cloud) instance:
-# the nine specialist (collaborator) agents first, then the supervisor tenderflow_assistant, whose
+# TenderFlow - import the eleven watsonx Orchestrate agents into an Orchestrate (IBM Cloud) instance:
+# the nine specialist (collaborator) agents and the admin builder first, then the supervisor tenderflow_assistant, whose
 # `collaborators:` list refers to them by name.
 #
 # Usage (from the repo root, in Windows PowerShell 5.1+ or PowerShell 7):
 #   powershell -ExecutionPolicy Bypass -File agents\import.ps1
 #
 # Reads WXO_INSTANCE_URL and WXO_API_KEY from the repo .env (process environment wins).
-# Optional: WXO_LLM (model id from `orchestrate models list`) overrides the llm in all ten YAML files;
+# Optional: WXO_LLM (model id from `orchestrate models list`) overrides the llm in all eleven YAML files;
 #           WXO_ENV_NAME (default "techzone"); WXO_AUTH_TYPE (default "ibm_iam" for IBM Cloud instances).
 # Stops on the first failing step. The API key is never printed.
 
@@ -20,7 +20,7 @@ $AgentsDir = $PSScriptRoot
 $RepoRoot = Split-Path -Parent $AgentsDir
 $EnvFile = Join-Path $RepoRoot '.env'
 # Order matters: collaborators first, supervisor (tenderflow_assistant) last.
-$AgentNames = @('tenderflow_pack_checker', 'tenderflow_clarification_assistant', 'tenderflow_compliance_screener', 'tenderflow_request_classifier', 'tenderflow_notice_drafter', 'tenderflow_relevance_matcher', 'tenderflow_evaluation_narrator', 'tenderflow_grade_reviewer', 'tenderflow_document_intelligence', 'tenderflow_assistant')
+$AgentNames = @('tenderflow_pack_checker', 'tenderflow_clarification_assistant', 'tenderflow_compliance_screener', 'tenderflow_request_classifier', 'tenderflow_notice_drafter', 'tenderflow_relevance_matcher', 'tenderflow_evaluation_narrator', 'tenderflow_grade_reviewer', 'tenderflow_document_intelligence', 'tenderflow_admin_builder', 'tenderflow_assistant')
 $AgentFiles = @($AgentNames | ForEach-Object { "$_.yaml" })
 
 # ---- load .env (KEY=VALUE, comments, optional quotes) -----------------------------------------------
@@ -118,7 +118,7 @@ foreach ($f in $AgentFiles) {
 
 Invoke-Step "orchestrate agents list" { orchestrate agents list }
 
-# Verify all ten agents are really there (some CLI paths log an error without a non-zero exit).
+# Verify all eleven agents are really there (some CLI paths log an error without a non-zero exit).
 $listing = (orchestrate agents list -v | Out-String)
 if ($LASTEXITCODE -ne 0) { throw "FAILED: orchestrate agents list -v (exit code $LASTEXITCODE)" }
 $missing = @($AgentNames | Where-Object { $listing -notmatch [regex]::Escape($_) })

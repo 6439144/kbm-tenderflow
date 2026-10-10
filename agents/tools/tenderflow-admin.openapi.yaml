@@ -1,0 +1,170 @@
+# OPTIONAL admin tool pack for watsonx Orchestrate (agent tenderflow_admin_builder). NOT wired by default: TenderFlow's
+# AI builder page calls the agent outbound and needs no inbound calls. Importing this pack lets the same agent be used
+# from the Orchestrate chat UI: it SUBMITS change proposals into TenderFlow and reads them back. It can never apply or
+# publish anything — there is deliberately no apply/publish operation here. An administrator reviews each proposal in
+# TenderFlow (Admin -> AI builder) and clicks "Create drafts", which creates DRAFT versions only.
+# Requires TenderFlow on a public HTTPS URL — replace the server URL below. See agents/tools/README.md.
+openapi: 3.0.3
+info:
+  title: TenderFlow admin builder API (watsonx Orchestrate tool pack)
+  version: 1.0.0
+  description: >
+    Submit a structured configuration change proposal to TenderFlow and read its validation result. Every call is
+    authorised with a TenderFlow bearer token (RS256 JWT issued by TenderFlow) of a TENANT_ADMIN; the entity (tenant)
+    comes only from that token, so proposals always land in that administrator's own entity. TenderFlow validates every
+    operation with its own rules (locked integrity controls cannot be changed) and stores the result as a PROPOSAL.
+servers:
+  - url: https://tenderflow.example.com/api/v1
+    description: Replace with the public HTTPS URL of your TenderFlow deployment (path /api/v1).
+security:
+  - bearerAuth: []
+paths:
+  /admin-agent/proposals:
+    post:
+      operationId: submit_admin_proposal
+      summary: Submit a configuration change proposal (draft-first; never applied by this call)
+      description: >
+        Sends the administrator's request and the proposed operations (cycle-template drafts, process rules, custom
+        form fields and sections, document types). TenderFlow checks the shape strictly (unknown operations or keys →
+        400), validates each operation against the entity's current configuration and stores a PROPOSAL with, per
+        operation, ok/error, reasons and a plain-language sentence in English and Arabic. Nothing in the configuration
+        changes. Tell the user that an administrator must open reviewPath in TenderFlow and click "Create drafts".
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitProposal'
+      responses:
+        '201':
+          description: Proposal stored (status PROPOSED, applied false)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Proposal'
+        '400':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /admin-agent/proposals/{id}:
+    get:
+      operationId: get_admin_proposal
+      summary: Read a proposal of the signed-in administrator's entity
+      description: >
+        Returns the proposal with its status (PROPOSED, APPLIED, DISCARDED, FAILED), the validation result per
+        operation and, once an administrator applied it, the drafts that were created.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Proposal id (UUID) returned by submit_admin_proposal
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The proposal
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Proposal'
+        '404':
+          $ref: '#/components/responses/Error'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  responses:
+    Error:
+      description: Error (400 invalid plan, 401 not signed in, 403 not a TENANT_ADMIN, 404 not found in this entity)
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              code: { type: string }
+              message: { type: string }
+              problems: { type: array, items: { type: string } }
+  schemas:
+    Bilingual:
+      type: object
+      required: [en, ar]
+      properties:
+        en: { type: string, description: English text }
+        ar: { type: string, description: Arabic text }
+    Operation:
+      type: object
+      description: >
+        One operation. "op" is one of CREATE_TEMPLATE {code, nameEn, nameAr, description?, baseCode?, changes?},
+        NEW_TEMPLATE_VERSION {code, nameEn?, nameAr?, description?, changes?}, ADD_RULE {rule}, UPDATE_RULE {ruleId,
+        changes}, SET_RULE_ENABLED {ruleId, enabled}, ADD_FORM_FIELD {form, field}, UPDATE_FORM_FIELD {form, key,
+        changes}, ADD_FORM_SECTION {form, section}, ADD_DOCUMENT_TYPE {code, nameEn, nameAr, contexts, fields?}.
+        Any other key is rejected. The content (rule conditions and actions, field properties, template settings) is
+        validated by TenderFlow; see docs/ADMIN-AI-BUILDER.md for the full catalogue.
+      required: [op]
+      properties:
+        op:
+          type: string
+          enum: [CREATE_TEMPLATE, NEW_TEMPLATE_VERSION, ADD_RULE, UPDATE_RULE, SET_RULE_ENABLED, ADD_FORM_FIELD, UPDATE_FORM_FIELD, ADD_FORM_SECTION, ADD_DOCUMENT_TYPE]
+      additionalProperties: true
+    SubmitProposal:
+      type: object
+      required: [operations]
+      properties:
+        request: { type: string, description: "The administrator's request in their own words (kept with the proposal)" }
+        reply:
+          $ref: '#/components/schemas/Bilingual'
+        operations:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/Operation'
+    OperationResult:
+      type: object
+      properties:
+        index: { type: integer }
+        op: { type: string }
+        status: { type: string, enum: [ok, error] }
+        summary: { $ref: '#/components/schemas/Bilingual' }
+        errors: { type: array, items: { $ref: '#/components/schemas/Bilingual' } }
+        warnings: { type: array, items: { $ref: '#/components/schemas/Bilingual' } }
+        target:
+          type: object
+          nullable: true
+          properties:
+            type: { type: string, enum: [TEMPLATE, FORM, RULESET, DOCUMENT_TYPE] }
+            code: { type: string }
+            action: { type: string, enum: [CREATE_DRAFT, UPDATE_DRAFT, CREATE_INACTIVE] }
+            draftVersion: { type: integer, nullable: true }
+    Proposal:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [PROPOSED, APPLIED, DISCARDED, FAILED] }
+        source: { type: string, enum: [CHAT, TOOL] }
+        requestText: { type: string }
+        reviewPath: { type: string, description: 'Path in TenderFlow where an administrator reviews and applies the proposal, e.g. /admin/builder?proposal=<id>' }
+        applied: { type: boolean, description: 'Always false in the submit response: this call never applies anything' }
+        next: { $ref: '#/components/schemas/Bilingual' }
+        validation:
+          type: object
+          properties:
+            valid: { type: boolean, description: 'True when every operation passed; only then can an administrator apply it' }
+            results: { type: array, items: { $ref: '#/components/schemas/OperationResult' } }
+            errors: { type: array, items: { $ref: '#/components/schemas/Bilingual' } }
+            notes: { type: array, items: { $ref: '#/components/schemas/Bilingual' } }
+        appliedRefs:
+          type: array
+          nullable: true
+          items:
+            type: object
+            properties:
+              type: { type: string }
+              id: { type: string }
+              code: { type: string }
+              version: { type: integer, nullable: true }
+              status: { type: string, enum: [DRAFT, INACTIVE] }
+              link: { type: string }
