@@ -17,7 +17,9 @@ const codeAt = (manualKey: string, offsetSteps = 0) => totp(base32Decode(manualK
 const nextStep = () => { const t = now().getTime(); setClockOffset((t - Date.now()) + (30_000 - (t % 30_000)) + 1_000); };
 
 before(async () => {
-  run = await startApp();
+  // TRUST_PROXY=1: the allowlist test below sends X-Forwarded-For as the OpenShift router would. The sign-in lockout
+  // (HARDEN) is raised here so this file keeps testing the second factor's own lock; harden.test.ts covers both.
+  run = await startApp(undefined, { TRUST_PROXY: '1', LOGIN_LOCKOUT_ATTEMPTS: '20' });
   await makeTenant(run, 'sa');
   await makeTenant(run, 'sb');
   await makeUser(run, 'sa', 'admin', ['TENANT_ADMIN']);

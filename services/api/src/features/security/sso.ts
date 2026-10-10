@@ -48,21 +48,58 @@ async function enabledConfig(ctx: Ctx, tenantId: string): Promise<OidcConfig> {
   return o;
 }
 
+// ---- HARDEN: browser binding of state + nonce ----
+// /start also sets an httpOnly, SameSite=Lax, 10-minute cookie, HMAC-signed with a key derived from AUDIT_SIGNING_KEY,
+// holding the state, the SHA-256 of the nonce, the entity and the expiry. /callback refuses (SSO_BROWSER_MISMATCH)
+// unless the same browser presents that cookie for that state, so a callback URL cannot be replayed from another
+// browser (login CSRF / code injection); the state row is single use, so it cannot be replayed in the same one either.
+export const SSO_COOKIE = 'tf_oidc_state';
+const SSO_COOKIE_PATH = '/api/v1/auth/oidc';
+const STATE_TTL_MS = 10 * 60_000;
+const cookieKey = (ctx: Ctx) => Buffer.from(crypto.hkdfSync('sha256', ctx.config.auditSigningKey, 'tenderflow', 'oidc-state-cookie', 32));
+const sha = (s: string) => crypto.createHash('sha256').update(s).digest('base64url');
+
+function signCookie(ctx: Ctx, payload: { s: string; n: string; t: string; e: number }): string {
+  const body = b64url(Buffer.from(JSON.stringify(payload)));
+  return `${body}.${crypto.createHmac('sha256', cookieKey(ctx)).update(body).digest('base64url')}`;
+}
+
+export function readSsoCookie(ctx: Ctx, cookieHeader: string | undefined): { s: string; n: string; t: string; e: number } | null {
+  const raw = (cookieHeader ?? '').split(';').map((c) => c.trim()).find((c) => c.startsWith(`${SSO_COOKIE}=`))?.slice(SSO_COOKIE.length + 1);
+  if (!raw) return null;
+  const [body, mac] = raw.split('.');
+  if (!body || !mac) return null;
+  const want = crypto.createHmac('sha256', cookieKey(ctx)).update(body).digest();
+  const got = Buffer.from(mac, 'base64url');
+  if (got.length !== want.length || !crypto.timingSafeEqual(got, want)) return null;
+  try {
+    const p = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
+    if (typeof p?.s !== 'string' || typeof p?.n !== 'string' || typeof p?.t !== 'string' || typeof p?.e !== 'number') return null;
+    return p;
+  } catch { return null; }
+}
+
+const cookieAttrs = (ctx: Ctx, maxAgeSec: number) =>
+  `Path=${SSO_COOKIE_PATH}; HttpOnly; SameSite=Lax; Max-Age=${maxAgeSec}${ctx.config.publicBaseUrl.startsWith('https:') ? '; Secure' : ''}`;
+export const clearSsoCookie = (ctx: Ctx) => `${SSO_COOKIE}=; ${cookieAttrs(ctx, 0)}`;
+
 /** Build the authorization request and remember state, nonce and the PKCE verifier (10 minutes, single use). */
-export async function ssoStart(ctx: Ctx, tenantId: string): Promise<string> {
+export async function ssoStart(ctx: Ctx, tenantId: string): Promise<{ url: string; cookie: string }> {
   if (!/^[a-z0-9_-]{2,40}$/.test(tenantId)) throw new SsoError('SSO_NOT_CONFIGURED', 'Unknown entity', 404);
   const o = await enabledConfig(ctx, tenantId);
   const doc = await discover(o.issuer);
   const state = rand(), nonce = rand(), verifier = rand(48);
   const challenge = b64url(crypto.createHash('sha256').update(verifier).digest());
   await ctx.db.query('DELETE FROM oidc_login_states WHERE expires_at < now()');
+  const expires = Date.now() + STATE_TTL_MS;
   await ctx.db.query('INSERT INTO oidc_login_states (state, tenant_id, nonce, code_verifier, expires_at) VALUES ($1,$2,$3,$4,$5)',
-    [state, tenantId, nonce, verifier, new Date(Date.now() + 10 * 60_000)]);
+    [state, tenantId, nonce, verifier, new Date(expires)]);
   const u = new URL(doc.authorization_endpoint);
   const p = { response_type: 'code', client_id: o.clientId, redirect_uri: redirectUri(ctx), scope: o.scopes, state, nonce,
     code_challenge: challenge, code_challenge_method: 'S256', response_mode: 'query' };
   for (const [k, v] of Object.entries(p)) u.searchParams.set(k, v);
-  return u.toString();
+  const cookie = `${SSO_COOKIE}=${signCookie(ctx, { s: state, n: sha(nonce), t: tenantId, e: expires })}; ${cookieAttrs(ctx, STATE_TTL_MS / 1000)}`;
+  return { url: u.toString(), cookie };
 }
 
 function claimList(payload: JWTPayload, claim: string): string[] {
@@ -79,11 +116,17 @@ async function refuse(ctx: Ctx, tenantId: string, code: string, message: string,
 }
 
 /** Validate the IdP response and prepare a one-time hand-off for the single-page app. Returns the tenant + hand-off id. */
-export async function ssoCallback(ctx: Ctx, query: Record<string, unknown>, req: ReqLike): Promise<{ tenantId: string; handoff: string }> {
+export async function ssoCallback(ctx: Ctx, query: Record<string, unknown>, req: ReqLike, cookieHeader?: string): Promise<{ tenantId: string; handoff: string }> {
   const state = typeof query.state === 'string' ? query.state : '';
-  const row = state ? (await ctx.db.query<{ tenant_id: string; nonce: string; code_verifier: string; expires_at: Date }>(
-    'DELETE FROM oidc_login_states WHERE state=$1 RETURNING tenant_id, nonce, code_verifier, expires_at', [state]))[0] : undefined;
+  // HARDEN: the browser that started the sign-in must present the signed state cookie for exactly this state.
+  const bound = readSsoCookie(ctx, cookieHeader);
+  if (!state || !bound || bound.e < Date.now() || bound.s.length !== state.length || !crypto.timingSafeEqual(Buffer.from(bound.s), Buffer.from(state)))
+    throw new SsoError('SSO_BROWSER_MISMATCH', 'This sign-in was not started in this browser (or its cookie expired or was blocked); start again');
+  const row = (await ctx.db.query<{ tenant_id: string; nonce: string; code_verifier: string; expires_at: Date }>(
+    'DELETE FROM oidc_login_states WHERE state=$1 RETURNING tenant_id, nonce, code_verifier, expires_at', [state]))[0];
   if (!row || new Date(row.expires_at) < new Date()) throw new SsoError('SSO_STATE_INVALID', 'The sign-in request expired or was already used; start again');
+  if (row.tenant_id !== bound.t || sha(row.nonce) !== bound.n)
+    throw new SsoError('SSO_BROWSER_MISMATCH', 'This sign-in was not started in this browser; start again');
   const tenantId = row.tenant_id;
   if (typeof query.error === 'string')
     return refuse(ctx, tenantId, 'SSO_IDP_ERROR', `The identity provider refused the sign-in: ${query.error}${typeof query.error_description === 'string' ? ` — ${query.error_description.slice(0, 300)}` : ''}`, { idpError: query.error });

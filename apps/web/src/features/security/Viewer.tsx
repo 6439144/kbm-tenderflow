@@ -7,12 +7,17 @@
 // or phone cameras — the UI says so.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import type { DocumentMeta } from '../../api';
+import { ApiError, type DocumentMeta } from '../../api';
 import { useI18n } from '../../i18n';
 import { useSession } from '../../session';
 import { DocButton } from '../../components/Layout';
 import { Badge, Button, ErrorBox, Spinner } from '../../components/ui';
-import { secApi, type DocAccess, type ViewEvent, type ViewPage, type ViewSession } from './api';
+import { secApi, VIEWABLE_MIME, type DocAccess, type ViewEvent, type ViewGrant, type ViewPage, type ViewSession } from './api';
+import { PdfPages } from './PdfViewer';
+
+/** HARDEN: server answers on which the pdf.js viewer falls back to the text viewer. */
+const TEXT_FALLBACK = ['VIEWER_FORMAT_UNSUPPORTED', 'PDF_ENCRYPTED', 'PDF_UNREADABLE', 'IMAGE_UNREADABLE'];
+export const isViewable = (mimeType?: string) => !!mimeType && VIEWABLE_MIME.includes(mimeType.toLowerCase());
 
 const PROTECTABLE = ['TENDER_PACK', 'ADDENDUM'];
 
@@ -70,8 +75,23 @@ export function ProtectedDocActions({ doc, access }: { doc: DocumentMeta; access
       {access.download === 'PURCHASE_REQUIRED' && <span className="muted small">{t('security.viewer.purchaseFirst')}</span>}
       {access.download === 'VIEW_ONLY_FORMAT' && <span className="muted small">{t('security.viewer.viewOnlyFormat')}</span>}
       {access.download === 'NONE' && <Badge label={t('security.viewer.viewOnly')} tone="warn" />}
-      {open && <ProtectedViewer documentId={doc.id} onClose={() => setOpen(false)} />}
+      {open && <ProtectedViewer documentId={doc.id} mimeType={doc.mimeType} onClose={() => setOpen(false)} />}
     </span>
+  );
+}
+
+/** HARDEN: "View" for any readable PDF / image (staff and vendors): the protected pdf.js viewer, watermarked, audited. */
+export function ViewDocButton({ documentId, mimeType, title }: { documentId: string; mimeType?: string; title: string }) {
+  const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+  if (!isViewable(mimeType)) return null;
+  return (
+    <>
+      <Button variant="ghost" onClick={() => setOpen(true)} aria-label={`${t('harden.viewer.view')}: ${title}`} title={t('harden.viewer.viewHint')}>
+        {t('harden.viewer.view')}
+      </Button>
+      {open && <ProtectedViewer documentId={documentId} mimeType={mimeType} onClose={() => setOpen(false)} />}
+    </>
   );
 }
 
@@ -199,16 +219,35 @@ function SheetCanvas({ sheet, wm, footer, label, emptyText }: { sheet: Sheet; wm
 
 // ---------------------------------------------------------------- viewer
 
-export function ProtectedViewer({ documentId, onClose }: { documentId: string; onClose: () => void }) {
+export function ProtectedViewer({ documentId, mimeType, onClose }: { documentId: string; mimeType?: string; onClose: () => void }) {
   const { t, te, lang } = useI18n();
+  const isVendorUser = useSession().hasRole('VENDOR');
   const [view, setView] = useState<ViewSession | null>(null);
   const [err, setErr] = useState<unknown>(null);
+  // HARDEN: PDFs and images → pdf.js on canvas with the server-stamped watermark; other formats (and PDFs that
+  // cannot be stamped) → the text viewer below.
+  const [textMode, setTextMode] = useState(!isViewable(mimeType));
+  const [grant, setGrant] = useState<ViewGrant | null>(null);
+  const [pdfPages, setPdfPages] = useState(0);
+  const onPdfOpened = useCallback((g: ViewGrant, n: number) => {
+    setGrant(g);
+    setPdfPages(n);
+  }, []);
+  const onPdfError = useCallback((e: unknown) => {
+    if (e instanceof ApiError && TEXT_FALLBACK.includes(e.code)) setTextMode(true);
+    else setErr(e);
+  }, []);
+  const pageLabel = useCallback((n: number, total: number) => t('security.viewer.pageLabel', { n, total }), [t]);
+  const viewId = view?.viewId ?? grant?.viewId ?? null;
+  const title = view?.title ?? grant?.title;
+  const mode = view?.mode ?? grant?.mode;
   const [hidden, setHidden] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const sent = useRef<Record<string, number>>({});
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (!textMode) return;
     let alive = true;
     secApi
       .openView(documentId)
@@ -217,17 +256,17 @@ export function ProtectedViewer({ documentId, onClose }: { documentId: string; o
     return () => {
       alive = false;
     };
-  }, [documentId]);
+  }, [documentId, textMode]);
 
   const report = useCallback(
     (type: ViewEvent) => {
-      if (!view) return;
+      if (!viewId) return;
       const n = sent.current[type] ?? 0;
       if (n >= 3) return; // the server also caps events per view
       sent.current[type] = n + 1;
-      secApi.viewEvent(view.viewId, type).catch(() => undefined);
+      secApi.viewEvent(viewId, type).catch(() => undefined);
     },
-    [view],
+    [viewId],
   );
 
   useEffect(() => {
@@ -305,10 +344,12 @@ export function ProtectedViewer({ documentId, onClose }: { documentId: string; o
     >
       <header className="security-viewer-head">
         <div className="security-viewer-title">
-          <h2 id="security-viewer-title">{view?.title ?? t('security.viewer.title')}</h2>
-          {view && (
+          <h2 id="security-viewer-title">{title ?? t('security.viewer.title')}</h2>
+          {(view || grant) && (
             <span className="row wrap">
-              <Badge label={te('security.content.', view.mode)} tone="warn" />
+              {mode && mode !== 'OFF' && <Badge label={te('security.content.', mode)} tone="warn" />}
+              {grant && <Badge label={t('harden.viewer.watermarked')} tone="info" />}
+              {grant && pdfPages > 0 && <span className="muted small">{t('harden.viewer.pages', { n: pdfPages })}</span>}
               <span className="muted small">{t('security.viewer.audited')}</span>
             </span>
           )}
@@ -317,15 +358,16 @@ export function ProtectedViewer({ documentId, onClose }: { documentId: string; o
           {t('common.close')}
         </Button>
       </header>
-      <p className="security-viewer-honest small">{t('security.viewer.honest')}</p>
+      <p className="security-viewer-honest small">{t(isVendorUser ? 'security.viewer.honest' : 'harden.viewer.honestStaff')}</p>
       {notice && (
         <div className="alert alert-warn security-viewer-notice" role="status">
           {notice}
         </div>
       )}
       <div className={`security-viewer-body ${hidden ? 'security-hidden' : ''}`}>
-        {err ? <ErrorBox error={err} /> : !view ? <Spinner label={t('security.viewer.preparing')} /> : null}
-        {view &&
+        {err ? <ErrorBox error={err} /> : textMode ? (!view ? <Spinner label={t('security.viewer.preparing')} /> : null) : !grant ? <Spinner label={t('security.viewer.preparing')} /> : null}
+        {!textMode && !err && <PdfPages documentId={documentId} pageLabel={pageLabel} onOpened={onPdfOpened} onError={onPdfError} />}
+        {textMode && view &&
           sheets.map((s, i) => (
             <SheetCanvas
               key={`${view.viewId}-${i}`}

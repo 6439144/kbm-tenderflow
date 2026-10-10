@@ -138,8 +138,8 @@ export function evaluateConfig(env: NodeJS.ProcessEnv): ConfigCheck[] {
   if (base && !baseUrl) fail('PUBLIC_BASE_URL', 'PUBLIC_BASE_URL is not a valid URL');
   else if (!baseUrl || baseUrl.protocol !== 'https:') rule('PUBLIC_BASE_URL', `PUBLIC_BASE_URL must be https (got ${base ? safeUrl(base) : 'the default http://localhost'})`);
   else ok('PUBLIC_BASE_URL', `PUBLIC_BASE_URL ${safeUrl(base)}`);
-  if (production && opt(env.TRUST_PROXY) === undefined) warn('TRUST_PROXY', 'TRUST_PROXY not set: defaults to 1 (one reverse proxy hop, e.g. the OpenShift router); set it explicitly');
-  else ok('TRUST_PROXY', `TRUST_PROXY=${opt(env.TRUST_PROXY) ?? '1 (default)'}`);
+  if (production && opt(env.TRUST_PROXY) === undefined) warn('TRUST_PROXY', 'TRUST_PROXY not set: X-Forwarded-For is ignored, so behind the OpenShift router every client looks like the router; set TRUST_PROXY=1');
+  else ok('TRUST_PROXY', `TRUST_PROXY=${opt(env.TRUST_PROXY) ?? 'off (default)'}`);
   if (opt(env.CORS_ORIGIN)?.split(',').some((o) => o.trim() === '*')) warn('CORS_ORIGIN', 'CORS_ORIGIN contains * (any web origin may call the API)', 'production');
 
   // --- content store ---

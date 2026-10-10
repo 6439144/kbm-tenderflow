@@ -7,4 +7,5 @@ export { MyMfaPage, Enrolment, RecoveryCodes, VerifyStep } from './Mfa';
 export { secApi, type LoginResult } from './api';
 export { AdminIdentityPage } from './AdminIdentity';
 export { AdminAccountsPage } from './AdminAccounts';
-export { useContentAccess, ProtectedDocActions, ProtectedViewer } from './Viewer';
+export { useContentAccess, ProtectedDocActions, ProtectedViewer, ViewDocButton, isViewable } from './Viewer';
+export { SignInLockCell } from './Lockout';

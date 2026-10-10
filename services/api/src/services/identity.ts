@@ -12,6 +12,7 @@ import { enforceStaffNetwork, type ReqLike } from '../features/security/network.
 import { secondStepFor, startEnrolment, confirmEnrolment, verifySecondFactor } from '../features/security/mfa.js';
 import { loadSettings } from '../features/security/settings.js';
 import { assertLoginAllowed } from './vendor-lifecycle.js';
+import { assertNotLocked, clearLoginFailures, lockStates, lockedError, recordLoginFailure } from './login-lockout.js';
 
 export interface UserRow {
   id: string; tenant_id: string; username: string; password_hash: string; display_name: string;
@@ -74,7 +75,8 @@ export async function adminCreateUser(ctx: Ctx, actor: Actor, body: any) {
 
 export async function listUsers(ctx: Ctx, actor: Actor) {
   const rows = await ctx.db.query<UserRow>('SELECT * FROM users WHERE tenant_id=$1 ORDER BY username', [actor.tenantId]);
-  return rows.map(publicUser);
+  const locks = await lockStates(ctx, actor.tenantId); // HARDEN: sign-in lockout shown on the admin users page
+  return rows.map((u) => ({ ...publicUser(u), lockedUntil: locks.get(u.username)?.lockedUntil ?? null, failedSignIns: locks.get(u.username)?.failures ?? 0 }));
 }
 
 // Pre-computed hash so unknown usernames take comparable time.
@@ -89,6 +91,7 @@ export async function login(ctx: Ctx, body: any, req?: ReqLike) {
   const tenantId = reqStr(body?.tenantId, 'tenantId', 40);
   const username = reqStr(body?.username, 'username', 80).toLowerCase();
   const password = typeof body?.password === 'string' ? body.password : '';
+  await assertNotLocked(ctx, tenantId, username); // HARDEN: same answer whether or not the user exists
   const rows = await ctx.db.query<UserRow & { tenant_status: string }>(
     `SELECT u.*, t.status AS tenant_status FROM users u JOIN tenants t ON t.id = u.tenant_id
       WHERE u.tenant_id=$1 AND u.username=$2`, [tenantId, username]);
@@ -100,6 +103,8 @@ export async function login(ctx: Ctx, body: any, req?: ReqLike) {
   }
   if (!u || !ok || !u.active || u.tenant_status !== 'ACTIVE') {
     if (u) await ctx.db.tx((q) => auditTx(ctx, q, { tenantId, actor: { id: u.id, roles: u.roles }, action: 'LOGIN_FAILED', resourceType: 'USER', resourceId: u.id }));
+    const locked = await recordLoginFailure(ctx, tenantId, username, 'PASSWORD', u ? { id: u.id, roles: u.roles } : null, req?.ip ?? null);
+    if (locked) throw lockedError(locked);
     throw new ApiError(401, 'INVALID_CREDENTIALS', 'Invalid tenant, username or password');
   }
   await assertLoginAllowed(ctx.db, u); // blocked vendor (FR-013): only after the password is verified, so nothing leaks
@@ -119,6 +124,7 @@ export async function completeLogin(ctx: Ctx, u: UserRow, method: 'PASSWORD' | '
   const token = await ctx.tokens.issue(u);
   await ctx.db.tx(async (q) => {
     await q.query('UPDATE users SET last_login_at=now() WHERE id=$1', [u.id]);
+    await clearLoginFailures(q, u.tenant_id, u.username);
     await auditTx(ctx, q, { tenantId: u.tenant_id, actor: { id: u.id, roles: u.roles }, action: 'LOGIN', resourceType: 'USER', resourceId: u.id, details: { method } });
   });
   return { token, user: publicUser(u) };
@@ -131,13 +137,27 @@ async function pendingUser(ctx: Ctx, body: any, req: ReqLike | undefined, purpos
   const u = (await ctx.db.query<UserRow & { tenant_status: string }>(
     'SELECT u.*, t.status AS tenant_status FROM users u JOIN tenants t ON t.id=u.tenant_id WHERE u.id=$1 AND u.tenant_id=$2', [p.userId, p.tenantId]))[0];
   if (!u || !u.active || u.tenant_status !== 'ACTIVE') throw new ApiError(401, 'MFA_TOKEN_INVALID', 'Sign-in step expired; enter your password again');
+  await assertNotLocked(ctx, u.tenant_id, u.username); // HARDEN: a locked name cannot finish the second step either
   if (req) await enforceStaffNetwork(ctx, req, { id: u.id, tenantId: u.tenant_id, roles: u.roles }, 'LOGIN');
   return u;
 }
 
+/** HARDEN: a wrong second-factor code counts towards the sign-in lockout as well. */
+async function countingMfaFailures<T>(ctx: Ctx, u: UserRow, req: ReqLike | undefined, fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (e) {
+    if (e instanceof ApiError && e.code === 'MFA_CODE_INVALID') {
+      const locked = await recordLoginFailure(ctx, u.tenant_id, u.username, 'MFA', { id: u.id, roles: u.roles }, req?.ip ?? null);
+      if (locked) throw lockedError(locked);
+    }
+    throw e;
+  }
+}
+
 export async function mfaLoginVerify(ctx: Ctx, body: any, req?: ReqLike) {
   const u = await pendingUser(ctx, body, req, 'verify');
-  const r = await verifySecondFactor(ctx, u, { code: body?.code, recoveryCode: body?.recoveryCode });
+  const r = await countingMfaFailures(ctx, u, req, () => verifySecondFactor(ctx, u, { code: body?.code, recoveryCode: body?.recoveryCode }));
   const out = await completeLogin(ctx, u, r.method === 'RECOVERY_CODE' ? 'PASSWORD+RECOVERY_CODE' : 'PASSWORD+TOTP');
   return { ...out, recoveryCodesLeft: r.recoveryCodesLeft };
 }
@@ -148,7 +168,7 @@ export async function mfaLoginEnrolStart(ctx: Ctx, body: any, req?: ReqLike) {
 
 export async function mfaLoginEnrolConfirm(ctx: Ctx, body: any, req?: ReqLike) {
   const u = await pendingUser(ctx, body, req, 'enrol');
-  const { recoveryCodes } = await confirmEnrolment(ctx, u, body?.code);
+  const { recoveryCodes } = await countingMfaFailures(ctx, u, req, () => confirmEnrolment(ctx, u, body?.code));
   const out = await completeLogin(ctx, u, 'PASSWORD+TOTP');
   return { ...out, recoveryCodes };
 }

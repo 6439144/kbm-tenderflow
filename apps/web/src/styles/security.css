@@ -264,3 +264,17 @@
     font-size: 18pt;
   }
 }
+
+/* HARDEN: pdf.js pages of the protected viewer (canvases appended by PdfPages). */
+.security-pdf-pages {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  inline-size: 100%;
+}
+.security-pdf-pages .security-sheet {
+  inline-size: min(100%, 900px);
+  block-size: auto;
+  user-select: none;
+}

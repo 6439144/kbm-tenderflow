@@ -2,6 +2,7 @@ import { ChainView, TenderCyclePanel, waitingStep, type CycleBid, type Step } fr
 import { RejectTenderButton } from '../../features/notify';
 import { auditLabel } from '../../locales/audit';
 import { TenderAiExtras } from '../../features/assistant';
+import { ViewDocButton } from '../../features/security'; // HARDEN: protected pdf.js viewer for opened bid files
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
@@ -903,6 +904,7 @@ function BidsTable({ bids, canDownload, two }: { bids: Async<Bid[]>; canDownload
                             label={d.ownerType ? te('doc.', d.ownerType) : d.title}
                             variant="secondary"
                           />
+                          <ViewDocButton documentId={d.id} mimeType={d.mimeType} title={d.title} />
                           <DocInsightInline documentId={d.id} title={d.title} />
                         </span>
                       ))}

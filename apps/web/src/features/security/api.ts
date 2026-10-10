@@ -1,6 +1,6 @@
 // SEC workstream: client for the identity, access and content-protection API (services/api/src/features/security.ts).
 // Every call is a real request; nothing here fabricates data.
-import { http, type Role, type User } from '../../api';
+import { fetchBytes, http, type Role, type User } from '../../api';
 
 export type MfaPolicy = 'OFF' | 'OPTIONAL' | 'REQUIRED';
 export type ContentMode = 'OFF' | 'VIEW_ONLY' | 'WATERMARKED_DOWNLOAD';
@@ -88,6 +88,13 @@ export interface ViewSession {
   watermark: { lines: string[]; linesAr: string[] };
   pages: ViewPage[];
 }
+/** HARDEN: single-use 60-second grant for the pdf.js viewer (POST /documents/:id/view-grant). */
+export interface ViewGrant {
+  grant: string; viewId: string; expiresAt: string; documentId: string; title: string; sourceMimeType: string; mimeType: string;
+  mode: ContentMode; download: DownloadState; watermarked: boolean;
+}
+export const VIEWABLE_MIME = ['application/pdf', 'image/png', 'image/jpeg'];
+
 export type ViewEvent = 'PRINTSCREEN_KEY' | 'PRINT_ATTEMPT' | 'COPY_ATTEMPT' | 'SAVE_ATTEMPT' | 'CONTEXT_MENU';
 
 const enc = encodeURIComponent;
@@ -128,4 +135,10 @@ export const secApi = {
   openView: (id: string) => http.post<ViewSession>(`/security/content/documents/${enc(id)}/view`),
   viewEvent: (viewId: string, type: ViewEvent) => http.post<{ recorded: boolean }>(`/security/content/views/${enc(viewId)}/events`, { type }),
   watermarkedPath: (id: string) => `/api/v1/security/content/documents/${enc(id)}/download`,
+
+  // HARDEN: protected pdf.js viewer and sign-in lockout
+  viewGrant: (id: string) => http.post<ViewGrant>(`/documents/${enc(id)}/view-grant`),
+  viewBytes: (id: string, grant: string) => fetchBytes(`/documents/${enc(id)}/view-bytes`, { 'X-Viewer-Grant': grant }),
+  unlockUser: (id: string, reason?: string) =>
+    http.post<{ userId: string; wasLocked: boolean; secondFactorWasLocked: boolean; locked: boolean }>(`/admin/users/${enc(id)}/unlock`, { reason }),
 };
