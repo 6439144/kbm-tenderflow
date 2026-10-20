@@ -1,4 +1,5 @@
 import { ChainView, TenderCyclePanel, waitingStep, type CycleBid, type Step } from '../../features/cycle';
+import { RecordBackLink } from '../../components/RecordBackLink';
 import { RejectTenderButton } from '../../features/notify';
 import { auditLabel } from '../../locales/audit';
 import { TenderAiExtras } from '../../features/assistant';
@@ -237,9 +238,7 @@ function Detail({
 
   return (
     <div className="stack">
-      <Link to="/procurement/tenders" className="backlink">
-        ← {t('nav.tenders')}
-      </Link>
+      <RecordBackLink to="/procurement/tenders" label={t('nav.tenders')} />
       <header className="page-head">
         <div>
           <div className="muted small" dir="ltr">

@@ -6,14 +6,17 @@ import { api, fileForm, login, makeTenant, makeUser, startApp, tenderBody, type 
 const runs: Running[] = [];
 after(async () => { for (const r of runs) await r.stop(); });
 
-test('demo routes answer 404 when DEMO_MODE is off', async () => {
+test('demo controls answer 404 when DEMO_MODE is off; status says disabled', async () => {
   const run = await startApp();
   runs.push(run);
   await makeTenant(run, 'off');
   await makeUser(run, 'off', 'officer', ['PROCUREMENT_OFFICER']);
   await makeUser(run, 'off', 'admin', ['TENANT_ADMIN']);
   const officer = await login(run, 'off', 'officer');
-  assert.equal((await api(run, 'GET', '/api/v1/demo/status', { token: officer })).status, 404);
+  // The status probe answers plainly (no failed request on every page); every control stays 404.
+  const st = await api(run, 'GET', '/api/v1/demo/status', { token: officer });
+  assert.equal(st.status, 200);
+  assert.deepEqual(st.body, { enabled: false });
   assert.equal((await api(run, 'POST', '/api/v1/demo/persona', { token: officer, json: { username: 'admin' } })).status, 404);
   assert.equal((await api(run, 'GET', '/api/v1/demo/evidence', { token: officer })).status, 404);
   assert.equal((await api(run, 'POST', '/api/v1/demo/tenders/00000000-0000-4000-8000-000000000000/expire-deadline', { token: officer })).status, 404);

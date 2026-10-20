@@ -1,4 +1,4 @@
-# TenderFlow (KBM) — v1.0.0-rc6
+# TenderFlow (KBM) — v1.0.0-rc7
 
 TenderFlow is a generic, configurable public-tendering product for government entities and regulated enterprises.
 Each entity runs **its own tender cycle** from a versioned template (stages on/off, N-level approval chains, one or
@@ -41,7 +41,7 @@ other entity id is answered with 404. `TENANCY_MODE=shared` (several entities in
 multi-entity demo and the tests. Details: [docs/DEPLOYMENT-MODEL.md](docs/DEPLOYMENT-MODEL.md).
 
 Docs: [Deployment model](docs/DEPLOYMENT-MODEL.md) · [BUILD-SPEC](docs/BUILD-SPEC.md) · [Installation & operations (Windows, OpenShift, PostgreSQL, backups, upgrades)](docs/INSTALLATION-AND-OPERATIONS.md) · [Implemented user stories](docs/USER-STORIES.md) ·
-[What is verified (rc6)](docs/release-notes-v1.0.0-rc6.md) · [Low-code Process Studio](docs/LOW-CODE-STUDIO.md) · [AI admin builder](docs/ADMIN-AI-BUILDER.md) · [MOI reference configuration](docs/MOI-REFERENCE-CONFIGURATION.md) ·
+[rc7 hardening](docs/release-notes-v1.0.0-rc7.md) · [What is verified (rc6)](docs/release-notes-v1.0.0-rc6.md) · [Azure demo deployment](docs/AZURE-DEMO-DEPLOYMENT.md) · [Low-code Process Studio](docs/LOW-CODE-STUDIO.md) · [AI admin builder](docs/ADMIN-AI-BUILDER.md) · [MOI reference configuration](docs/MOI-REFERENCE-CONFIGURATION.md) ·
 [Security](docs/SECURITY-FEATURES.md) · [Notifications & escalation](docs/NOTIFICATIONS-AND-ESCALATION.md) · [Analytics & evidence](docs/ANALYTICS-AND-EVIDENCE.md) · FileNet: [README](docs/filenet/README.md), [showcase](docs/filenet/SHOWCASE.md) ·
 AI agents: [agents/README.md](agents/README.md) · [Document intelligence](docs/DOCUMENT-INTELLIGENCE.md)
 

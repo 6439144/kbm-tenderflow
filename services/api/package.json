@@ -1,6 +1,6 @@
 {
   "name": "@tenderflow/api",
-  "version": "1.0.0-rc6",
+  "version": "1.0.0-rc7",
   "description": "TenderFlow API service (REST API + static web host)",
   "main": "./dist/server.js",
   "type": "module",
@@ -26,7 +26,7 @@
     "pdf-lib": "^1.17.1",
     "pg": "^8.13.1",
     "qrcode": "^1.5.4",
-    "unpdf": "^0.12.1"
+    "unpdf": "^1.8.1"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

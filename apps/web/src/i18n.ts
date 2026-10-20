@@ -97,6 +97,7 @@ const coreEn = {
   'login.submit': 'Sign in',
   'login.registerLink': 'New supplier? Register your company',
   'login.demoHint': 'Demo users: officer, director, chair, evaluator1, admin, auditor, vendor1–vendor3',
+  'login.demoUsers': 'Demo users: {list}',
   'login.tenantsError': 'Could not load entities',
   'login.noTenants': 'No entities are available.',
 
@@ -513,6 +514,7 @@ const coreAr: Record<keyof typeof coreEn, string> = {
   'login.submit': 'دخول',
   'login.registerLink': 'مورد جديد؟ سجّل شركتك',
   'login.demoHint': 'مستخدمو العرض: officer, director, chair, evaluator1, admin, auditor, vendor1–vendor3',
+  'login.demoUsers': 'مستخدمو العرض: {list}',
   'login.tenantsError': 'تعذر تحميل الجهات',
   'login.noTenants': 'لا توجد جهات متاحة.',
 

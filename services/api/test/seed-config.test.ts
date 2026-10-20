@@ -56,6 +56,15 @@ test('serves the built web app with SPA fallback, API 404s stay JSON', async () 
     const page = await api(run, 'GET', '/procurement/tenders/123');
     assert.equal(page.status, 200);
     assert.match(page.text, /id=root/);
+    // a redeployed release must be picked up at once: the page is never cached, hashed build files are immutable
+    fs.mkdirSync(path.join(web, 'assets'));
+    fs.writeFileSync(path.join(web, 'assets', 'index-abc123.js'), 'console.log(1)');
+    const html = await fetch(run.base + '/login');
+    assert.equal(html.headers.get('cache-control'), 'no-store');
+    assert.equal(html.headers.get('etag'), null);
+    const asset = await fetch(run.base + '/assets/index-abc123.js');
+    assert.equal(asset.status, 200);
+    assert.equal(asset.headers.get('cache-control'), 'public, max-age=31536000, immutable');
     const missing = await api(run, 'GET', '/api/v1/does-not-exist');
     assert.equal(missing.status, 401, 'unknown API routes are behind auth, never the SPA');
     assert.equal(missing.body.code, 'UNAUTHORIZED');

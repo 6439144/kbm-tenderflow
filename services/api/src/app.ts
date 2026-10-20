@@ -113,8 +113,18 @@ export async function createApp(baseConfig: Config, overrides: { store?: Content
   app.use('/api/v1', apiRouter(ctx));
 
   if (fs.existsSync(path.join(config.webDistDir, 'index.html'))) {
-    app.use(express.static(config.webDistDir, { index: false }));
-    app.get(/^\/(?!api\/|api$|\.well-known\/).*/, (_req, res) => { res.sendFile(path.join(config.webDistDir, 'index.html')); });
+    // Content-hashed build files (assets/*) never change: cache them for a year. Everything else, index.html above
+    // all, is revalidated on every visit so a redeployed release is picked up immediately (no stale bundle).
+    app.use(express.static(config.webDistDir, {
+      index: false,
+      setHeaders: (res, file) => {
+        res.setHeader('Cache-Control', /[\\/]assets[\\/]/.test(file) ? 'public, max-age=31536000, immutable' : 'no-cache');
+      },
+    }));
+    app.get(/^\/(?!api\/|api$|\.well-known\/).*/, (_req, res) => {
+      res.setHeader('Cache-Control', 'no-store');
+      res.sendFile(path.join(config.webDistDir, 'index.html'), { etag: false, lastModified: false });
+    });
   }
   app.use(errorHandler);
 

@@ -1006,7 +1006,6 @@ ul.plain {
 .tl-action {
   font-weight: 650;
   font-size: 0.85rem;
-  font-family: var(--mono);
 }
 .ai-runs li {
   border-block-end: 1px solid var(--line-2);

@@ -1,6 +1,6 @@
 {
   "name": "tenderflow",
-  "version": "1.0.0-rc6",
+  "version": "1.0.0-rc7",
   "description": "Enterprise Digital Tendering Platform",
   "private": true,
   "type": "module",

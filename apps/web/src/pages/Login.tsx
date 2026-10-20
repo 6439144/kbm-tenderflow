@@ -179,9 +179,17 @@ export default function Login() {
                 <p className="center">
                   <Link to="/register">{t('login.registerLink')}</Link>
                 </p>
-                <p className="demo-hint small muted" dir="auto">
-                  {t('login.demoHint')}
-                </p>
+                {dedicated ? (
+                  !!deployment?.demoUsers?.length && (
+                    <p className="demo-hint small muted" dir="auto">
+                      {t('login.demoUsers', { list: compactUsers(deployment.demoUsers) })}
+                    </p>
+                  )
+                ) : (
+                  <p className="demo-hint small muted" dir="auto">
+                    {t('login.demoHint')}
+                  </p>
+                )}
               </>
             )}
             {step.kind === 'verify' && (
@@ -215,4 +223,21 @@ export default function Login() {
       </main>
     </>
   );
+}
+
+/** "vendor1, vendor2, vendor3" → "vendor1–vendor3" (keeps the sign-in hint short). */
+function compactUsers(users: string[]): string {
+  const out: string[] = [];
+  const nums = new Map<string, number[]>();
+  for (const u of users) {
+    const m = /^([a-z]+)(\d+)$/i.exec(u);
+    if (m) { const list = nums.get(m[1]) ?? []; list.push(Number(m[2])); nums.set(m[1], list); if (list.length === 1) out.push(`#${m[1]}`); }
+    else out.push(u);
+  }
+  return out.map((x) => {
+    if (!x.startsWith('#')) return x;
+    const base = x.slice(1); const n = (nums.get(base) ?? []).sort((a, b) => a - b);
+    const run = n.length > 2 && n[n.length - 1] - n[0] === n.length - 1;
+    return run ? `${base}${n[0]}–${base}${n[n.length - 1]}` : n.map((k) => base + k).join(', ');
+  }).join(', ');
 }

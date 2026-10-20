@@ -1,6 +1,7 @@
 // Departmental procurement requests (/procurement/requests): register (scanned GM letter or Raslni reference),
 // approval chain, convert to a tender draft that pins a cycle template.
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { RecordBackLink } from '../../components/RecordBackLink';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { CATEGORIES } from '../../api';
 import { platform, type ProcurementRequest } from '../../api-platform';
@@ -213,9 +214,7 @@ function RequestDetail({ r, reload }: { r: ProcurementRequest & { createdBy?: st
 
   return (
     <div className="stack">
-      <Link to="/procurement/requests" className="backlink">
-        ← {t('cycle.r.title')}
-      </Link>
+      <RecordBackLink to="/procurement/requests" label={t('cycle.r.title')} />
       <header className="page-head">
         <div>
           <div className="muted small" dir="ltr">

@@ -130,7 +130,9 @@ export function registerDemoRoutes(r: express.Router, ctx: Ctx): void {
     ctx.config.demoMode ? next() : next(new ApiError(404, 'NOT_FOUND', 'No such API route'));
   if (ctx.config.demoMode) console.warn('[demo] DEMO_MODE=true: presenter controls (persona switch, deadline advance) are ENABLED. Never use in production.');
 
-  r.get('/demo/status', demoOnly, h(async (req) => {
+  r.get('/demo/status', h(async (req) => {
+    // Presenter mode off: answer plainly (200, enabled:false) so clients do not log a failed request on every page.
+    if (!ctx.config.demoMode) return { enabled: false };
     const a = actor(req);
     const rows = await ctx.db.query<{ username: string; display_name: string; roles: string[]; vendor_status: string | null }>(
       `SELECT u.username, u.display_name, u.roles, v.status AS vendor_status FROM users u LEFT JOIN vendors v ON v.id = u.vendor_id

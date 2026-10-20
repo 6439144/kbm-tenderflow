@@ -25,6 +25,7 @@ deploy/backups/
 deploy/proxy/certs/*.crt
 deploy/proxy/certs/*.key
 dist/
+dist-release/
 node_modules/
 npm-debug.log*
 storage/local/

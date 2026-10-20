@@ -112,6 +112,8 @@ export interface DeploymentInfo {
   mode: TenancyMode;
   /** Dedicated: this installation's entity (null until it is provisioned). Shared: always null. */
   entity: { id: string; nameEn: string; nameAr: string; primaryColor: string | null; logoText: string | null } | null;
+  /** Demo installations only (SEED_DEMO=true, never TF_ENV=production): the entity's demo user names for the sign-in hint. */
+  demoUsers?: string[];
 }
 
 /** GET /api/v1/public/deployment — what the web app needs to brand itself and hide multi-entity UI. Public fields only. */
@@ -123,5 +125,11 @@ export async function deploymentInfo(ctx: Pick<Ctx, 'config' | 'db'>): Promise<D
     'SELECT id, name_en, name_ar, primary_color, profile, status FROM tenants WHERE id=$1', [bound]))[0];
   if (!r || r.status !== 'ACTIVE') return { mode: 'dedicated', entity: null };
   const logo = typeof r.profile?.logoText === 'string' && r.profile.logoText.trim() ? r.profile.logoText.trim().slice(0, 12) : null;
-  return { mode: 'dedicated', entity: { id: r.id, nameEn: r.name_en, nameAr: r.name_ar, primaryColor: r.primary_color, logoText: logo } };
+  const out: DeploymentInfo = { mode: 'dedicated', entity: { id: r.id, nameEn: r.name_en, nameAr: r.name_ar, primaryColor: r.primary_color, logoText: logo } };
+  if (ctx.config.seedDemo && ctx.config.tfEnv !== 'production') {
+    const users = await ctx.db.query<{ username: string }>(
+      'SELECT username FROM users WHERE tenant_id=$1 AND active ORDER BY (vendor_id IS NOT NULL), username LIMIT 20', [r.id]);
+    out.demoUsers = users.map((u) => u.username);
+  }
+  return out;
 }

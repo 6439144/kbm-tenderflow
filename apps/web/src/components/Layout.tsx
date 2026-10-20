@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { NavLink, Navigate, Outlet } from 'react-router-dom';
+import { NavLink, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { downloadFile, openFile, type Role } from '../api';
 import { useI18n, type TKey } from '../i18n';
 import { useSession } from '../session';
@@ -81,7 +81,12 @@ export function Header({ children }: { children?: ReactNode }) {
 export function Portal({ roles, nav }: { roles: Role[]; nav: NavItem[] }) {
   const { t } = useI18n();
   const { session, hasRole } = useSession();
+  const location = useLocation();
   if (!session) return <Navigate to="/login" replace />;
+  // Administrators and auditors open tender and request records (linked from dashboards, queues and tasks)
+  // read-only inside their own portal instead of hitting an access error.
+  const staffRecord = /^\/procurement\/((?:tenders|requests)\/[^/]+)$/.exec(location.pathname);
+  if (!hasRole(...roles) && staffRecord && hasRole('TENANT_ADMIN', 'AUDITOR')) return <Navigate to={`/admin/${staffRecord[1]}`} replace />;
   if (!hasRole(...roles))
     return (
       <>

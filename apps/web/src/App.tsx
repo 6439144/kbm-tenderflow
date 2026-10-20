@@ -163,6 +163,9 @@ export default function App() {
               <Route path="studio" element={<Remountable render={(reload) => <StudioPage headerExtras={<DescribeChangeButton scope="process" onApplied={reload} />} />} />} />
               {/* AI admin builder */}
               <Route path="builder" element={<AdminBuilderPage />} />
+              {/* read-only record views for administrators and auditors */}
+              <Route path="tenders/:id" element={<TenderDetailPage />} />
+              <Route path="requests/:id" element={<RequestDetailPage />} />
               <Route path="entity" element={<EntitySettingsPage />} />
               <Route path="document-types" element={<DocumentTypesPage />} />
               <Route path="documents" element={<DocumentQueuePage />} />

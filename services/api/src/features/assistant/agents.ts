@@ -175,6 +175,10 @@ function forVendorView(run: any, open: TenderRow[]) {
 
 export async function tendersForMe(ctx: Ctx, actor: Actor) {
   if (!actor.vendorId) throw forbidden('Only vendor users have a tender ranking');
+  // A company whose registration is not approved yet simply has no eligible tenders to show (the dashboard asks on
+  // every visit); ranking (POST) still refuses with VENDOR_NOT_APPROVED.
+  const st = (await ctx.db.query<{ status: string }>('SELECT status FROM vendors WHERE id=$1 AND tenant_id=$2', [actor.vendorId, actor.tenantId]))[0];
+  if (st && st.status !== 'APPROVED') return { configured: ctx.ai.isConfigured(), vendorApproved: false, ...forVendorView(null, []) };
   const open = await eligibleOpenTenders(ctx, actor);
   const last = (await ctx.db.query<any>(
     `SELECT * FROM ai_runs WHERE tenant_id=$1 AND kind='RELEVANCE_MATCH' AND subject_id=$2 ORDER BY created_at DESC LIMIT 1`, [actor.tenantId, actor.vendorId]))[0];

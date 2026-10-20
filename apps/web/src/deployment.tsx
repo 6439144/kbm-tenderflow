@@ -17,6 +17,8 @@ export interface DeploymentEntity {
 export interface Deployment {
   mode: 'dedicated' | 'shared';
   entity: DeploymentEntity | null;
+  /** Demo installations only: the entity's demo user names (sign-in hint). */
+  demoUsers?: string[];
 }
 
 interface DeploymentCtx {
@@ -34,7 +36,7 @@ let cached: Promise<Deployment> | null = null;
 export function loadDeployment(): Promise<Deployment> {
   if (!cached) {
     cached = http.get<Deployment>('/public/deployment').then(
-      (d) => (d && (d.mode === 'dedicated' || d.mode === 'shared') ? { mode: d.mode, entity: d.entity ?? null } : { mode: 'shared', entity: null }),
+      (d) => (d && (d.mode === 'dedicated' || d.mode === 'shared') ? { mode: d.mode, entity: d.entity ?? null, demoUsers: Array.isArray(d.demoUsers) ? d.demoUsers : undefined } : { mode: 'shared', entity: null }),
       () => {
         cached = null; // try again on the next screen
         return { mode: 'shared', entity: null };
