@@ -35,7 +35,7 @@ Target: app `kbm-tenderflow` in resource group `rg-kbm-tenderflow` → https://k
    (defaults: `-AppName kbm-tenderflow -ResourceGroup rg-kbm-tenderflow -Location westeurope -Entity moi`).
    Do not add `-EphemeralData` unless step 4 tells you to.
 3. The script ends with a PASS/FAIL table and writes `deploy-report-<time>.json` (no secrets). Exit code 0 means
-   deployed and verified. The checks are: Version = {{VERSION}}, Dedicated entity = moi, Page / and /login = 200,
+   deployed and verified. The eight checks are: Version = {{VERSION}}, Dedicated entity = moi, Page / and /login = 200,
    Sign-in (officer), Presenter mode off, Demo status, Tenders API.
 4. Only if something fails:
    - Upload error mentioning DNS / `getaddrinfo`: the script already retries 3 times; wait 2 minutes and rerun it.

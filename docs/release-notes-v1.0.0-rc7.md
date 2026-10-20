@@ -38,7 +38,7 @@ pages and layout overflow. The KEA configuration (shared demo) was swept the sam
   on a fresh database), splits it into 25 MB parts and writes `release.json` (version, commit, SHA-256, part list).
 - `deploy/azure/deploy-tenderflow-azure-free.ps1` reads `release.json` (nothing to edit by hand), refuses any plan
   other than Free F1, keeps keys and the demo password of an existing app, retries the upload for a new app's DNS
-  delay, waits for the **new** version, and runs seven release checks with a PASS/FAIL table and a report file.
+  delay, waits for the **new** version, and runs eight release checks with a PASS/FAIL table and a report file.
 - `deploy/azure/ANTIGRAVITY-PROMPT.md` is the operator prompt for an AI deployment assistant.
 - Runbook: [AZURE-DEMO-DEPLOYMENT.md](AZURE-DEMO-DEPLOYMENT.md).
 

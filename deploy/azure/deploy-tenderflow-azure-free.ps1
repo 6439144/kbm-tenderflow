@@ -197,7 +197,9 @@ if ($token) {
 }
 
 Write-Host ''
-$results | Format-Table -AutoSize | Out-String | Write-Host
+foreach ($r in $results) {
+  Write-Host ('{0,-20} {1,-5} {2}' -f $r.Check, $r.Result, $r.Detail) -ForegroundColor $(if ($r.Result -eq 'PASS') { 'Green' } else { 'Red' })
+}
 $failed = @($results | Where-Object { $_.Result -eq 'FAIL' }).Count
 $report = [pscustomobject]@{ app = $AppName; url = $url; resourceGroup = $appRg; version = $version; commit = $release.commit; checkedAt = (Get-Date).ToString('o'); checks = $results }
 $reportFile = Join-Path $here ("deploy-report-{0}.json" -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
