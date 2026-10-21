@@ -38,9 +38,18 @@ pages and layout overflow. The KEA configuration (shared demo) was swept the sam
   on a fresh database), splits it into 25 MB parts and writes `release.json` (version, commit, SHA-256, part list).
 - `deploy/azure/deploy-tenderflow-azure-free.ps1` reads `release.json` (nothing to edit by hand), refuses any plan
   other than Free F1, keeps keys and the demo password of an existing app, retries the upload for a new app's DNS
-  delay, waits for the **new** version, and runs eight release checks with a PASS/FAIL table and a report file.
+  delay, waits for the **new** version, and runs the release checks (version and commit, entity, pages, sign-in, presenter mode, tenders API, watsonx) with a PASS/FAIL table and a report file.
 - `deploy/azure/ANTIGRAVITY-PROMPT.md` is the operator prompt for an AI deployment assistant.
 - Runbook: [AZURE-DEMO-DEPLOYMENT.md](AZURE-DEMO-DEPLOYMENT.md).
+
+## watsonx Orchestrate on Azure, and the multi-entity demo app
+- The deploy script connects watsonx Orchestrate with `-WatsonxFrom <.env>` (copies only the `WXO_*` settings, values
+  never printed), disconnects with `-DisconnectWatsonx`, and checks the connection after every deployment (IAM token
+  and every TenderFlow agent present).
+- New setting `AI_RATE_LIMIT_PER_MIN` (default 20): AI requests per user and minute, so a shared demo password cannot
+  exhaust the Orchestrate instance. Answers 429 `AI_RATE_LIMITED`; reads are never limited.
+- `-Tenancy shared` deploys the multi-entity demo (KEA, GCIA, MOI) as a second free app, `kbm-tenderflow-demo`.
+  An existing app is never switched between dedicated and shared by accident.
 
 ## Upgrade
 No migrations. Redeploy the rc7 release folder with its script; data, keys and the demo password are kept.

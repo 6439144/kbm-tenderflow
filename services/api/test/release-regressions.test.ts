@@ -44,3 +44,23 @@ test('a vendor not yet approved opens the portal without a failed request; ranki
   assert.equal(r.body.vendorApproved, false);
   assert.equal((await api(run, 'POST', '/api/v1/vendor/ai/tenders-for-me', { token: tok })).status, 409);
 });
+
+test('AI requests are limited per user and minute (AI_RATE_LIMIT_PER_MIN); reads are not', async () => {
+  const limited = await startApp(undefined, { AI_RATE_LIMIT_PER_MIN: '2' });
+  try {
+    const { makeTenant, makeUser } = await import('./helpers.js');
+    await makeTenant(limited, 'lim');
+    await makeUser(limited, 'lim', 'officer', ['PROCUREMENT_OFFICER']);
+    await makeUser(limited, 'lim', 'director', ['DIRECTOR']);
+    const officer = await login(limited, 'lim', 'officer');
+    const chat = () => api(limited, 'POST', '/api/v1/assistant/chat', { token: officer, json: { message: 'hello' } });
+    assert.notEqual((await chat()).status, 429);
+    assert.notEqual((await chat()).status, 429);
+    const third = await chat();
+    assert.equal(third.status, 429);
+    assert.equal(third.body.code, 'AI_RATE_LIMITED');
+    assert.equal((await api(limited, 'GET', '/api/v1/tenders', { token: officer })).status, 200, 'reads are not limited');
+    const director = await login(limited, 'lim', 'director');
+    assert.notEqual((await api(limited, 'POST', '/api/v1/assistant/chat', { token: director, json: { message: 'hello' } })).status, 429, 'per user');
+  } finally { await limited.stop(); }
+});

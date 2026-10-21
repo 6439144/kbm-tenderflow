@@ -27,6 +27,8 @@ export interface Config {
   webDistDir: string;
   closeJobIntervalMs: number;
   loginRateLimit: number;
+  /** AI requests (POST to an AI route) per user and minute; 0 = no limit. */
+  aiRateLimit: number;
   /**
    * DOC_AI_AUTO — automatic document intelligence after upload/opening (when Orchestrate is configured):
    * true → also vendor and request-letter uploads (unless the entity setting says otherwise); false → never automatic
@@ -178,6 +180,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     webDistDir: path.resolve(REPO_ROOT, opt(env.WEB_DIST_DIR) ?? path.join('apps', 'web', 'dist')),
     closeJobIntervalMs: Number(opt(env.CLOSE_JOB_INTERVAL_MS) ?? 60_000),
     loginRateLimit: Number(opt(env.LOGIN_RATE_LIMIT_PER_MIN) ?? 30),
+    aiRateLimit: Math.max(0, Number(opt(env.AI_RATE_LIMIT_PER_MIN) ?? 20) || 0),
     docAiAuto: opt(env.DOC_AI_AUTO) === undefined ? null : ['true', '1', 'yes'].includes(opt(env.DOC_AI_AUTO)!.toLowerCase()),
     docAiProperties: ['true', '1', 'yes'].includes((opt(env.FILENET_AI_PROPERTIES) ?? 'false').toLowerCase()),
     // --- security (SEC workstream) ---

@@ -67,9 +67,34 @@ or give an AI deployment assistant the `ANTIGRAVITY-PROMPT.md` from the same fol
 | Presenter mode off | `POST /api/v1/demo/persona` → 401/403/404 |
 | Demo status | `/api/v1/demo/status` → `enabled: false` |
 | Tenders API | `GET /api/v1/tenders` as officer → 200 |
+| watsonx Orchestrate | when the app has `WXO_*` settings: `/ready` (administrator token) → IAM token OK and every agent found; otherwise shown as OFF (not a failure) |
 
 Exit code 0 = deployed and verified; 2 = deployed but a check failed. A `deploy-report-<time>.json` (no secrets) is
 written next to the script. `-VerifyOnly` reruns the checks without touching Azure.
+
+## Two apps on the same free plan
+
+| App | Tenancy | Purpose | Deploy |
+|---|---|---|---|
+| `kbm-tenderflow` | dedicated, MOI | the product edition shown to MOI | `.\deploy-tenderflow-azure-free.ps1` |
+| `kbm-tenderflow-demo` | shared: KEA, GCIA, MOI with an entity picker | KBM's multi-entity demo | `.\deploy-tenderflow-azure-free.ps1 -AppName kbm-tenderflow-demo -Tenancy shared` |
+
+Both use the plan `kbm-bootstrap-asp` and its 60 CPU-minutes/day with TenderScout; an idle app uses none. Each app has
+its own keys, demo password and database. The script never switches an existing app between dedicated and shared
+unless `-AllowTenancyChange` is given.
+
+## watsonx Orchestrate
+
+1. On the machine with the TechZone instance details in the repo `.env`, import and check the agents:
+   `powershell -ExecutionPolicy Bypass -File agents\import.ps1`, then `npm run verify:ai`.
+2. Deploy with `-WatsonxFrom C:\Users\kabed\Downloads\KBM_Tender_v1\.env`. The script copies only the `WXO_*`
+   runtime settings into the app settings and prints their names, never their values.
+3. The `watsonx Orchestrate` check must PASS (IAM token OK, every agent found).
+4. `-DisconnectWatsonx` removes the settings again.
+
+Each user may make 20 AI requests a minute (`AI_RATE_LIMIT_PER_MIN`), so a shared demo password cannot exhaust the
+instance. The TechZone reservation has an end date: when it expires the check fails and AI features say the service is
+unavailable; disconnect or reconnect with the new instance.
 
 ## 4. Accept
 

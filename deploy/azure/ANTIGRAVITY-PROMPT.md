@@ -9,8 +9,9 @@ the provided script, confirm every check passes, and report. You do not write or
 It contains `release.json` (version, commit, SHA-256, part list), the `part.NN` files and
 `deploy-tenderflow-azure-free.ps1`. Work only in this folder. Older release folders next to it are history: leave them.
 
-Target: app `kbm-tenderflow` in resource group `rg-kbm-tenderflow` → https://kbm-tenderflow.azurewebsites.net
-(MOI reference configuration, fictitious demo data).
+Targets (fictitious demo data in both):
+- `kbm-tenderflow` → https://kbm-tenderflow.azurewebsites.net (dedicated MOI installation, the product edition)
+- `kbm-tenderflow-demo` → https://kbm-tenderflow-demo.azurewebsites.net (shared multi-entity demo: KEA, GCIA, MOI)
 
 ## Hard rules
 1. **Free tier only.** Never create, upgrade or scale to a paid SKU, and never add databases, storage accounts,
@@ -30,13 +31,20 @@ Target: app `kbm-tenderflow` in resource group `rg-kbm-tenderflow` → https://k
 ## Steps
 1. `az --version` (install with `winget install -e --id Microsoft.AzureCLI` if missing), then `az account show`;
    if not signed in, `az login` and I will complete the browser sign-in.
-2. From the release folder:
-   `powershell -ExecutionPolicy Bypass -File .\deploy-tenderflow-azure-free.ps1`
+2. From the release folder, the MOI app:
+   `powershell -ExecutionPolicy Bypass -File .\deploy-tenderflow-azure-free.ps1 -WatsonxFrom C:\Users\kabed\Downloads\KBM_Tender_v1\.env`
    (defaults: `-AppName kbm-tenderflow -ResourceGroup rg-kbm-tenderflow -Location westeurope -Entity moi`).
-   Do not add `-EphemeralData` unless step 4 tells you to.
+   Leave out `-WatsonxFrom` if I tell you not to connect watsonx. Never open, print or copy the `.env` yourself: the
+   script reads only the `WXO_*` lines and never shows their values.
+   Then the multi-entity demo app:
+   `powershell -ExecutionPolicy Bypass -File .\deploy-tenderflow-azure-free.ps1 -AppName kbm-tenderflow-demo -Tenancy shared`
+   On its first deployment the script prints that app's demo password once: do not repeat it in your report.
+   Do not add `-EphemeralData` or `-AllowTenancyChange` unless I ask.
 3. The script ends with a PASS/FAIL table and writes `deploy-report-<time>.json` (no secrets). Exit code 0 means
-   deployed and verified. The eight checks are: Version = {{VERSION}}, Dedicated entity = moi, Page / and /login = 200,
-   Sign-in (officer), Presenter mode off, Demo status, Tenders API.
+   deployed and verified. The checks are: Version = {{VERSION}}, Dedicated entity = moi (Entities on the demo app),
+   Page / and /login = 200, Sign-in (officer), Presenter mode off, Demo status, Tenders API, watsonx Orchestrate
+   (PASS when connected, OFF when not; FAIL means the key, the instance or an agent is wrong: report the detail line,
+   do not retry with other values).
 4. Only if something fails:
    - Upload error mentioning DNS / `getaddrinfo`: the script already retries 3 times; wait 2 minutes and rerun it.
    - `Version` fails but the site answers: the free plan may still be starting. Rerun with `-VerifyOnly` after

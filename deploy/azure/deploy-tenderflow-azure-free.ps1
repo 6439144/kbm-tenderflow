@@ -8,6 +8,14 @@
 #   -ResourceGroup rg-kbm-tenderflow   -Location westeurope   -Entity moi   (moi | kea | gcia)
 #   -EphemeralData                   database on the container's local disk; demo data is re-created after each restart
 #   -VerifyOnly                      run the post-deployment checks only (no change to Azure)
+#   -Tenancy shared                  multi-entity demo (KEA, GCIA and MOI in one app, with an entity picker). The default,
+#                                    dedicated, is the product edition: one entity per installation (-Entity).
+#                                    An existing app's tenancy is never switched unless -AllowTenancyChange is given.
+#   -WatsonxFrom <path\.env>         connect IBM watsonx Orchestrate: copies the WXO_* settings (instance URL, API key,
+#                                    optional model and agent names) from that file into the app settings. Values are
+#                                    never printed. Import the agents first (agents\import.ps1, npm run verify:ai).
+#   -DisconnectWatsonx               remove the WXO_* settings again (AI features then say they are not connected)
+#   -HidePassword                    do not print a newly created demo password (when the output is logged)
 #
 # What it does
 #   1. Joins the parts into tenderflow-azure-package.zip and checks the SHA-256 recorded in release.json.
@@ -28,6 +36,11 @@ param(
   [ValidateSet('moi', 'kea', 'gcia')][string]$Entity = 'moi',
   [switch]$EphemeralData,
   [switch]$VerifyOnly,
+  [ValidateSet('dedicated', 'shared')][string]$Tenancy = 'dedicated',
+  [switch]$AllowTenancyChange,
+  [string]$WatsonxFrom = '',
+  [switch]$DisconnectWatsonx,
+  [switch]$HidePassword,  # never print a new demo password (for unattended runs whose output is logged); read it in the portal
   [string]$BaseUrl = ''   # checks only: test a different address (for example a local smoke run of the package)
 )
 
@@ -37,6 +50,24 @@ $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 function Step([string]$text) { Write-Host ''; Write-Host "==> $text" -ForegroundColor Cyan }
 function Check([string]$what) { if ($LASTEXITCODE -ne 0) { throw "FAILED: $what (exit code $LASTEXITCODE)" } }
+function ReadWatsonxSettings([string]$file) {
+  # KEY=VALUE lines (comments, optional quotes), same rules as agents\import.ps1. Only WXO_* runtime settings are taken.
+  if (-not (Test-Path -LiteralPath $file)) { throw "WatsonxFrom: file not found: $file" }
+  $found = [ordered]@{}
+  foreach ($raw in [System.IO.File]::ReadAllLines((Resolve-Path -LiteralPath $file), [System.Text.Encoding]::UTF8)) {
+    $line = $raw.Trim()
+    if ($line -eq '' -or $line.StartsWith('#')) { continue }
+    if ($line -match '^(?:export\s+)?(WXO_[A-Z0-9_]+)\s*=\s*(.*)$') {
+      $k = $Matches[1]; $v = $Matches[2].Trim()
+      if ($v.Length -ge 2 -and (($v.StartsWith('"') -and $v.EndsWith('"')) -or ($v.StartsWith("'") -and $v.EndsWith("'")))) { $v = $v.Substring(1, $v.Length - 2) }
+      else { $v = ($v -replace '\s+#.*$', '').Trim() }
+      if ($v -and $k -notin @('WXO_ENV_NAME', 'WXO_AUTH_TYPE')) { $found[$k] = $v }
+    }
+  }
+  foreach ($need in @('WXO_INSTANCE_URL', 'WXO_API_KEY')) { if (-not $found.Contains($need)) { throw "WatsonxFrom: $need is missing or empty in $file" } }
+  if ($found['WXO_INSTANCE_URL'] -notmatch '^(https://|http://(127\.0\.0\.1|localhost)[:/])') { throw 'WatsonxFrom: WXO_INSTANCE_URL must start with https://' }
+  return $found
+}
 function RandomBytes([int]$n) { $b = New-Object byte[] $n; [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); return $b }
 
 # ---------------------------------------------------------------- 1. package
@@ -121,8 +152,13 @@ if (-not $VerifyOnly) {
   Step 'Settings'
   $current = az webapp config appsettings list -g $appRg -n $AppName -o json | ConvertFrom-Json; Check 'appsettings list'
   $names = @($current | ForEach-Object { $_.name })
-  $settings = @(
-    'TENANCY_MODE=dedicated', "ENTITY_ID=$Entity", "DEMO_ENTITY=$Entity", 'SEED_DEMO=true', 'DEMO_MODE=false',
+  $currentTenancy = ($current | Where-Object { $_.name -eq 'TENANCY_MODE' } | Select-Object -First 1).value
+  if ($exists -and $currentTenancy -and $currentTenancy -ne $Tenancy -and -not $AllowTenancyChange) {
+    throw "The app runs TENANCY_MODE=$currentTenancy; this run asks for $Tenancy. Use -Tenancy $currentTenancy, or add -AllowTenancyChange if switching is intended."
+  }
+  $tenancySettings = if ($Tenancy -eq 'shared') { @('TENANCY_MODE=shared') } else { @('TENANCY_MODE=dedicated', "ENTITY_ID=$Entity", "DEMO_ENTITY=$Entity") }
+  $settings = $tenancySettings + @(
+    'SEED_DEMO=true', 'DEMO_MODE=false', 'AI_RATE_LIMIT_PER_MIN=20',
     'CONTENT_STORE_TYPE=filesystem', 'TRUST_PROXY=1', "PUBLIC_BASE_URL=https://$AppName.azurewebsites.net",
     'LOWCODE_AUTOMATION_MS=60000', 'WEBSITE_RUN_FROM_PACKAGE=1', 'SCM_DO_BUILD_DURING_DEPLOYMENT=false', 'WEBSITE_NODE_DEFAULT_VERSION=~22'
   )
@@ -137,7 +173,20 @@ if (-not $VerifyOnly) {
     $newPassword = 'Tf-' + (-join ((RandomBytes 12) | ForEach-Object { $chars[$_ % $chars.Length] })) + '-26'
     $settings += "DEMO_PASSWORD=$newPassword"
   }
+  if ($WatsonxFrom) {
+    $wxo = ReadWatsonxSettings $WatsonxFrom
+    foreach ($k in $wxo.Keys) { $settings += "$k=$($wxo[$k])" }
+    Write-Host "Connecting watsonx Orchestrate: $(@($wxo.Keys) -join ', ') (values not shown)"
+  }
   az webapp config appsettings set -g $appRg -n $AppName --settings $settings --only-show-errors 1>$null; Check 'appsettings set'
+  $settings = $null; $wxo = $null
+  $remove = @()
+  if ($Tenancy -eq 'shared') { $remove += @($names | Where-Object { $_ -in @('ENTITY_ID', 'DEMO_ENTITY') }) }
+  if ($DisconnectWatsonx) { $remove += @($names | Where-Object { $_ -like 'WXO_*' }) }
+  if ($remove.Count) {
+    az webapp config appsettings delete -g $appRg -n $AppName --setting-names $remove --only-show-errors 1>$null; Check 'appsettings delete'
+    Write-Host "Removed settings: $($remove -join ', ')"
+  }
   az webapp config set -g $appRg -n $AppName --startup-file 'node services/api/dist/server.js' --only-show-errors 1>$null; Check 'startup command'
   az webapp update -g $appRg -n $AppName --https-only true --only-show-errors 1>$null; Check 'https only'
 
@@ -171,21 +220,30 @@ function Status([string]$method, [string]$path, $headers = @{}) {
 }
 
 Result 'Version' ($live -and $live.version -eq $version -and $live.commit -eq $release.commit) "live: $(if ($live) { "$($live.version) ($($live.commit))" } else { 'no answer' }), expected: $version ($($release.commit))"
+$tenant = $null   # shared mode: sign in to KEA
 try {
   $dep = Invoke-RestMethod -TimeoutSec 60 "$url/api/v1/public/deployment"
-  Result 'Dedicated entity' ($dep.mode -eq 'dedicated' -and $dep.entity.id -eq $Entity) "mode $($dep.mode), entity $($dep.entity.id)"
-} catch { Result 'Dedicated entity' $false $_.Exception.Message }
+  if ($Tenancy -eq 'shared') {
+    $ents = @(Invoke-RestMethod -TimeoutSec 60 "$url/api/v1/public/tenants" | ForEach-Object { $_.id })
+    $tenant = 'kea'
+    Result 'Entities' ($dep.mode -eq 'shared' -and $ents.Count -ge 2 -and $ents -contains 'kea') "mode $($dep.mode), entities $($ents -join ', ')"
+  } else {
+    Result 'Dedicated entity' ($dep.mode -eq 'dedicated' -and $dep.entity.id -eq $Entity) "mode $($dep.mode), entity $($dep.entity.id)"
+  }
+} catch { Result $(if ($Tenancy -eq 'shared') { 'Entities' } else { 'Dedicated entity' }) $false $_.Exception.Message }
 foreach ($p in @('/', '/login')) { $s = Status 'GET' $p; Result "Page $p" ($s -eq 200) "HTTP $s" }
 $token = $null
 try {
   # The password is read into memory only; it is never printed or written to disk.
   $pw = az webapp config appsettings list -g $appRg -n $AppName --query "[?name=='DEMO_PASSWORD'].value | [0]" -o tsv
-  $body = @{ username = 'officer'; password = $pw } | ConvertTo-Json
-  $res = Invoke-RestMethod -TimeoutSec 60 -Method Post -Uri "$url/api/v1/auth/login" -Body $body -ContentType 'application/json'
-  $pw = $null; $body = $null
+  $creds = @{ username = 'officer'; password = $pw }; if ($tenant) { $creds.tenantId = $tenant }
+  $res = Invoke-RestMethod -TimeoutSec 60 -Method Post -Uri "$url/api/v1/auth/login" -Body ($creds | ConvertTo-Json) -ContentType 'application/json'
+  $creds.username = 'admin'
+  $adminRes = Invoke-RestMethod -TimeoutSec 60 -Method Post -Uri "$url/api/v1/auth/login" -Body ($creds | ConvertTo-Json) -ContentType 'application/json'
+  $pw = $null; $creds = $null
   $token = $res.token
   Result 'Sign-in (officer)' ($res.user.username -eq 'officer' -and [bool]$token) "user $($res.user.username), token $(if ($token) { 'issued' } else { 'missing' })"
-} catch { $pw = $null; $body = $null; Result 'Sign-in (officer)' $false $_.Exception.Message }
+} catch { $pw = $null; $creds = $null; Result 'Sign-in (officer)' $false $_.Exception.Message }
 if ($token) {
   $auth = @{ Authorization = "Bearer $token" }
   $s = Status 'POST' '/api/v1/demo/persona' $auth
@@ -195,18 +253,33 @@ if ($token) {
   $s = Status 'GET' '/api/v1/tenders' $auth
   Result 'Tenders API' ($s -eq 200) "GET /tenders -> HTTP $s"
 }
+# watsonx Orchestrate: /ready with an administrator's token reports the AI check (IAM token + every agent present).
+$wxoExpected = $false
+if (-not $BaseUrl -or $WatsonxFrom) {
+  try { $wxoExpected = [bool](az webapp config appsettings list -g $appRg -n $AppName --query "[?name=='WXO_INSTANCE_URL'].name | [0]" -o tsv) } catch { }
+}
+if ($adminRes -and $adminRes.token) {
+  try {
+    $rd = Invoke-RestMethod -TimeoutSec 90 -Uri "$url/ready" -Headers @{ Authorization = "Bearer $($adminRes.token)" }
+    $ai = $rd.checks.ai
+    if ($wxoExpected) { Result 'watsonx Orchestrate' ([bool]$ai.ok) ([string]$ai.detail) }
+    else { $results.Add([pscustomobject]@{ Check = 'watsonx Orchestrate'; Result = 'OFF'; Detail = 'not connected on this app (run with -WatsonxFrom to connect)' }) }
+  } catch { Result 'watsonx Orchestrate' (-not $wxoExpected) $_.Exception.Message }
+}
 
 Write-Host ''
 foreach ($r in $results) {
-  Write-Host ('{0,-20} {1,-5} {2}' -f $r.Check, $r.Result, $r.Detail) -ForegroundColor $(if ($r.Result -eq 'PASS') { 'Green' } else { 'Red' })
+  Write-Host ('{0,-20} {1,-5} {2}' -f $r.Check, $r.Result, $r.Detail) -ForegroundColor $(switch ($r.Result) { 'PASS' { 'Green' } 'OFF' { 'Yellow' } default { 'Red' } })
 }
 $failed = @($results | Where-Object { $_.Result -eq 'FAIL' }).Count
 $report = [pscustomobject]@{ app = $AppName; url = $url; resourceGroup = $appRg; version = $version; commit = $release.commit; checkedAt = (Get-Date).ToString('o'); checks = $results }
 $reportFile = Join-Path $here ("deploy-report-{0}.json" -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
 $report | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $reportFile -Encoding utf8
 Write-Host "Report (no secrets): $reportFile"
-Write-Host 'Demo accounts (fictitious): admin, officer, tenderdept, grader, director, undersecretary, auditor, vendor1..vendor5'
-if ($newPassword) { Write-Host "Demo password (shown once; share it by Teams, not by email): $newPassword" -ForegroundColor Yellow }
+if ($Tenancy -eq 'shared') { Write-Host 'Demo accounts (fictitious): pick the entity on the sign-in page; KEA: officer, director, chair, evaluator1, admin, auditor, vendor1..vendor4; MOI: admin, officer, tenderdept, grader, director, undersecretary, auditor, vendor1..vendor5' }
+else { Write-Host 'Demo accounts (fictitious): see the sign-in page (the installation lists its own demo users)' }
+if ($newPassword -and -not $HidePassword) { Write-Host "Demo password (shown once; share it by Teams, not by email): $newPassword" -ForegroundColor Yellow }
+elseif ($newPassword) { Write-Host 'Demo password: created (Azure portal > the app > Settings > Environment variables > DEMO_PASSWORD).' }
 else { Write-Host 'Demo password: unchanged (Azure portal > the app > Settings > Environment variables > DEMO_PASSWORD).' }
 if ($failed -gt 0) {
   Write-Host "$failed check(s) FAILED. Log: az webapp log tail -g $appRg -n $AppName" -ForegroundColor Red

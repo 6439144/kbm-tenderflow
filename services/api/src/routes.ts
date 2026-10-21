@@ -64,6 +64,9 @@ export function sendDoc(res: Response, doc: DocumentRow, bytes: Buffer) {
   res.end(bytes);
 }
 
+/** POST routes that call watsonx Orchestrate (see the AI rate limit in apiRouter). */
+export const AI_PATH = /(^|\/)ai(\/|-draft$)|^\/assistant\/chat$|^\/admin-agent\/(chat|proposals)$/;
+
 export function apiRouter(ctx: Ctx): express.Router {
   const r = express.Router();
   const auth = authenticate(ctx);
@@ -80,6 +83,14 @@ export function apiRouter(ctx: Ctx): express.Router {
 
   // ---- everything below requires a valid token ----
   r.use(auth);
+  // Every AI request uses capacity of the entity's watsonx Orchestrate instance: limit each user's AI requests per minute
+  // (AI_RATE_LIMIT_PER_MIN, default 20, 0 = off). Reads (GET) and all non-AI routes are not limited.
+  if (ctx.config.aiRateLimit > 0) {
+    const aiLimiter = rateLimit({ windowMs: 60_000, limit: ctx.config.aiRateLimit, standardHeaders: 'draft-7', legacyHeaders: false,
+      keyGenerator: (req) => `${actor(req).tenantId}:${actor(req).id}`,
+      handler: (_req, res) => { res.status(429).json({ code: 'AI_RATE_LIMITED', message: 'Too many AI requests in a minute. Wait a moment and try again.' }); } });
+    r.use((req, res, next) => (req.method === 'POST' && AI_PATH.test(req.path) ? aiLimiter(req, res, next) : next()));
+  }
   r.get('/auth/me', h((req) => identity.me(ctx, actor(req))));
 
   // Vendors
